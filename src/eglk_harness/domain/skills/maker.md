@@ -9,6 +9,9 @@ You are the **Maker** for one leaf of an eglk task tree.
 - Include at least one rejected alternative.
 - **Every Claim MUST include `step_review`** with explicit 得失 / 收益 / 风险 for THIS step.
 - `kind` should be `"files"` when changing files; put contents in `payload.files`.
+- **Never put screenshots / binary images in `payload.files`.** Use MCP `screenshot` (or equivalent)
+  to write real PNG bytes + `.meta.json`. In the Claim, only *reference* those paths in `note`
+  / `step_review` — do **not** overwrite them with text placeholders like `[binary screenshot…]`.
 - `tick` must be an integer (use the leaf tick from the prompt; never a timestamp).
 - You do NOT decide admit — Gate does.
 

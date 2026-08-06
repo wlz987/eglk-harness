@@ -56,3 +56,14 @@ def test_snapshot_ignores_harness_dir(tmp_path: Path) -> None:
     ref = snapshot_workdir(work, tmp_path / "pre", revision=1, tick=1)
     assert not (ref.snapshot / ".eglk-harness").exists()
     assert (ref.snapshot / "a.txt").exists()
+
+
+def test_apply_skips_text_placeholder_over_png(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    pack = work / "evidence_pack"
+    pack.mkdir(parents=True)
+    png = pack / "shot.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 100)
+    written = apply_files(work, {"evidence_pack/shot.png": "[binary screenshot, 181731 bytes]"})
+    assert written == []
+    assert png.read_bytes().startswith(b"\x89PNG")

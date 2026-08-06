@@ -108,6 +108,23 @@ def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
     return WorldRef(snapshot=world_ref.snapshot, revision=new_rev, meta=meta)
 
 
+_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".wasm"}
+
+
+def _looks_like_text_placeholder_for_binary(rel: str, content: str) -> bool:
+    """Reject Claim.payload.files that would clobber tool-written binaries with ASCII stubs."""
+    suffix = Path(rel).suffix.lower()
+    if suffix not in _BINARY_SUFFIXES:
+        return False
+    # real base64 payloads can be long; placeholders are short ASCII descriptions
+    sample = content[:200]
+    if "\x00" in content[:64]:
+        return False
+    if len(content) < 512 and sample.isprintable():
+        return True
+    return False
+
+
 def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
     """Apply Claim.payload.files mapping (relative path → content). Returns written paths."""
     workdir = workdir.resolve()
@@ -118,6 +135,9 @@ def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
             raise ValueError(f"path escape rejected: {rel}")
         if rel_s.startswith(".eglk-harness/") or rel_s in {".goal.md", ".goal_format.md"}:
             # protected paths — skip (orchestrator may log)
+            continue
+        if _looks_like_text_placeholder_for_binary(rel_s, content):
+            # Keep MCP/tool screenshots; do not overwrite with Claim text stubs.
             continue
         dest = workdir / rel_s
         dest.parent.mkdir(parents=True, exist_ok=True)
