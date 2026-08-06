@@ -1,4 +1,4 @@
-"""Codex plugin discovery and explicit setup used by the doctor command."""
+"""Codex bundled computer-use plugin setup (doctor / plugin CLI only)."""
 
 from __future__ import annotations
 
@@ -12,10 +12,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from eglk_harness.domain.plugins.errors import PluginError
+from eglk_harness.domain.plugins.state import CODEX_GUI_PLUGIN_ID, forget_install, record_install
+
 COMPUTER_USE_PLUGIN_ID = "computer-use@openai-bundled"
 
 
-class CodexPluginError(RuntimeError):
+class CodexPluginError(PluginError):
     """Raised when a required Codex plugin cannot be made ready."""
 
 
@@ -66,6 +69,13 @@ def install_computer_use_plugin(
             f"{COMPUTER_USE_PLUGIN_ID} is still not enabled after setup. "
             "A project or managed Codex policy may be overriding the user configuration."
         )
+    record_install(
+        CODEX_GUI_PLUGIN_ID,
+        agents=["codex"],
+        mcp_configs={},
+        mcp_server_name="",
+        version=state.version,
+    )
     return state
 
 
@@ -86,6 +96,7 @@ def uninstall_computer_use_plugin(
         raise CodexPluginError(
             f"{COMPUTER_USE_PLUGIN_ID} is still installed after Codex reported a successful removal."
         )
+    forget_install(CODEX_GUI_PLUGIN_ID)
     return state
 
 
@@ -238,3 +249,23 @@ def _enable_plugin_in_user_config(plugin_id: str) -> None:
 def _notify(callback: StatusCallback | None, status: str, message: str) -> None:
     if callback is not None:
         callback(status, message)
+
+
+def runtime_app_path() -> Path | None:
+    """Best-effort path to the Codex Computer Use runtime app (macOS)."""
+    candidates = [
+        Path.home() / "Library/Application Support/Codex/Computer Use.app",
+        Path("/Applications/Codex Computer Use.app"),
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def codex_gui_grants() -> str:
+    """Human-readable note about OS grants for Codex Computer Use."""
+    app = runtime_app_path()
+    if app is None:
+        return "Codex Computer Use runtime app not found; grant Accessibility after install."
+    return f"Ensure Accessibility (and Screen Recording if prompted) for {app}."

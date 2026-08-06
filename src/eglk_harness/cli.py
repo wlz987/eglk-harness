@@ -50,6 +50,130 @@ def _doctor_line(level: str, name: str, detail: str) -> None:
     print(f"{level:4}  {name}: {detail}", flush=True)
 
 
+_CODEX_GUI_PLUGIN = "codex-computer-use"
+_PLUGIN_CHOICES = (_CODEX_GUI_PLUGIN, "open-computer-use", "clawdcursor")
+
+
+def _cmd_plugin(args: argparse.Namespace) -> int:
+    """Install/list/uninstall computer-use plugins (never invoked by ``run``)."""
+    from eglk_harness.domain.plugins import (
+        COMMUNITY_PLUGINS,
+        COMPUTER_USE_PLUGIN_ID,
+        PLUGIN_PRIORITY,
+        PluginError,
+        active_plugin_for_agent,
+        community_plugin_ids,
+        community_plugin_state,
+        get_codex_plugin_state,
+        get_community_plugin,
+        install_community_plugin,
+        install_computer_use_plugin,
+        npm_binary,
+        plugins_root,
+        uninstall_community_plugin,
+        uninstall_computer_use_plugin,
+    )
+
+    assert set(_PLUGIN_CHOICES) == {_CODEX_GUI_PLUGIN, *community_plugin_ids()}
+
+    action = getattr(args, "plugin_command", None)
+    if not action:
+        print("usage: eglk-harness plugin {list,install,uninstall} ...", flush=True)
+        return 2
+    if action == "list":
+        print(f"Priority when several are installed: {' > '.join(PLUGIN_PRIORITY)}")
+        print(f"Generated MCP configs live under {plugins_root()}")
+        for agent in ("codex", "claude_code"):
+            try:
+                active = active_plugin_for_agent(agent)
+            except PluginError as exc:
+                print(f"Active for {agent}: unknown ({exc})")
+            else:
+                print(f"Active for {agent}: {active[0] if active else 'none installed'}")
+        try:
+            official = get_codex_plugin_state(COMPUTER_USE_PLUGIN_ID)
+            if official.ready:
+                state = f"installed and enabled {official.version}".strip()
+            elif official.installed:
+                state = "installed but disabled"
+            elif official.available:
+                state = "not installed"
+            else:
+                state = "unavailable on this Codex build"
+        except (PluginError, CodexPluginError) as exc:
+            state = f"unknown ({exc})"
+        print(f"\n{_CODEX_GUI_PLUGIN}")
+        print("  Official Codex Computer Use (bundled with Codex CLI).")
+        print(f"  state : {state}")
+        npm_missing = not npm_binary()
+        for plugin in COMMUNITY_PLUGINS:
+            if npm_missing:
+                pstate = "unknown (npm missing; needs Node.js 20+)"
+            else:
+                try:
+                    pkg = community_plugin_state(plugin)
+                    pstate = (
+                        f"installed {pkg.version}".strip()
+                        if pkg.installed
+                        else "not installed"
+                    )
+                except PluginError as exc:
+                    pstate = f"unknown ({exc})"
+            print(f"\n{plugin.plugin_id}")
+            print(f"  {plugin.summary}")
+            print(f"  state : {pstate}")
+            print(f"  homepage : {plugin.homepage}")
+        return 0
+
+    name = getattr(args, "name", None)
+    if not name:
+        print("plugin install/uninstall requires --name", flush=True)
+        return 2
+    try:
+        if name == _CODEX_GUI_PLUGIN:
+            if action == "install":
+                state = install_computer_use_plugin(
+                    on_status=lambda s, m: _doctor_line("…. ", s, m),
+                )
+                _doctor_line(
+                    "ok",
+                    name,
+                    f"ready={state.ready} installed={state.installed} enabled={state.enabled}",
+                )
+                return 0 if state.ready else 1
+            if action == "uninstall":
+                state = uninstall_computer_use_plugin(
+                    on_status=lambda s, m: _doctor_line("…. ", s, m),
+                )
+                _doctor_line("ok", name, f"installed={state.installed}")
+                return 0
+            print(f"unknown plugin action: {action}", flush=True)
+            return 2
+        plugin = get_community_plugin(name)
+        agents = list(args.agent) if getattr(args, "agent", None) else list(plugin.agents)
+        if action == "install":
+            install_community_plugin(
+                plugin,
+                agents=agents,
+                on_status=lambda s, m: _doctor_line("…. ", s, m),
+                activate=not bool(getattr(args, "skip_activation", False)),
+            )
+            _doctor_line("ok", name, f"installed for agents={agents}")
+            return 0
+        if action == "uninstall":
+            uninstall_community_plugin(
+                plugin,
+                on_status=lambda s, m: _doctor_line("…. ", s, m),
+            )
+            _doctor_line("ok", name, "uninstalled")
+            return 0
+        print(f"unknown plugin action: {action}", flush=True)
+        return 2
+    except (PluginError, CodexPluginError) as exc:
+        _doctor_line("FAIL", name, str(exc))
+        return 1
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     code = 0
@@ -306,6 +430,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly uninstall Codex Computer Use",
     )
     doc_p.set_defaults(func=_cmd_doctor)
+
+    plug = sub.add_parser("plugin", help="Install or remove computer-use plugins (never by run)")
+    plug_sub = plug.add_subparsers(dest="plugin_command")
+    for action, help_text in (
+        ("list", "Show available computer-use plugins and install state"),
+        ("install", "Install a computer-use plugin and register it with an agent"),
+        ("uninstall", "Remove a computer-use plugin"),
+    ):
+        sp = plug_sub.add_parser(action, help=help_text)
+        if action != "list":
+            sp.add_argument(
+                "--name",
+                required=True,
+                choices=_PLUGIN_CHOICES,
+                help="Plugin id (see `eglk-harness plugin list`)",
+            )
+        if action == "install":
+            sp.add_argument(
+                "--agent",
+                action="append",
+                choices=("codex", "claude_code"),
+                help="Agent to register (repeatable; default: all supported)",
+            )
+            sp.add_argument(
+                "--skip-activation",
+                action="store_true",
+                help="Skip consent / OS-permission commands",
+            )
+        sp.set_defaults(func=_cmd_plugin)
+    plug.set_defaults(func=_cmd_plugin)
 
     run_p = sub.add_parser("run", help="Start a harness run")
     run_p.add_argument("--workdir", default=".", help="Project root (default: cwd)")
