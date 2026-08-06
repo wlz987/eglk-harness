@@ -82,7 +82,13 @@ class CheckerActor(RequestResponseActor):
         )
         if not result.ok or not isinstance(result.parsed, dict):
             return messages.err_body(result.error or "checker_episode_failed")
-        evidence = dict(result.parsed)
+        from eglk_harness.domain.evidence_guard import normalize_evidence
+
+        evidence = normalize_evidence(
+            dict(result.parsed),
+            written=written,
+            mutations=list(args.get("mutations") or []),
+        )
         evidence["tick"] = tick
         evidence["subgoal_id"] = subgoal_id
         return messages.ok_body(

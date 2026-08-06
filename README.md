@@ -42,6 +42,7 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `status` | Read-only tree / decision / quota / leaf |
 | `dashboard` | Read-only HTTP browse（无 approve/inject） |
 | `check-update` | PyPI version hint（不自动升级） |
+| `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |
 | `eval` | 辅尺：`experiment/eval/` 薄调度；scorer 不进 Gate |
 | `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
 | `check-projections` | CI pin vs `design/kernel/projections.md` |
@@ -56,4 +57,9 @@ Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).
 ```bash
 pytest
 eglk-harness check-projections
+eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
+# Live soak (manual gate):
+# EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
+# Eval smoke (from design repo):
+# bash experiment/eval/scripts/ci_weave_thin.sh
 ```

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eglk-harness"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Evidence-Gated Loop Kernel harness (eglk) for long-horizon agents"
 readme = "README.md"
 requires-python = ">=3.11"

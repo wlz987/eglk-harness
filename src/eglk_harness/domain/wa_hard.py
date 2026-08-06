@@ -68,3 +68,22 @@ def score_placeholder(*, task_id: str, workdir: Path) -> dict[str, Any]:
         "status": "recorded_only",
         "note": "Wire ServiceNow/webarena-verified harness separately; never feed Gate",
     }
+
+
+def score_external(result_json: Path) -> dict[str, Any]:
+    """Read an external WA-Hard judge JSON into a Manifest-safe scores dict.
+
+    Never feeds Gate. Accepts either a flat scores object or ``{scores: {...}}``.
+    """
+    data = json.loads(result_json.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"external score must be a JSON object: {result_json}")
+    scores = data.get("scores") if isinstance(data.get("scores"), dict) else data
+    out = {str(k): v for k, v in scores.items()}
+    out.setdefault("judge", "external_wa_verified")
+    out.setdefault("source", str(result_json))
+    out["status"] = "external_scored"
+    # Strip anything that looks like Gate input
+    out.pop("admit", None)
+    out.pop("gate", None)
+    return out

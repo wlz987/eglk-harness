@@ -254,6 +254,26 @@ def _cmd_run(args: argparse.Namespace) -> int:
         "maker_timeout_s": args.maker_timeout,
         "checker_timeout_s": args.checker_timeout,
     }
+    from eglk_harness.domain.budgets import resolve_role_budgets
+
+    budgets = resolve_role_budgets(args)
+    if kwargs["maker_timeout_s"] is None:
+        kwargs["maker_timeout_s"] = budgets.maker.max_duration_seconds
+    if kwargs["checker_timeout_s"] is None:
+        kwargs["checker_timeout_s"] = budgets.checker.max_duration_seconds
+    # Export bypass budgets for actors that read env
+    os.environ.setdefault(
+        "EGLK_TIMEOUT_GOVERNOR", str(budgets.governor.max_duration_seconds)
+    )
+    os.environ.setdefault(
+        "EGLK_TIMEOUT_EXPLORER", str(budgets.explorer.max_duration_seconds)
+    )
+    os.environ.setdefault(
+        "EGLK_TIMEOUT_VERIFIER", str(budgets.verifier.max_duration_seconds)
+    )
+    os.environ.setdefault(
+        "EGLK_TIMEOUT_REFINER", str(budgets.refiner.max_duration_seconds)
+    )
     if args.max_ticks is not None:
         kwargs["max_ticks"] = args.max_ticks
     if getattr(args, "tick", None) is not None:
@@ -376,11 +396,21 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         )
     )
     if args.suite == "wa_hard":
-        scores = wa_hard_mod.score_placeholder(task_id=args.task_id, workdir=out)
-        ok = True
-        detail = "recorded_only"
+        if getattr(args, "external_score", None):
+            scores = wa_hard_mod.score_external(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = True
+            detail = "external_scored"
+        else:
+            scores = wa_hard_mod.score_placeholder(task_id=args.task_id, workdir=out)
+            ok = True
+            detail = "recorded_only"
     elif args.suite == "osworld_aux":
         scores = osworld_mod.score_placeholder(task_id=args.task_id, workdir=out)
+        hint = osworld_mod.path_hint(eval_root)
+        if hint is not None:
+            scores["vendor_hint"] = str(hint)
         ok = True
         detail = "recorded_only"
     else:
@@ -532,6 +562,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--compile", default="off", choices=("auto", "force", "off"))
     ev.add_argument("--max-ticks", type=int, default=4)
     ev.add_argument("--prepare-only", action="store_true", help="Only write .goal.md / init")
+    ev.add_argument(
+        "--external-score",
+        default=None,
+        help="Path to external judge JSON (wa_hard); merged into Manifest only — never Gate",
+    )
     ev.set_defaults(func=_cmd_eval)
 
     cp = sub.add_parser(

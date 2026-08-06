@@ -69,6 +69,9 @@ async def run_bypass_json(
         return None
 
     prompt = render_prompt(role, leaf_block=leaf_block, extra=extra)
+    from eglk_harness.domain.prompt_i18n import constraint_block
+
+    prompt = f"{prompt}\n\n{constraint_block()}"
     req = EpisodeRequest(
         role=role,
         prompt=prompt,

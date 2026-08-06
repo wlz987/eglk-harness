@@ -1,0 +1,21 @@
+{
+  "role": "verifier",
+  "ok": true,
+  "source": "llm",
+  "detail": "challenges=1",
+  "elapsed_s": 0.0,
+  "artifact": {
+    "role": "verifier",
+    "tick": 0,
+    "leaf_id": "root",
+    "challenges": [
+      {
+        "id": "ch-1",
+        "title": "missing artifact",
+        "text": "ensure deliverable exists"
+      }
+    ],
+    "veto": false,
+    "source": "llm"
+  }
+}

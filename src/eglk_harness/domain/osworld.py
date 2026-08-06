@@ -67,4 +67,32 @@ def score_placeholder(*, task_id: str, workdir: Path) -> dict[str, Any]:
         "workdir": str(workdir),
         "status": "recorded_only",
         "note": "Wire OSWorldv2-harness from vendor/; never feed Gate",
+        "vendor_hint": str(path_hint(workdir) or ""),
     }
+
+
+def path_hint(eval_root: Path | None = None) -> Path | None:
+    """Return vendor OSWorld harness path if present under eval_root or alw."""
+    roots: list[Path] = []
+    if eval_root is not None:
+        roots.append(Path(eval_root))
+        roots.append(Path(eval_root).parent)  # experiment/
+        roots.append(Path(eval_root).parents[1] if len(Path(eval_root).parents) > 1 else Path(eval_root))
+    here = Path(__file__).resolve()
+    # .../alw/eglk-harness/src/eglk_harness/domain/osworld.py → alw
+    if len(here.parents) > 4:
+        roots.append(here.parents[4])
+    seen: set[Path] = set()
+    for root in roots:
+        root = root.resolve()
+        if root in seen:
+            continue
+        seen.add(root)
+        for cand in (
+            root / "experiment" / "eval" / "vendor" / "OSWorldv2-harness",
+            root / "eval" / "vendor" / "OSWorldv2-harness",
+            root / "vendor" / "OSWorldv2-harness",
+        ):
+            if cand.is_dir():
+                return cand
+    return None

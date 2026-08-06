@@ -130,4 +130,36 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         )
     )
 
+    from eglk_harness.domain.budgets import resolve_role_budgets
+    from eglk_harness.domain.plugins.state import installed_plugins, plugins_root
+    from eglk_harness.domain.prompt_i18n import prompt_language
+
+    budgets = resolve_role_budgets()
+    report.checks.append(
+        DoctorCheck(
+            name="budgets",
+            ok=True,
+            detail=(
+                f"maker={budgets.maker.max_duration_seconds}s "
+                f"checker={budgets.checker.max_duration_seconds}s "
+                f"governor={budgets.governor.max_duration_seconds}s"
+            ),
+        )
+    )
+    report.checks.append(
+        DoctorCheck(
+            name="prompt_language",
+            ok=True,
+            detail=prompt_language(),
+        )
+    )
+    try:
+        plugged = installed_plugins()
+        detail = f"root={plugins_root()}; installed={sorted(plugged) or 'none'}"
+        ok = True
+    except Exception as exc:  # noqa: BLE001 — doctor must not crash
+        detail = f"unreadable: {exc}"
+        ok = False
+    report.checks.append(DoctorCheck(name="plugins", ok=ok, detail=detail))
+
     return report

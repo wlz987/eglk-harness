@@ -1,0 +1,123 @@
+{
+  "agent": "mock",
+  "workdir": "/home/wlz/alw/eglk-harness/.eglk-soak-bypass",
+  "ok": true,
+  "roles": [
+    {
+      "role": "governor",
+      "ok": true,
+      "source": "llm",
+      "detail": "children=2",
+      "elapsed_s": 0.0,
+      "artifact": {
+        "role": "governor",
+        "tick": 0,
+        "split_node": "root",
+        "children": [
+          {
+            "id": "root.01",
+            "title": "Implement root",
+            "done_criteria": [
+              "implementation complete"
+            ]
+          },
+          {
+            "id": "root.02",
+            "title": "Verify root",
+            "done_criteria": [
+              "verification evidence recorded"
+            ]
+          }
+        ],
+        "source": "llm"
+      }
+    },
+    {
+      "role": "explorer",
+      "ok": true,
+      "source": "llm",
+      "detail": "alts=3",
+      "elapsed_s": 0.0,
+      "artifact": {
+        "role": "explorer",
+        "tick": 0,
+        "leaf_id": "root",
+        "title": null,
+        "alternatives": [
+          {
+            "id": "alt-1",
+            "text": "direct implement",
+            "prob": 0.8,
+            "impact": 0.9
+          },
+          {
+            "id": "alt-2",
+            "text": "incremental",
+            "prob": 0.5,
+            "impact": 0.6
+          },
+          {
+            "id": "alt-3",
+            "text": "cosmetic only",
+            "prob": 0.1,
+            "impact": 0.05
+          }
+        ],
+        "source": "llm"
+      }
+    },
+    {
+      "role": "verifier",
+      "ok": true,
+      "source": "llm",
+      "detail": "challenges=1",
+      "elapsed_s": 0.0,
+      "artifact": {
+        "role": "verifier",
+        "tick": 0,
+        "leaf_id": "root",
+        "challenges": [
+          {
+            "id": "ch-1",
+            "title": "missing artifact",
+            "text": "ensure deliverable exists"
+          }
+        ],
+        "veto": false,
+        "source": "llm"
+      }
+    },
+    {
+      "role": "refiner",
+      "ok": true,
+      "source": "llm",
+      "detail": "kind=hit",
+      "elapsed_s": 0.0,
+      "artifact": {
+        "id": "sigma-hit-000",
+        "kind": "hit",
+        "text": "mock refined hit",
+        "conf": 0.75,
+        "source": "llm"
+      }
+    },
+    {
+      "role": "compile",
+      "ok": true,
+      "source": "llm",
+      "detail": "title=Mock Goal",
+      "elapsed_s": 0.0,
+      "artifact": {
+        "title": "Mock Goal",
+        "direction": "Pursue mock goal",
+        "acceptance": [
+          "mock acceptance"
+        ],
+        "constraints": [
+          "Preserve .eglk-harness/"
+        ],
+        "notes": "mock compile"
+      }
+    }
+  ]
+}
