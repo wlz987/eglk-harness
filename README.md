@@ -39,11 +39,15 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `doctor` | PATH / schemas / skills / MCP (check-only) |
 | `run` | STEP 0 compile → four-phase tick |
 | `status` | Read-only tree / decision / quota / leaf |
+| `check-projections` | CI pin vs `design/kernel/projections.md` |
 
 `run` flags: `--goal/--task`, `--agent`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`.
+
+Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).
 
 ## Develop
 
 ```bash
 pytest
+eglk-harness check-projections
 ```

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from eglk_harness import __version__
 from eglk_harness.app import RunRequest, run as app_run
+from eglk_harness.domain.check_projections import check_projections
 from eglk_harness.domain.config_resolve import resolve_agent, resolve_compile, resolve_swarm
 from eglk_harness.domain.doctor import run_doctor
 from eglk_harness.domain.init_project import init_project
@@ -59,6 +60,14 @@ def _cmd_status(args: argparse.Namespace) -> int:
     report = collect_status(Path(args.workdir).resolve(), run_id=args.run)
     print(report.render())
     return 0
+
+
+def _cmd_check_projections(_args: argparse.Namespace) -> int:
+    report = check_projections()
+    for c in report.checks:
+        mark = "ok  " if c.ok else "FAIL"
+        print(f"{mark}  {c.name}: {c.detail}")
+    return 0 if report.ok else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,6 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
     st_p.add_argument("--workdir", default=".", help="Project root (default: cwd)")
     st_p.add_argument("--run", default=None, help="Select loop/<run_id> (default: newest)")
     st_p.set_defaults(func=_cmd_status)
+
+    cp = sub.add_parser(
+        "check-projections",
+        help="CI pin: assert thresholds match design/kernel/projections.md",
+    )
+    cp.set_defaults(func=_cmd_check_projections)
 
     return p
 

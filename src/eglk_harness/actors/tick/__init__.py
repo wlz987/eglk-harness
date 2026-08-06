@@ -8,7 +8,7 @@ from typing import Any
 
 from eba_job import Job
 
-from eglk_harness.domain import loop_store, phase3, sigma, worldref
+from eglk_harness.domain import integrity, loop_store, phase3, sigma, worldref
 from eglk_harness.domain.leaf_contract import assemble_leaf_contract
 from eglk_harness.domain.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
 from eglk_harness.domain.tree import TaskTree, make_root
@@ -63,6 +63,8 @@ class TickJob(Job):
         self.leaf_contract: dict[str, Any] | None = None
         self.phase3_record: dict[str, Any] | None = None
         self.gate_payload_keys: tuple[str, ...] | None = None
+        self._pre_checker_fp: integrity.WorldFingerprint | None = None
+        self.integrity_mutations: list[str] = []
 
     async def begin(self) -> None:
         self.loop_dir = loop_store.ensure_loop_layout(self.workdir, self.goal_id)
@@ -258,6 +260,7 @@ class TickJob(Job):
                 return
 
             cur = self.tree.in_progress()
+            self._pre_checker_fp = integrity.fingerprint_workdir(self.workdir)
             await self.request(
                 stage="checker",
                 request_prefix=topics.ROLE_CHECKER_RUN,
@@ -280,6 +283,12 @@ class TickJob(Job):
             if not isinstance(evidence, dict):
                 await self.finish(ok=False, error="checker_missing_evidence")
                 return
+            # Invariant #11: Checker must not mutate the task world
+            if self._pre_checker_fp is not None:
+                after_fp = integrity.fingerprint_workdir(self.workdir)
+                self.integrity_mutations = integrity.apply_integrity_flag(
+                    evidence, before=self._pre_checker_fp, after=after_fp
+                )
             self.evidence = evidence
             loop_store.write_evidence(self.loop_dir, self.tick, evidence)
             # Gate inputs: Claim + Evidence only (truth-blind; no candidates/Σ)

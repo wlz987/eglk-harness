@@ -22,6 +22,8 @@ from eglk_harness.actors.tick import TickJob
 from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
 from eglk_harness.domain.compile_goal import compile_goal
+from eglk_harness.domain.manifest import build_manifest, new_run_id, write_manifest
+from eglk_harness.domain.models import resolve_model
 from eglk_harness.domain import paths
 from eglk_harness.domain.init_project import init_project
 from eglk_harness.protocol import keys, topics
@@ -185,21 +187,36 @@ async def _run_one_tick(request: RunRequest) -> dict[str, Any]:
                 await asyncio.sleep(0.005)
         job = host.jobs[0]
         outcome = getattr(job, "outcome", None) or {}
+        decision = getattr(job, "decision", None) or {}
+        run_id = new_run_id()
+        manifest = build_manifest(
+            run_id=run_id,
+            workdir=workdir,
+            goal_id=goal_id,
+            agent=request.agent,
+            model=resolve_model("maker"),
+            mcp_config=request.mcp_config,
+            swarm=request.swarm,
+            decision=decision if isinstance(decision, dict) else {},
+        )
+        manifest_path = write_manifest(workdir, manifest)
         return {
             "goal_id": goal_id,
             "outcome": outcome,
-            "decision": getattr(job, "decision", None),
+            "decision": decision if isinstance(decision, dict) else None,
             "written": list(getattr(job, "written", []) or []),
             "agent": request.agent,
             "compile": compiled.action,
             "swarm_plan": getattr(job, "swarm_plan", None),
+            "manifest": str(manifest_path),
+            "integrity_mutations": list(getattr(job, "integrity_mutations", []) or []),
         }
 
     return await run_actors(actors, work, grace=1.0)
 
 
 def run(request: RunRequest) -> int:
-    """Start a harness run (M4: four-phase tick + STEP 0 compile)."""
+    """Start a harness run (M6: four-phase + STEP 0 + Manifest)."""
     workdir = request.workdir.resolve()
     goal_file = paths.goal_path(workdir)
     if not goal_file.is_file() and not request.goal:
@@ -231,6 +248,7 @@ def run(request: RunRequest) -> int:
         f"  swarm={swarm_s}\n"
         f"  decision={decision.get('decision')} ({decision.get('reason')})\n"
         f"  written={result.get('written')}\n"
+        f"  manifest={result.get('manifest')}\n"
         f"  ok={outcome.get('ok')}",
         flush=True,
     )
