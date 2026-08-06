@@ -17,7 +17,8 @@ from eglk_harness.domain.adapters.mcp import (
     codex_mcp_overrides,
 )
 from eglk_harness.domain.adapters.mock import MockAdapter
-from eglk_harness.domain.json_extract import extract_json
+from eglk_harness.domain.adapters.parse import episode_from_text
+from eglk_harness.domain.json_extract import extract_json, unwrap_agent_jsonl
 from eglk_harness.domain.schema_validate import parse_and_validate, validate_document
 from eglk_harness.domain.skills import load_skill, render_prompt
 
@@ -73,6 +74,37 @@ def test_claude_argv_with_tools(tmp_path: Path) -> None:
 def test_extract_json_fenced() -> None:
     text = 'noise\n```json\n{"a": 1}\n```\n'
     assert extract_json(text) == {"a": 1}
+
+
+def test_unwrap_codex_jsonl_agent_message() -> None:
+    stream = (
+        '{"type":"thread.started","thread_id":"t1"}\n'
+        '{"type":"item.completed","item":{"id":"item_1","type":"agent_message",'
+        '"text":"```json\\n{\\"claim_id\\":\\"c1\\",\\"tick\\":0,\\"maker_session_id\\":\\"m\\",'
+        '\\"kind\\":\\"files\\",\\"done_progress\\":1.0,\\"confidence\\":0.9,'
+        '\\"alternatives\\":[{\\"text\\":\\"alt\\",\\"status\\":\\"reject\\"}],'
+        '\\"payload\\":{\\"files\\":{\\"a.txt\\":\\"x\\"}}}\\n```"}}\n'
+        '{"type":"turn.completed","usage":{"input_tokens":1}}\n'
+    )
+    body = unwrap_agent_jsonl(stream)
+    assert "claim_id" in body
+    assert "thread_id" not in body
+    doc, errs = parse_and_validate("claim", stream)
+    assert errs == []
+    assert doc and doc["claim_id"] == "c1"
+
+    ep = episode_from_text(
+        EpisodeRequest(
+            role="maker",
+            prompt="x",
+            workdir=Path("."),
+            tools_allowed=True,
+            expect="claim",
+        ),
+        stream,
+        backend="codex",
+    )
+    assert ep.ok and ep.parsed and ep.parsed["claim_id"] == "c1"
 
 
 def test_skills_load() -> None:
@@ -139,6 +171,27 @@ def test_parse_and_validate_claim() -> None:
     doc, errs = parse_and_validate("claim", text)
     assert errs == []
     assert doc and doc["claim_id"] == "c1"
+
+
+def test_parse_claim_coerces_alt_id_and_timestamp_tick() -> None:
+    text = """
+    {
+      "claim_id": "c1",
+      "tick": "2026-08-06T14:20:05Z",
+      "maker_session_id": "m",
+      "kind": "files",
+      "done_progress": 1.0,
+      "confidence": 0.9,
+      "alternatives": [{"id": "alt_print", "reason": "needs a file"}],
+      "payload": {"files": {"a.txt": "x"}}
+    }
+    """
+    doc, errs = parse_and_validate("claim", text)
+    assert errs == []
+    assert doc is not None
+    assert doc["tick"] == 0  # placeholder; MakerActor overwrites with leaf tick
+    assert doc["alternatives"][0]["text"] == "alt_print"
+    assert doc["alternatives"][0]["status"] == "reject"
 
 
 def test_codex_build_argv_includes_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

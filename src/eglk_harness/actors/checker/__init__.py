@@ -75,6 +75,6 @@ class CheckerActor(RequestResponseActor):
         if not result.ok or not isinstance(result.parsed, dict):
             return messages.err_body(result.error or "checker_episode_failed")
         evidence = dict(result.parsed)
-        evidence.setdefault("tick", tick)
-        evidence.setdefault("subgoal_id", subgoal_id)
+        evidence["tick"] = tick
+        evidence["subgoal_id"] = subgoal_id
         return messages.ok_body(evidence=evidence)

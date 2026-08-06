@@ -68,6 +68,6 @@ class MakerActor(RequestResponseActor):
         if not result.ok or not isinstance(result.parsed, dict):
             return messages.err_body(result.error or "maker_episode_failed")
         claim = dict(result.parsed)
-        claim.setdefault("tick", tick)
-        claim.setdefault("subgoal_id", subgoal_id)
+        claim["tick"] = tick
+        claim["subgoal_id"] = subgoal_id
         return messages.ok_body(claim=claim)
