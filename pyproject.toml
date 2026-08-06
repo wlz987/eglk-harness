@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "eglk" }]
-dependencies = []
+dependencies = [
+  "eba @ git+https://github.com/wlz987/eba.git",
+  "eba-job @ git+https://github.com/wlz987/eba_job.git",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
@@ -27,3 +30,5 @@ eglk_harness = ["domain/schemas/*.json", "domain/schemas/README.md"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
