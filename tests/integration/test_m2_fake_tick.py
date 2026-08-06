@@ -70,7 +70,7 @@ async def test_fake_tick_admit_writes_loop_artifacts(tmp_path: Path) -> None:
     assert (loop_dir / "evidence" / "000.json").is_file()
     assert (loop_dir / "decisions" / "000.json").is_file()
     assert (tmp_path / "hello.txt").is_file()
-    assert "hello from fake maker" in (tmp_path / "hello.txt").read_text(encoding="utf-8")
+    assert "hello from mock maker" in (tmp_path / "hello.txt").read_text(encoding="utf-8")
 
     tree = loop_store.load_tree(loop_dir)
     assert tree is not None

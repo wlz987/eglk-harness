@@ -13,6 +13,7 @@ authors = [{ name = "eglk" }]
 dependencies = [
   "eba @ git+https://github.com/wlz987/eba.git",
   "eba-job @ git+https://github.com/wlz987/eba_job.git",
+  "jsonschema>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +26,11 @@ eglk-harness = "eglk_harness.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-eglk_harness = ["domain/schemas/*.json", "domain/schemas/README.md"]
+eglk_harness = [
+  "domain/schemas/*.json",
+  "domain/schemas/README.md",
+  "domain/skills/*.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

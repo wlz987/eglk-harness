@@ -48,6 +48,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             agent=args.agent,
             swarm=args.swarm,
             mcp_config=Path(args.mcp_config) if args.mcp_config else None,
+            mcp_add_dirs=list(args.mcp_add_dir or []),
         )
     )
 
@@ -101,12 +102,18 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--goal", "--task", dest="goal", default=None, help="Goal text or path")
     run_p.add_argument(
         "--agent",
-        default="codex",
-        choices=("codex", "claude_code"),
-        help="Backend agent (default: codex)",
+        default="mock",
+        choices=("mock", "codex", "claude_code"),
+        help="Backend agent (default: mock until live adapters are configured)",
     )
     run_p.add_argument("--swarm", default=None, help="0|1 soft switch")
     run_p.add_argument("--mcp-config", default=None, help="Claude-shaped mcp.json (opt-in)")
+    run_p.add_argument(
+        "--mcp-add-dir",
+        action="append",
+        default=None,
+        help="Extra readable dir for Maker/Checker MCP (repeatable)",
+    )
     run_p.set_defaults(func=_cmd_run)
 
     st_p = sub.add_parser("status", help="Read-only status of harness dirs / runs")

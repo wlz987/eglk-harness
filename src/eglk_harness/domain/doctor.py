@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -10,7 +11,9 @@ from pathlib import Path
 
 from eglk_harness import __version__
 from eglk_harness.domain import paths
+from eglk_harness.domain.adapters.mcp import resolve_mcp_config
 from eglk_harness.domain.paths import STATE_SCHEMA
+from eglk_harness.domain.skills import load_skill
 
 
 @dataclass
@@ -42,40 +45,69 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         )
     )
 
+    codex = shutil.which("codex")
     report.checks.append(
         DoctorCheck(
             name="codex",
-            ok=shutil.which("codex") is not None,
-            detail="found in PATH" if shutil.which("codex") else "not in PATH (optional until live Adapter)",
+            ok=True,
+            detail=("found in PATH" if codex else "not in PATH [warn] — needed for --agent codex"),
         )
     )
-    # codex missing is a warning for M0 — mark ok=True with soft note so doctor exits 0
-    # Re-evaluate: packaging says doctor checks if in PATH. Soft fail for M0 so CI passes.
-    for i, c in enumerate(report.checks):
-        if c.name == "codex" and not c.ok:
-            report.checks[i] = DoctorCheck(c.name, True, c.detail + " [warn]")
-
+    claude = shutil.which("claude")
     report.checks.append(
         DoctorCheck(
             name="claude",
             ok=True,
             detail=(
-                "found in PATH"
-                if shutil.which("claude")
-                else "not in PATH (optional) [warn]"
+                "found in PATH" if claude else "not in PATH [warn] — needed for --agent claude_code"
             ),
         )
     )
 
     schema_dir = Path(__file__).resolve().parent / "schemas"
-    schema_ok = schema_dir.is_dir() and (schema_dir / "state.schema.json").is_file()
+    required = ("state.schema.json", "claim.schema.json", "evidence.schema.json", "gate_decision.schema.json")
+    missing = [n for n in required if not (schema_dir / n).is_file()]
     report.checks.append(
         DoctorCheck(
             name="schemas",
-            ok=schema_ok,
-            detail=f"pin {STATE_SCHEMA}; dir={schema_dir}" if schema_ok else f"missing {schema_dir}",
+            ok=not missing,
+            detail=(
+                f"pin {STATE_SCHEMA}; dir={schema_dir}"
+                if not missing
+                else f"missing {missing} under {schema_dir}"
+            ),
         )
     )
+
+    try:
+        load_skill("maker")
+        load_skill("checker")
+        skills_ok, skills_detail = True, "maker.md + checker.md present"
+    except FileNotFoundError as exc:
+        skills_ok, skills_detail = False, str(exc)
+    report.checks.append(DoctorCheck(name="skills", ok=skills_ok, detail=skills_detail))
+
+    mcp = resolve_mcp_config(None)
+    if mcp is None:
+        report.checks.append(
+            DoctorCheck(name="mcp_config", ok=True, detail="unset (opt-in; no MCP)")
+        )
+    elif not mcp.is_file():
+        report.checks.append(
+            DoctorCheck(name="mcp_config", ok=False, detail=f"EGLK_MCP_CONFIG not readable: {mcp}")
+        )
+    else:
+        try:
+            data = json.loads(mcp.read_text(encoding="utf-8"))
+            servers = data.get("mcpServers") if isinstance(data, dict) else None
+            n = len(servers) if isinstance(servers, dict) else 0
+            report.checks.append(
+                DoctorCheck(name="mcp_config", ok=True, detail=f"{mcp} readable; {n} server(s)")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            report.checks.append(
+                DoctorCheck(name="mcp_config", ok=False, detail=f"invalid JSON: {exc}")
+            )
 
     harness = paths.harness_root(workdir)
     report.checks.append(
@@ -90,7 +122,6 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         )
     )
 
-    # package import smoke
     report.checks.append(
         DoctorCheck(
             name="package",
