@@ -71,7 +71,7 @@ class ClaudeCodeAdapter:
                 error=f"claude_exit_{proc.returncode}: {proc.stderr[:500]}",
                 backend=self.name,
             )
-        from eglk_harness.domain.adapters.agent_logs import write_visible_sidecar
+        from eglk_harness.domain.adapters.agent_logs import write_trajectory_sidecars
 
-        write_visible_sidecar(request.tee_path, text)
+        write_trajectory_sidecars(request.tee_path, text)
         return episode_from_text(request, text, backend=self.name)
