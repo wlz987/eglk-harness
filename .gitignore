@@ -40,3 +40,4 @@ uv.lock
 *.log
 .tmp
 *.tmp
+.eglk-soak-bypass/
