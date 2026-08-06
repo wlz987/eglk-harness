@@ -113,7 +113,7 @@ def _assemble_actors(
     title = title_from_goal(text)
     criteria = done_criteria(text)
 
-    mcp_path = resolve_mcp_config(request.mcp_config)
+    mcp_path = resolve_mcp_config(request.mcp_config, agent=request.agent)
     add_dirs = resolve_add_dirs(request.mcp_add_dirs)
 
     for role, allowed in (

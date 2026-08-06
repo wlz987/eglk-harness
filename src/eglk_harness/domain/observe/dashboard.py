@@ -19,7 +19,14 @@ _FORBIDDEN_SEGMENTS = frozenset(
 
 
 def list_routes() -> list[str]:
-    return ["GET /", "GET /api/status", "GET /api/tree", "GET /api/ticks", "GET /health"]
+    return [
+        "GET /",
+        "GET /api/status",
+        "GET /api/tree",
+        "GET /api/ticks",
+        "GET /api/agent_logs",
+        "GET /health",
+    ]
 
 
 def assert_read_only_routes() -> None:
@@ -67,6 +74,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/ticks":
             self._json({"lines": self._load_ticks()})
             return
+        if path == "/api/agent_logs":
+            self._json(self._load_agent_logs())
+            return
         if path == "/":
             self._html(_INDEX_HTML)
             return
@@ -98,6 +108,32 @@ class _Handler(BaseHTTPRequestHandler):
         if not ticks.is_file():
             return []
         return ticks.read_text(encoding="utf-8").splitlines()[-50:]
+
+    def _load_agent_logs(self) -> dict[str, Any]:
+        """List visible/steps sidecars under the newest loop (read-only)."""
+        loop = paths.loop_root(self.workdir)
+        if not loop.is_dir():
+            return {"files": [], "error": "no_loop"}
+        goals = sorted(p for p in loop.iterdir() if p.is_dir())
+        if not goals:
+            return {"files": [], "error": "empty"}
+        logs_dir = goals[-1] / "agent_logs"
+        if not logs_dir.is_dir():
+            return {"goal_id": goals[-1].name, "files": []}
+        files: list[dict[str, str]] = []
+        for path in sorted(logs_dir.iterdir()):
+            if not path.is_file():
+                continue
+            name = path.name
+            kind = "raw"
+            if name.endswith(".visible.txt"):
+                kind = "visible"
+            elif name.endswith(".steps.json"):
+                kind = "steps"
+            elif name.endswith(".jsonl"):
+                kind = "jsonl"
+            files.append({"name": name, "kind": kind, "path": str(path)})
+        return {"goal_id": goals[-1].name, "files": files[-40:]}
 
     def _json(self, data: dict[str, Any]) -> None:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -135,6 +171,7 @@ _INDEX_HTML = """<!DOCTYPE html>
     <a href="/api/status">/api/status</a> ·
     <a href="/api/tree">/api/tree</a> ·
     <a href="/api/ticks">/api/ticks</a> ·
+    <a href="/api/agent_logs">/api/agent_logs</a> ·
     <a href="/health">/health</a>
   </p>
   <pre id="out">loading…</pre>

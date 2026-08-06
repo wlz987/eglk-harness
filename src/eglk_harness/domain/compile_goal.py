@@ -137,6 +137,7 @@ def frame_from_compile_json(doc: dict[str, Any], *, source_excerpt: str = "") ->
 
 async def _compile_via_adapter(workdir: Path, goal_text: str, backend: str) -> str | None:
     from eglk_harness.domain.adapters.factory import create_adapter
+    from eglk_harness.domain.budgets import timeout_for_role
     from eglk_harness.domain.bypass_llm import run_bypass_json
 
     adapter = create_adapter(backend)
@@ -148,7 +149,7 @@ async def _compile_via_adapter(workdir: Path, goal_text: str, backend: str) -> s
         extra='JSON: {"title","direction","acceptance":[],"constraints":[],"notes"}',
         tick=0,
         subgoal_id="compile",
-        timeout_s=180.0,
+        timeout_s=timeout_for_role("compile"),
         force=True,
     )
     if not raw:

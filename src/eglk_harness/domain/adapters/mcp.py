@@ -33,12 +33,29 @@ def resolve_mcp_config(
     cli_path: Path | None = None,
     *,
     env: Mapping[str, str] | None = None,
+    agent: str | None = None,
 ) -> Path | None:
+    """Resolve MCP config: CLI → env → already-installed plugin (never installs)."""
     env = env or os.environ
     if cli_path is not None:
         return Path(cli_path)
     raw = env.get("EGLK_MCP_CONFIG") or ""
-    return Path(raw) if raw.strip() else None
+    if raw.strip():
+        return Path(raw)
+    # Opt-in use of a previously installed computer-use plugin MCP file.
+    # ``run`` never installs; empty path (official Codex GUI) is skipped here.
+    if agent and agent not in {"mock", "fake"}:
+        try:
+            from eglk_harness.domain.plugins.state import active_plugin_for_agent
+
+            active = active_plugin_for_agent(agent)
+        except Exception:
+            active = None
+        if active is not None:
+            _plugin_id, mcp_path = active
+            if mcp_path and Path(mcp_path).is_file():
+                return Path(mcp_path)
+    return None
 
 
 def resolve_add_dirs(

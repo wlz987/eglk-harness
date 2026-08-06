@@ -10,6 +10,7 @@ from eba import RequestResponseActor
 
 from eglk_harness.domain import sigma
 from eglk_harness.domain.adapters.base import AgentAdapter
+from eglk_harness.domain.budgets import timeout_for_role
 from eglk_harness.domain.bypass_llm import coerce_refiner, run_bypass_json
 from eglk_harness.protocol import messages, payload, topics
 
@@ -117,6 +118,7 @@ class RefinerActor(RequestResponseActor):
             extra='JSON: {"id","kind","text","conf"}',
             tick=tick,
             subgoal_id=leaf or "root",
+            timeout_s=float(args.get("timeout_s") or timeout_for_role("refiner")),
         )
         item = coerce_refiner(raw, fallback=fallback)
         path = sigma.write_refined(loop_dir, tick, item)

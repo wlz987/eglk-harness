@@ -59,7 +59,8 @@ class StatusReport:
             "quota:       "
             f"cognitive_tokens={q.get('cognitive_tokens', 0)}/"
             f"{q.get('cognitive_tokens_max', P.COGNITIVE_TOKENS_MAX)}  "
-            f"repairs_max={q.get('repairs_max', P.REPAIRS_MAX)}"
+            f"repairs_max={q.get('repairs_max', P.REPAIRS_MAX)}  "
+            f"usd_used={q.get('usd_used', 0)}"
         )
         lines.append(f"sigma.active: {self.sigma_active_count}")
 
@@ -217,4 +218,17 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
                 break
 
     report.sigma_active_count = len(sigma.load_active(workdir))
+    try:
+        from eglk_harness.domain.adapters.mcp import resolve_mcp_config
+        from eglk_harness.domain.plugins.state import active_plugin_for_agent
+
+        mcp = resolve_mcp_config(None)
+        if mcp is not None:
+            report.notes.append(f"mcp={mcp}")
+        for agent in ("codex", "claude_code"):
+            active = active_plugin_for_agent(agent)
+            if active:
+                report.notes.append(f"plugin[{agent}]={active[0]}")
+    except Exception:
+        pass
     return report

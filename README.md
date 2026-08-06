@@ -58,8 +58,11 @@ Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).
 pytest
 eglk-harness check-projections
 eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
+make maturity                                  # pytest + projections + soak + weave CI
 # Live soak (manual gate):
 # EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
 # Eval smoke (from design repo):
 # bash experiment/eval/scripts/ci_weave_thin.sh
+# New live run scaffold:
+# bash ../experiment/runs/scripts/new_live_run.sh my_run
 ```

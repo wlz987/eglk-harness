@@ -9,3 +9,6 @@
 - Meter tokens/USD from adapter JSONL into `EpisodeResult`.
 - Eval: `--external-score` for WA-Hard; OSWorld `path_hint`; weave CI script in design repo.
 - Doctor reports plugins / budgets / prompt_language; richer default `config.toml`.
+- Bypass roles honour `timeout_for_role`; `run` reuses installed plugin MCP (no install).
+- Dashboard `/api/agent_logs`; status shows `usd_used` + plugin hints.
+- `make maturity` / `scripts/maturity_gate.sh` local gate.

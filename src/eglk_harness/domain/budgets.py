@@ -81,3 +81,8 @@ def resolve_role_budgets(
         refiner=EpisodeBudget(values["refiner"]),
         compile=EpisodeBudget(values["compile"]),
     )
+
+
+def timeout_for_role(role: str, env: Mapping[str, str] | None = None) -> float:
+    """Resolve one role's episode timeout from env/defaults (for bypass actors)."""
+    return resolve_role_budgets(None, env).for_role(role.lower()).max_duration_seconds
