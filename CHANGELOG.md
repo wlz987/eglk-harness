@@ -12,3 +12,6 @@
 - Bypass roles honour `timeout_for_role`; `run` reuses installed plugin MCP (no install).
 - Dashboard `/api/agent_logs`; status shows `usd_used` + plugin hints.
 - `make maturity` / `scripts/maturity_gate.sh` local gate.
+- Runtime bootstrap: `.env` → `config.toml` → CLI (packaging priority); `run --dashboard`.
+- Protected paths: refuse Claim writes to `.goal.md` / `.goal_format.md` / `.eglk-harness/`.
+- Packaging contract tests pin CLI surface to `design/kernel/packaging.md` §3.1.

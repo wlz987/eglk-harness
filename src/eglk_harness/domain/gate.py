@@ -128,7 +128,8 @@ def decide(
 
     def _repair(reason: str) -> GateDecision:
         used = int(counts.get(reason, 0))
-        if used >= P.REPAIRS_MAX:
+        repairs_cap = int(quota.get("repairs_max", P.REPAIRS_MAX) or P.REPAIRS_MAX)
+        if used >= repairs_cap:
             return _out(
                 "abort",
                 f"{reason}_exhausted",

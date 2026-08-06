@@ -231,23 +231,32 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
-    # Per-role model env overrides (CLI wins for this process)
+    from eglk_harness.domain.runtime_bootstrap import (
+        bootstrap_workdir,
+        soft_max_ticks,
+        want_dashboard,
+    )
+
+    cli_env: dict[str, str] = {}
     if args.maker_model:
-        os.environ["EGLK_MODEL_MAKER"] = args.maker_model
+        cli_env["EGLK_MODEL_MAKER"] = args.maker_model
     if args.checker_model:
-        os.environ["EGLK_MODEL_CHECKER"] = args.checker_model
+        cli_env["EGLK_MODEL_CHECKER"] = args.checker_model
     if args.model:
-        os.environ.setdefault("EGLK_MODEL", args.model)
+        cli_env["EGLK_MODEL"] = args.model
         if not args.maker_model:
-            os.environ["EGLK_MODEL_MAKER"] = args.model
+            cli_env["EGLK_MODEL_MAKER"] = args.model
         if not args.checker_model:
-            os.environ["EGLK_MODEL_CHECKER"] = args.model
+            cli_env["EGLK_MODEL_CHECKER"] = args.model
+    if args.mcp_config:
+        cli_env["EGLK_MCP_CONFIG"] = str(Path(args.mcp_config).resolve())
+    bootstrap_workdir(workdir, cli_env=cli_env)
 
     kwargs: dict = {
         "workdir": workdir,
         "goal": args.goal,
         "agent": resolve_agent(args.agent, workdir),
-        "swarm": resolve_swarm(args.swarm),
+        "swarm": resolve_swarm(args.swarm, workdir),
         "mcp_config": Path(args.mcp_config) if args.mcp_config else None,
         "mcp_add_dirs": list(args.mcp_add_dir or []),
         "compile": resolve_compile(args.compile, workdir),
@@ -261,7 +270,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
         kwargs["maker_timeout_s"] = budgets.maker.max_duration_seconds
     if kwargs["checker_timeout_s"] is None:
         kwargs["checker_timeout_s"] = budgets.checker.max_duration_seconds
-    # Export bypass budgets for actors that read env
     os.environ.setdefault(
         "EGLK_TIMEOUT_GOVERNOR", str(budgets.governor.max_duration_seconds)
     )
@@ -274,11 +282,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
     os.environ.setdefault(
         "EGLK_TIMEOUT_REFINER", str(budgets.refiner.max_duration_seconds)
     )
-    if args.max_ticks is not None:
-        kwargs["max_ticks"] = args.max_ticks
+    ticks = soft_max_ticks(args.max_ticks)
+    if ticks is not None:
+        kwargs["max_ticks"] = ticks
     if getattr(args, "tick", None) is not None:
         kwargs["tick"] = args.tick
-    return app_run(RunRequest(**kwargs))
+    code = app_run(RunRequest(**kwargs))
+    open_dash = bool(getattr(args, "dashboard", False)) or want_dashboard(cli_flag=None)
+    if open_dash:
+        port = int(getattr(args, "dashboard_port", 8766) or 8766)
+        print(
+            f"opening read-only dashboard on http://127.0.0.1:{port}/ (Ctrl+C to stop)",
+            flush=True,
+        )
+        serve_dashboard(workdir, host="127.0.0.1", port=port, blocking=True)
+    return code
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
@@ -532,6 +550,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Start tick index (default: auto-resume from state.json + 1)",
+    )
+    run_p.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="After run, open read-only dashboard (never an approval gate)",
+    )
+    run_p.add_argument(
+        "--dashboard-port",
+        type=int,
+        default=8766,
+        help="Port for --dashboard (default 8766)",
     )
     run_p.set_defaults(func=_cmd_run)
 

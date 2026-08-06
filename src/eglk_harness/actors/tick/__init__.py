@@ -10,7 +10,7 @@ from eba_job import Job
 
 from eglk_harness.domain import integrity, loop_store, phase3, sigma, skill_lib, worldref
 from eglk_harness.domain.leaf_contract import assemble_leaf_contract
-from eglk_harness.domain.projections import COGNITIVE_TOKENS_MAX
+from eglk_harness.domain.projections import effective_cognitive_tokens_max, effective_repairs_max
 from eglk_harness.domain.repair_counts import load_runtime_state, repair_counts_from_decisions
 from eglk_harness.domain.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
 from eglk_harness.domain.tokens import add_tokens
@@ -60,11 +60,14 @@ class TickJob(Job):
             quota
             or {
                 "cognitive_tokens": 0,
-                "cognitive_tokens_max": COGNITIVE_TOKENS_MAX,
+                "cognitive_tokens_max": effective_cognitive_tokens_max(),
+                "repairs_max": effective_repairs_max(),
             }
         )
         if "cognitive_tokens_max" not in self.quota:
-            self.quota["cognitive_tokens_max"] = COGNITIVE_TOKENS_MAX
+            self.quota["cognitive_tokens_max"] = effective_cognitive_tokens_max()
+        if "repairs_max" not in self.quota:
+            self.quota["repairs_max"] = effective_repairs_max()
         self.loop_dir: Path | None = None
         self.tree: TaskTree | None = None
         self.world: worldref.WorldRef | None = None

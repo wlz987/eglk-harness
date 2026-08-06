@@ -126,19 +126,31 @@ def _looks_like_text_placeholder_for_binary(rel: str, content: str) -> bool:
 
 
 def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
-    """Apply Claim.payload.files mapping (relative path → content). Returns written paths."""
+    """Apply Claim.payload.files mapping (relative path → content). Returns written paths.
+
+    Refuses ``.goal.md`` / ``.goal_format.md`` / ``.env`` / ``.eglk-harness/**``
+    (GOAL.md invariant: runtime models must not rewrite goal or harness config).
+    """
     workdir = workdir.resolve()
-    written: list[str] = []
+    protected_hits: list[str] = []
+    pending: list[tuple[str, str]] = []
     for rel, content in files.items():
         rel_s = str(rel).lstrip("/").replace("\\", "/")
         if ".." in Path(rel_s).parts:
             raise ValueError(f"path escape rejected: {rel}")
-        if rel_s.startswith(".eglk-harness/") or rel_s in {".goal.md", ".goal_format.md"}:
-            # protected paths — skip (orchestrator may log)
+        if rel_s.startswith(".eglk-harness/") or rel_s in {".goal.md", ".goal_format.md", ".env"}:
+            protected_hits.append(rel_s)
             continue
         if _looks_like_text_placeholder_for_binary(rel_s, content):
-            # Keep MCP/tool screenshots; do not overwrite with Claim text stubs.
             continue
+        pending.append((rel_s, content))
+    if protected_hits:
+        raise ValueError(
+            "protected path refused (invariant: goal/config immutable at runtime): "
+            + ", ".join(protected_hits)
+        )
+    written: list[str] = []
+    for rel_s, content in pending:
         dest = workdir / rel_s
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content, encoding="utf-8")

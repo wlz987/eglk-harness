@@ -47,7 +47,9 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
 | `check-projections` | CI pin vs `design/kernel/projections.md` |
 
-`run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`.
+`run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`, `--dashboard`（只读观测，非审批闸）.
+
+配置优先级（`packaging.md`）：**CLI > `.eglk-harness/config.toml` > `.env`/环境变量 > 内置默认**（`run` 启动时 bootstrap）。
 
 Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
 评测资产 SSOT：设计仓 `experiment/eval/`（主尺 WA-Hard；Weave/OSWorld 辅）。

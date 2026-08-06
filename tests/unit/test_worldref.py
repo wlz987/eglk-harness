@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from eglk_harness.domain.worldref import (
     apply_claim_payload,
     apply_files,
@@ -37,13 +39,14 @@ def test_apply_rejects_path_escape(tmp_path: Path) -> None:
         assert "escape" in str(e)
 
 
-def test_apply_skips_protected(tmp_path: Path) -> None:
+def test_apply_refuses_protected(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
     (work / ".goal.md").write_text("keep", encoding="utf-8")
-    written = apply_claim_payload(work, {"files": {".goal.md": "hack", "ok.txt": "yes"}})
-    assert written == ["ok.txt"]
+    with pytest.raises(ValueError, match="protected path"):
+        apply_claim_payload(work, {"files": {".goal.md": "hack", "ok.txt": "yes"}})
     assert (work / ".goal.md").read_text(encoding="utf-8") == "keep"
+    assert not (work / "ok.txt").exists()
 
 
 def test_snapshot_ignores_harness_dir(tmp_path: Path) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Mapping
+
 # ── Gate 判定阈值 ──
 TAU_DONE: float = 1.0
 TAU_GAP: float = 0.5
@@ -10,6 +12,34 @@ TAU_UNC: float = 0.15  # legacy throttle reference — NEVER abort
 
 REPAIRS_MAX: int = 8
 COGNITIVE_TOKENS_MAX: int = 64000
+
+
+def effective_cognitive_tokens_max(env: Mapping[str, str] | None = None) -> int:
+    """Design default, overridable by ``EGLK_COGNITIVE_TOKENS_MAX`` / config.toml [limits]."""
+    import os
+
+    env = env or os.environ
+    raw = (env.get("EGLK_COGNITIVE_TOKENS_MAX") or "").strip()
+    if not raw:
+        return COGNITIVE_TOKENS_MAX
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return COGNITIVE_TOKENS_MAX
+
+
+def effective_repairs_max(env: Mapping[str, str] | None = None) -> int:
+    """Design default, overridable by ``EGLK_REPAIRS_MAX`` / config.toml [limits]."""
+    import os
+
+    env = env or os.environ
+    raw = (env.get("EGLK_REPAIRS_MAX") or "").strip()
+    if not raw:
+        return REPAIRS_MAX
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return REPAIRS_MAX
 
 # ── SWARM 触发 ──
 TAU_UNC_HIGH: float = 0.6

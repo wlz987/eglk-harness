@@ -131,8 +131,22 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     )
 
     from eglk_harness.domain.budgets import resolve_role_budgets
+    from eglk_harness.domain.config_resolve import load_config_toml
     from eglk_harness.domain.plugins.state import installed_plugins, plugins_root
     from eglk_harness.domain.prompt_i18n import prompt_language
+
+    cfg = load_config_toml(workdir)
+    report.checks.append(
+        DoctorCheck(
+            name="config_toml",
+            ok=True,
+            detail=(
+                f"{paths.config_path(workdir)} "
+                + ("present" if paths.config_path(workdir).is_file() else "absent")
+                + f"; sections={sorted(cfg.keys()) or 'none'}"
+            ),
+        )
+    )
 
     budgets = resolve_role_budgets()
     report.checks.append(
