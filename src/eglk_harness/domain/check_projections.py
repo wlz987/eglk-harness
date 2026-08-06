@@ -93,16 +93,6 @@ def check_projections() -> ProjectionReport:
             detail="TaskTree present; MAX_SPLIT_DEPTH pinned",
         )
     )
-
-    # Smoke: focus/unc must not abort via gate when only those signals differ
-    # (covered by gate unit tests; here we only pin the policy constants).
-    report.checks.append(
-        ProjectionCheck(
-            name="abort_authority",
-            ok=True,
-            detail="abort only via cognitive_tokens + repairs_max (design)",
-        )
-    )
     return report
 
 

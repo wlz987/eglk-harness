@@ -1,16 +1,30 @@
-"""M6 hardening: integrity, projections CI, manifest, models."""
+"""Hardening: integrity monitor, projections CI, Manifest, model resolve."""
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
+from eba import ActorId, Bus, Inbox, make_envelope, run_actors
 
+from eglk_harness.actors.checker import CheckerActor
+from eglk_harness.actors.gate import GateActor
+from eglk_harness.actors.governor import GovernorActor
+from eglk_harness.actors.host import RunHost
+from eglk_harness.actors.maker import MakerActor
+from eglk_harness.actors.refiner import RefinerActor
+from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
+from eglk_harness.actors.tick import TickJob
+from eglk_harness.cli import main
+from eglk_harness.domain import projections as P
+from eglk_harness.domain.adapters import MockAdapter
 from eglk_harness.domain.check_projections import EXPECTED, check_projections
 from eglk_harness.domain.integrity import apply_integrity_flag, fingerprint_workdir
+from eglk_harness.domain.init_project import init_project
 from eglk_harness.domain.manifest import build_manifest, local_runs_root, write_manifest
 from eglk_harness.domain.models import NEVER_DOWNGRADE_ROLES, may_downgrade, resolve_model
-from eglk_harness.domain import projections as P
+from eglk_harness.protocol import keys, topics, payload as pl
 
 
 def test_check_projections_ok() -> None:
@@ -19,7 +33,7 @@ def test_check_projections_ok() -> None:
     assert EXPECTED["TAU_DONE"] == P.TAU_DONE
 
 
-def test_fingerprint_detects_checker_write(tmp_path: Path) -> None:
+def test_fingerprint_detects_write(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("1\n", encoding="utf-8")
     before = fingerprint_workdir(tmp_path)
     (tmp_path / "a.txt").write_text("2\n", encoding="utf-8")
@@ -32,42 +46,34 @@ def test_fingerprint_detects_checker_write(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_integrity_forces_repair(tmp_path: Path) -> None:
-    """Simulate Checker mutating world between fingerprint and evidence handling."""
-    # Use a custom checker path: run admit mode but manually mutate mid-flight is hard;
-    # unit-level apply_integrity_flag is covered; here ensure TickJob wires fingerprint
-    # by monkeypatching FakeChecker to write a file.
-    from eba import ActorId, Bus, Inbox, make_envelope, run_actors
-    import asyncio
-
-    from eglk_harness.actors.checker import FakeCheckerActor
-    from eglk_harness.actors.gate import GateActor
-    from eglk_harness.actors.governor import GovernorActor
-    from eglk_harness.actors.host import RunHost
-    from eglk_harness.actors.maker import FakeMakerActor
-    from eglk_harness.actors.refiner import RefinerActor
-    from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
-    from eglk_harness.actors.tick import TickJob
-    from eglk_harness.domain.init_project import init_project
-    from eglk_harness.protocol import keys, topics
-
-    class MutatingChecker(FakeCheckerActor):
+    class MutatingChecker(CheckerActor):
         async def work(self, body):  # type: ignore[no-untyped-def]
-            # Mutate workdir during checker episode
-            args = body.get("args") if isinstance(body, dict) else {}
-            if not isinstance(args, dict):
-                from eglk_harness.protocol import payload as pl
-
-                args = pl.get_args(body if isinstance(body, dict) else {})
+            args = pl.get_args(body if isinstance(body, dict) else {})
             wd = Path(str(args.get("workdir") or tmp_path))
             (wd / "evil.txt").write_text("checker wrote me\n", encoding="utf-8")
             return await super().work(body)
 
     init_project(tmp_path)
+    adapter = MockAdapter(mode="admit")
     bus = Bus()
     inbox = lambda: Inbox(32)  # noqa: E731
     actors = [
-        FakeMakerActor(actor_id=ActorId(keys.MAKER), bus=bus, inbox=inbox(), mode="admit", workdir=tmp_path),
-        MutatingChecker(actor_id=ActorId(keys.CHECKER), bus=bus, inbox=inbox(), mode="admit", workdir=tmp_path),
+        MakerActor(
+            actor_id=ActorId(keys.MAKER),
+            bus=bus,
+            inbox=inbox(),
+            adapter=adapter,
+            workdir=tmp_path,
+            tools_allowed=True,
+        ),
+        MutatingChecker(
+            actor_id=ActorId(keys.CHECKER),
+            bus=bus,
+            inbox=inbox(),
+            adapter=adapter,
+            workdir=tmp_path,
+            tools_allowed=True,
+        ),
         GateActor(actor_id=ActorId(keys.GATE), bus=bus, inbox=inbox()),
         GovernorActor(actor_id=ActorId(keys.GOVERNOR), bus=bus, inbox=inbox(), workdir=tmp_path),
         ExplorerActor(actor_id=ActorId(keys.EXPLORER), bus=bus, inbox=inbox()),
@@ -121,16 +127,17 @@ def test_manifest_write(tmp_path: Path) -> None:
 
 
 def test_model_resolve_shared_and_never_downgrade() -> None:
-    assert resolve_model("maker", env={"EGLK_MODEL": "m1"}) == "m1"
-    assert resolve_model("explorer", env={"EGLK_MODEL_EXPLORER": "cheap", "EGLK_MODEL": "m1"}) == "cheap"
+    assert resolve_model("maker", env={"EGLK_MODEL": "shared"}) == "shared"
+    assert (
+        resolve_model("explorer", env={"EGLK_MODEL_EXPLORER": "cheap", "EGLK_MODEL": "shared"})
+        == "cheap"
+    )
     assert may_downgrade("verifier") is True
     assert may_downgrade("maker") is False
     assert NEVER_DOWNGRADE_ROLES == frozenset({"maker", "governor", "checker"})
 
 
 def test_cli_check_projections() -> None:
-    from eglk_harness.cli import main
-
     with pytest.raises(SystemExit) as ei:
         main(["check-projections"])
     assert ei.value.code == 0

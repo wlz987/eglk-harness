@@ -1,4 +1,4 @@
-"""TickJob — four phases: Phase0 SWARM → Phase1 main → Phase2 refine/veto → Phase3."""
+"""TickJob — Phase 0 SWARM → Phase 1 main chain → Phase 2 refine/veto → Phase 3."""
 
 from __future__ import annotations
 

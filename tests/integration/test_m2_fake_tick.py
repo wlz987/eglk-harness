@@ -1,4 +1,4 @@
-"""M2 integration: one fake tick writes loop artifacts via eba / eba_job."""
+"""Integration: one tick writes loop artifacts and advances/rolls back the tree."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from helpers.tick_runtime import run_tick
 
 
 @pytest.mark.asyncio
-async def test_fake_tick_admit_writes_loop_artifacts(tmp_path: Path) -> None:
+async def test_tick_admit_writes_loop_artifacts(tmp_path: Path) -> None:
     job = await run_tick(tmp_path, mode="admit", swarm_soft="0")
     assert job.outcome and job.outcome["ok"] is True
     assert job.decision and job.decision["decision"] == "admit"
@@ -27,12 +27,11 @@ async def test_fake_tick_admit_writes_loop_artifacts(tmp_path: Path) -> None:
     assert tree is not None
     assert tree.root.status == "admitted"
     assert tree.all_work_admitted()
-    # Phase 3 ticks.jsonl
     assert (loop_dir / "ticks.jsonl").is_file()
 
 
 @pytest.mark.asyncio
-async def test_fake_tick_repair_rolls_back_world(tmp_path: Path) -> None:
+async def test_tick_repair_rolls_back_world(tmp_path: Path) -> None:
     (tmp_path / "keep.txt").write_text("keep\n", encoding="utf-8")
     job = await run_tick(tmp_path, mode="repair_integrity", swarm_soft="0")
     assert job.outcome and job.outcome["ok"] is True

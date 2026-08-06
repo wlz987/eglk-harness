@@ -7,8 +7,8 @@ from pathlib import Path
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
 from eglk_harness.domain.adapters import mcp as mcp_mod
+from eglk_harness.domain.adapters.parse import episode_from_text
 from eglk_harness.domain.adapters.process import require_binary, run_cli
-from eglk_harness.domain.schema_validate import parse_and_validate
 
 
 class ClaudeCodeAdapter:
@@ -29,7 +29,6 @@ class ClaudeCodeAdapter:
 
     def build_argv(self, request: EpisodeRequest) -> list[str]:
         bin_path = require_binary(self.binary)
-        # print mode: non-interactive; prompt as final arg
         argv: list[str] = [bin_path, "-p", "--output-format", "text"]
         model = request.model or self.model
         if model:
@@ -51,9 +50,7 @@ class ClaudeCodeAdapter:
     async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
         try:
             argv = self.build_argv(request)
-        except FileNotFoundError as exc:
-            return EpisodeResult(ok=False, error=str(exc), backend=self.name)
-        except AssertionError as exc:
+        except (FileNotFoundError, AssertionError) as exc:
             return EpisodeResult(ok=False, error=str(exc), backend=self.name)
 
         try:
@@ -73,18 +70,4 @@ class ClaudeCodeAdapter:
                 error=f"claude_exit_{proc.returncode}: {proc.stderr[:500]}",
                 backend=self.name,
             )
-        return self._parse(request, text)
-
-    def _parse(self, request: EpisodeRequest, text: str) -> EpisodeResult:
-        if request.expect == "text":
-            return EpisodeResult(ok=True, text=text, backend=self.name)
-        schema = "claim" if request.expect == "claim" else "evidence"
-        parsed, errs = parse_and_validate(schema, text)
-        if errs or parsed is None:
-            return EpisodeResult(
-                ok=False,
-                text=text,
-                error="unparseable:" + ";".join(errs),
-                backend=self.name,
-            )
-        return EpisodeResult(ok=True, text=text, parsed=parsed, backend=self.name)
+        return episode_from_text(request, text, backend=self.name)

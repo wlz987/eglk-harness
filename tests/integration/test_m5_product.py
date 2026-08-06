@@ -1,4 +1,4 @@
-"""M5 product surface: status + toy e2e admit."""
+"""Product surface: status, start.sh, env.example, toy e2e admit."""
 
 from __future__ import annotations
 

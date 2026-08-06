@@ -63,12 +63,5 @@ def write_decision(loop_dir: Path, tick: int, decision: Mapping[str, Any]) -> Pa
     return write_json(loop_dir / "decisions" / f"{tick:03d}.json", dict(decision))
 
 
-def append_tick_log(loop_dir: Path, record: Mapping[str, Any]) -> Path:
-    path = loop_dir / "ticks.jsonl"
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
-    return path
-
-
 def world_pre_dir(loop_dir: Path, tick: int) -> Path:
     return loop_dir / "world" / f"pre_{tick:03d}"

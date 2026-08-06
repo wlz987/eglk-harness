@@ -206,8 +206,15 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
 
     report.leaf_contract = _leaf_from_reasoning(loop_dir)
     if report.leaf_contract is None:
-        # still in candidates mid-tick (rare for status after run)
-        report.leaf_contract = _latest_json(loop_dir / "candidates")
+        cand = loop_dir / "candidates"
+        for path in sorted(cand.glob("leaf_contract_*.json")) if cand.is_dir() else []:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(data, dict):
+                report.leaf_contract = data
+                break
 
     report.sigma_active_count = len(sigma.load_active(workdir))
     return report

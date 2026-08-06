@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,6 @@ class GovernorActor(RequestResponseActor):
     error_code = "governor_failed"
 
     def __init__(self, *, workdir: Path | None = None, **kwargs: Any) -> None:
-        # Hard: no MCP kwargs accepted on construction
         if kwargs.pop("mcp_config", None) or kwargs.pop("add_dirs", None):
             raise AssertionError("Governor must not receive MCP")
         if kwargs.pop("tools_allowed", False):
@@ -29,7 +29,6 @@ class GovernorActor(RequestResponseActor):
         loop_dir = Path(str(args["loop_dir"])) if args.get("loop_dir") else None
         tick = int(args.get("tick", 0))
         leaf_id = str(args.get("subgoal_id") or "root")
-        # Mock split proposal — orchestrator applies via tree.split_node
         children = [
             {
                 "id": f"{leaf_id}.a",
@@ -52,7 +51,7 @@ class GovernorActor(RequestResponseActor):
             cand = loop_dir / "candidates"
             cand.mkdir(parents=True, exist_ok=True)
             (cand / "subgoals_tree.json").write_text(
-                __import__("json").dumps(proposal, indent=2) + "\n",
+                json.dumps(proposal, indent=2) + "\n",
                 encoding="utf-8",
             )
         return messages.ok_body(proposal=proposal)

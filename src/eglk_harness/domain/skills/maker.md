@@ -1,4 +1,4 @@
-# Maker skill (M3 template)
+# Maker skill
 
 You are the **Maker** for one leaf of an eglk task tree.
 

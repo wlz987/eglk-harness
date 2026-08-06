@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
 from eglk_harness.domain.adapters import mcp as mcp_mod
+from eglk_harness.domain.adapters.parse import episode_from_text
 from eglk_harness.domain.adapters.process import require_binary, run_cli
-from eglk_harness.domain.schema_validate import parse_and_validate
 
 
 class CodexAdapter:
@@ -51,16 +50,13 @@ class CodexAdapter:
                 role=request.role,
             )
         )
-        # prompt via stdin
-        argv.append("-")
+        argv.append("-")  # prompt on stdin
         return argv
 
     async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
         try:
             argv = self.build_argv(request)
-        except FileNotFoundError as exc:
-            return EpisodeResult(ok=False, error=str(exc), backend=self.name)
-        except AssertionError as exc:
+        except (FileNotFoundError, AssertionError) as exc:
             return EpisodeResult(ok=False, error=str(exc), backend=self.name)
 
         try:
@@ -81,19 +77,4 @@ class CodexAdapter:
                 error=f"codex_exit_{proc.returncode}: {proc.stderr[:500]}",
                 backend=self.name,
             )
-
-        return self._parse(request, text)
-
-    def _parse(self, request: EpisodeRequest, text: str) -> EpisodeResult:
-        if request.expect == "text":
-            return EpisodeResult(ok=True, text=text, backend=self.name)
-        schema = "claim" if request.expect == "claim" else "evidence"
-        parsed, errs = parse_and_validate(schema, text)
-        if errs or parsed is None:
-            return EpisodeResult(
-                ok=False,
-                text=text,
-                error="unparseable:" + ";".join(errs),
-                backend=self.name,
-            )
-        return EpisodeResult(ok=True, text=text, parsed=parsed, backend=self.name)
+        return episode_from_text(request, text, backend=self.name)

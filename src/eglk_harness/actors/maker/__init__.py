@@ -71,10 +71,3 @@ class MakerActor(RequestResponseActor):
         claim.setdefault("tick", tick)
         claim.setdefault("subgoal_id", subgoal_id)
         return messages.ok_body(claim=claim)
-
-
-# Backward-compatible alias used by older M2 tests
-class FakeMakerActor(MakerActor):
-    def __init__(self, *, mode: str = "admit", **kwargs: Any) -> None:
-        kwargs.pop("adapter", None)
-        super().__init__(adapter=MockAdapter(mode=mode), **kwargs)

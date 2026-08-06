@@ -1,4 +1,4 @@
-"""Unit tests for AgentAdapter stack (M3)."""
+"""Unit tests for AgentAdapter stack."""
 
 from __future__ import annotations
 

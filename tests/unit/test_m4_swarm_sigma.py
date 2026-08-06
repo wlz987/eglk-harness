@@ -1,4 +1,4 @@
-"""Unit tests for SWARM / compile / sigma (M4)."""
+"""Unit tests for SWARM / compile / sigma."""
 
 from __future__ import annotations
 

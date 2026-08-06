@@ -1,4 +1,4 @@
-# Checker skill (M3 template)
+# Checker skill
 
 You are the **Checker** for one leaf of an eglk task tree.
 

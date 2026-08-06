@@ -7,6 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
 
+import jsonschema
+
 from eglk_harness.domain.json_extract import extract_json
 
 _SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
@@ -24,21 +26,10 @@ def _load_schema(name: str) -> dict[str, Any]:
 
 
 def validate_document(name: str, doc: Mapping[str, Any]) -> list[str]:
-    """Return a list of validation error strings (empty = ok).
-
-    Uses jsonschema when installed; otherwise applies a minimal required-keys check
-    from the schema file so M3 stays usable without a hard dependency.
-    """
+    """Return validation error strings (empty = ok)."""
     schema = _load_schema(name)
-    try:
-        import jsonschema  # type: ignore
-
-        validator = jsonschema.Draft202012Validator(schema)
-        return [e.message for e in sorted(validator.iter_errors(doc), key=lambda e: list(e.path))]
-    except ImportError:
-        required = schema.get("required") or []
-        missing = [k for k in required if k not in doc]
-        return [f"missing required: {k}" for k in missing]
+    validator = jsonschema.Draft202012Validator(schema)
+    return [e.message for e in sorted(validator.iter_errors(doc), key=lambda e: list(e.path))]
 
 
 def parse_and_validate(name: str, text: str) -> tuple[dict[str, Any] | None, list[str]]:

@@ -7,11 +7,11 @@ from pathlib import Path
 
 from eba import ActorId, Bus, Inbox, make_envelope, run_actors
 
-from eglk_harness.actors.checker import CheckerActor, FakeCheckerActor
+from eglk_harness.actors.checker import CheckerActor
 from eglk_harness.actors.gate import GateActor
 from eglk_harness.actors.governor import GovernorActor
 from eglk_harness.actors.host import RunHost
-from eglk_harness.actors.maker import FakeMakerActor, MakerActor
+from eglk_harness.actors.maker import MakerActor
 from eglk_harness.actors.refiner import RefinerActor
 from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
 from eglk_harness.actors.tick import TickJob
@@ -28,7 +28,6 @@ async def run_tick(
     swarm_soft: str | None = "0",
     uncertainty: float = 0.0,
     focus_score: float = 1.0,
-    use_fake: bool = True,
 ) -> TickJob:
     init_project(workdir)
     adapter = MockAdapter(mode=mode)
@@ -37,34 +36,23 @@ async def run_tick(
     def inbox() -> Inbox:
         return Inbox(32)
 
-    if use_fake:
-        maker: MakerActor = FakeMakerActor(
-            actor_id=ActorId(keys.MAKER), bus=bus, inbox=inbox(), mode=mode, workdir=workdir
-        )
-        checker: CheckerActor = FakeCheckerActor(
-            actor_id=ActorId(keys.CHECKER), bus=bus, inbox=inbox(), mode=mode, workdir=workdir
-        )
-    else:
-        maker = MakerActor(
+    actors = [
+        MakerActor(
             actor_id=ActorId(keys.MAKER),
             bus=bus,
             inbox=inbox(),
             adapter=adapter,
             workdir=workdir,
             tools_allowed=True,
-        )
-        checker = CheckerActor(
+        ),
+        CheckerActor(
             actor_id=ActorId(keys.CHECKER),
             bus=bus,
             inbox=inbox(),
             adapter=adapter,
             workdir=workdir,
             tools_allowed=True,
-        )
-
-    actors = [
-        maker,
-        checker,
+        ),
         GateActor(actor_id=ActorId(keys.GATE), bus=bus, inbox=inbox()),
         GovernorActor(actor_id=ActorId(keys.GOVERNOR), bus=bus, inbox=inbox(), workdir=workdir),
         ExplorerActor(actor_id=ActorId(keys.EXPLORER), bus=bus, inbox=inbox()),

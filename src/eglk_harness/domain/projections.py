@@ -6,7 +6,8 @@ from __future__ import annotations
 TAU_DONE: float = 1.0
 TAU_GAP: float = 0.5
 TAU_FOCUS: float = 0.2  # SWARM throttle only — NEVER abort
-TAU_UNC: float = 0.15  # legacy throttle — NEVER abort
+TAU_UNC: float = 0.15  # legacy throttle reference — NEVER abort
+
 REPAIRS_MAX: int = 8
 COGNITIVE_TOKENS_MAX: int = 64000
 

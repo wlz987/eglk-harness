@@ -78,9 +78,3 @@ class CheckerActor(RequestResponseActor):
         evidence.setdefault("tick", tick)
         evidence.setdefault("subgoal_id", subgoal_id)
         return messages.ok_body(evidence=evidence)
-
-
-class FakeCheckerActor(CheckerActor):
-    def __init__(self, *, mode: str = "admit", **kwargs: Any) -> None:
-        kwargs.pop("adapter", None)
-        super().__init__(adapter=MockAdapter(mode=mode), **kwargs)

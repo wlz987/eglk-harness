@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from eglk_harness.domain.projections import STATE_SCHEMA as STATE_SCHEMA  # re-export
+
 HARNESS_DIRNAME = ".eglk-harness"
 LOOP_DIRNAME = "loop"
 MEMORY_DIRNAME = "memory"
 CONFIG_NAME = "config.toml"
 GOAL_NAME = ".goal.md"
-STATE_SCHEMA = "eglk.state/0.2.2"
 
 
 def harness_root(workdir: Path) -> Path:
