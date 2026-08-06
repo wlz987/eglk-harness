@@ -16,4 +16,6 @@ if [[ -x "$EVAL_ROOT/scripts/ci_weave_thin.sh" ]]; then
 else
   echo "skip weave (eval root missing): $EVAL_ROOT"
 fi
+echo "== eval_compare =="
+bash "$ROOT/scripts/eval_compare.sh"
 echo "maturity-gate: OK"

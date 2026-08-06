@@ -17,8 +17,11 @@ class WaHardTask:
 
 
 def load_pack_index(eval_root: Path) -> list[WaHardTask]:
-    """Load ``wa_hard/pack.example.json`` if present."""
-    path = eval_root / "wa_hard" / "pack.example.json"
+    """Load ``wa_hard/pack.json`` if present, else ``pack.example.json``."""
+    root = Path(eval_root) / "wa_hard"
+    path = root / "pack.json"
+    if not path.is_file():
+        path = root / "pack.example.json"
     if not path.is_file():
         return []
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -87,3 +90,57 @@ def score_external(result_json: Path) -> dict[str, Any]:
     out.pop("admit", None)
     out.pop("gate", None)
     return out
+
+
+def run_batch(
+    eval_root: Path,
+    *,
+    out_root: Path,
+    limit: int | None = None,
+    prepare_only: bool = True,
+    external_score_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Prepare (and optionally score) a batch of WA-Hard tasks. Scores never feed Gate."""
+    tasks = load_pack_index(eval_root)
+    if limit is not None:
+        tasks = tasks[: max(0, int(limit))]
+    out_root = Path(out_root)
+    out_root.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+    for task in tasks:
+        task_dir = out_root / task.task_id
+        materialize_goal(task, task_dir)
+        from eglk_harness.domain.product.init_project import init_project
+
+        init_project(task_dir)
+        entry: dict[str, Any] = {
+            "task_id": task.task_id,
+            "workdir": str(task_dir),
+            "prepared": True,
+        }
+        if not prepare_only:
+            if external_score_dir is not None:
+                cand = Path(external_score_dir)
+                score_path = cand if cand.is_file() else cand / f"{task.task_id}.json"
+                if score_path.is_file():
+                    entry["scores"] = score_external(score_path)
+                    entry["detail"] = "external_scored"
+                else:
+                    entry["scores"] = score_placeholder(task_id=task.task_id, workdir=task_dir)
+                    entry["detail"] = "recorded_only_missing_external"
+            else:
+                entry["scores"] = score_placeholder(task_id=task.task_id, workdir=task_dir)
+                entry["detail"] = "recorded_only"
+            entry["ok"] = True
+        results.append(entry)
+    summary = {
+        "suite": "wa_hard",
+        "count": len(results),
+        "prepare_only": prepare_only,
+        "note": "scores are Manifest-only — never Gate inputs",
+        "tasks": results,
+    }
+    summary_path = out_root / "batch_summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    summary["summary_path"] = str(summary_path)
+    return summary

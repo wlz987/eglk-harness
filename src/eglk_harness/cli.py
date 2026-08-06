@@ -384,6 +384,28 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         )
         return 2
     out = Path(args.workdir).resolve()
+
+    if getattr(args, "batch", False):
+        if args.suite != "wa_hard":
+            print("error: --batch currently supports --suite wa_hard only", flush=True)
+            return 2
+        limit = int(args.limit) if getattr(args, "limit", None) is not None else None
+        external = Path(args.external_score).resolve() if getattr(args, "external_score", None) else None
+        summary = wa_hard_mod.run_batch(
+            eval_root,
+            out_root=out,
+            limit=limit,
+            prepare_only=bool(args.prepare_only),
+            external_score_dir=external,
+        )
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        print("note: offline scores are Manifest-only — never Gate inputs")
+        return 0
+
+    if not args.task_id:
+        print("error: --task-id required unless --batch", flush=True)
+        return 2
+
     if args.suite == "wa_hard":
         tasks = {t.task_id: t for t in wa_hard_mod.load_pack_index(eval_root)}
         task = tasks.get(args.task_id)
@@ -583,7 +605,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Auxiliary eval suite runner (offline scores never feed Gate)",
     )
     ev.add_argument("--suite", required=True, choices=("weave_thin", "wa_hard", "osworld_aux", "scenarios"))
-    ev.add_argument("--task-id", required=True)
+    ev.add_argument("--task-id", default=None, help="Single task id (required unless --batch)")
     ev.add_argument("--eval-root", default=None, help="Path to experiment/eval (default: auto)")
     ev.add_argument("--workdir", default="./.eglk-eval-workdir", help="Materialized task workdir")
     ev.add_argument("--agent", default="mock", choices=("mock", "codex", "claude_code"))
@@ -592,9 +614,15 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--max-ticks", type=int, default=4)
     ev.add_argument("--prepare-only", action="store_true", help="Only write .goal.md / init")
     ev.add_argument(
+        "--batch",
+        action="store_true",
+        help="Batch mode for wa_hard (writes batch_summary.json under --workdir)",
+    )
+    ev.add_argument("--limit", type=int, default=None, help="Max tasks in --batch")
+    ev.add_argument(
         "--external-score",
         default=None,
-        help="Path to external judge JSON (wa_hard); merged into Manifest only — never Gate",
+        help="Path to external judge JSON (wa_hard); or directory of <task_id>.json for --batch",
     )
     ev.set_defaults(func=_cmd_eval)
 
