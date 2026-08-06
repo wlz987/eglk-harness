@@ -46,21 +46,27 @@ def tokens_and_cost_from_raw(raw: str) -> tuple[int, float]:
 
 
 def _usage_tokens(usage: dict[str, Any]) -> int:
-    total = 0
-    for key in (
-        "input_tokens",
-        "output_tokens",
-        "cached_input_tokens",
-        "total_tokens",
-        "prompt_tokens",
-        "completion_tokens",
-    ):
-        val = usage.get(key)
-        if isinstance(val, (int, float)):
-            # Avoid double-counting total_tokens with parts: prefer parts
-            if key == "total_tokens" and (
-                usage.get("input_tokens") is not None or usage.get("output_tokens") is not None
-            ):
-                continue
-            total += int(val)
-    return total
+    """Count billable turn tokens without double-counting cache fields.
+
+    Prefer ``input_tokens + output_tokens``. Ignore ``cached_input_tokens`` /
+    ``cache_write_input_tokens`` (subsets / side channels of input). Ignore
+    ``total_tokens`` when parts are present.
+    """
+    if usage.get("input_tokens") is not None or usage.get("output_tokens") is not None:
+        total = 0
+        for key in ("input_tokens", "output_tokens"):
+            val = usage.get(key)
+            if isinstance(val, (int, float)):
+                total += int(val)
+        return total
+    if usage.get("prompt_tokens") is not None or usage.get("completion_tokens") is not None:
+        total = 0
+        for key in ("prompt_tokens", "completion_tokens"):
+            val = usage.get(key)
+            if isinstance(val, (int, float)):
+                total += int(val)
+        return total
+    val = usage.get("total_tokens")
+    if isinstance(val, (int, float)):
+        return int(val)
+    return 0

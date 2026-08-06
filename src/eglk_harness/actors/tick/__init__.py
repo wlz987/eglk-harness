@@ -282,6 +282,25 @@ class TickJob(Job):
         assert self.loop_dir is not None and self.tree is not None
         cur = self.tree.ensure_pointer()
         if cur is None:
+            # Spurious extra tick after last admit (or empty tree): succeed cleanly.
+            if self.tree.all_work_admitted():
+                self.decision = {
+                    "decision": "admit",
+                    "reason": "already_complete",
+                    "should_run_next": False,
+                    "next_action": "advance",
+                    "tick": self.tick,
+                }
+                await self.finish(
+                    ok=True,
+                    answer={
+                        "decision": self.decision,
+                        "root_done": True,
+                        "written": [],
+                        "note": "no_in_progress_leaf_but_all_admitted",
+                    },
+                )
+                return
             await self.finish(ok=False, error="no_in_progress_leaf")
             return
         lessons = [x for x in sigma.load_active(self.workdir) if x.get("kind") == "lesson"][-5:]
@@ -608,6 +627,14 @@ class TickJob(Job):
         if kind == "repair":
             answer["rolled_back"] = True
         await self.finish(ok=True, answer=answer)
+
+    async def finish(
+        self, *, ok: bool, error: str | None = None, answer: Any = None
+    ) -> None:
+        # Publish outcome *before* ``finished`` flips so the run loop's
+        # ``_should_continue`` cannot race and miss ``root_done``.
+        self.outcome = {"ok": ok, "error": error, "answer": answer}
+        await super().finish(ok=ok, error=error, answer=answer)
 
     async def on_finished(
         self, *, ok: bool, error: str | None = None, answer: Any = None

@@ -96,7 +96,12 @@ def _should_continue(job: TickJob) -> bool:
     if kind == "abort":
         return False
     if kind == "admit":
-        return not bool(answer.get("root_done"))
+        if answer.get("root_done"):
+            return False
+        # Belt-and-suspenders: trust in-memory tree if outcome raced
+        if job.tree is not None and job.tree.all_work_admitted():
+            return False
+        return True
     if kind == "repair":
         return bool(decision.get("should_run_next", True))
     # stage failure / unknown
@@ -188,7 +193,11 @@ def _assemble_actors(
 
 async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
     async with asyncio.timeout(timeout_s):
-        while len(host.jobs) <= index or not getattr(host.jobs[index], "finished", False):
+        while True:
+            if len(host.jobs) > index:
+                job = host.jobs[index]
+                if getattr(job, "finished", False) and getattr(job, "outcome", None) is not None:
+                    break
             await asyncio.sleep(0.005)
     job = host.jobs[index]
     assert isinstance(job, TickJob)

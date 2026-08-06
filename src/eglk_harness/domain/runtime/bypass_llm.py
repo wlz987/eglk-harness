@@ -36,11 +36,15 @@ def bypass_llm_enabled(
 
 
 def _parse_bypass_result(result: Any) -> dict[str, Any] | None:
-    if not getattr(result, "ok", False):
-        return None
     if isinstance(getattr(result, "parsed", None), dict):
         return result.parsed
-    doc = extract_json(getattr(result, "text", None) or "")
+    text = getattr(result, "text", None) or ""
+    if not str(text).strip():
+        return None
+    try:
+        doc = extract_json(text)
+    except ValueError:
+        return None
     return doc if isinstance(doc, dict) else None
 
 

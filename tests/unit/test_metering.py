@@ -13,3 +13,12 @@ def test_meter_turn_completed():
 
 def test_meter_absent():
     assert tokens_and_cost_from_codex_jsonl("") == (0, 0.0)
+
+
+def test_meter_ignores_cached_input_double_count():
+    raw = (
+        '{"type":"turn.completed","usage":{'
+        '"input_tokens":100,"cached_input_tokens":80,"output_tokens":5}}\n'
+    )
+    tokens, _ = tokens_and_cost_from_codex_jsonl(raw)
+    assert tokens == 105
