@@ -82,33 +82,68 @@ def _scan_balanced(stripped: str, opener: str, closer: str) -> list[Any]:
     return out
 
 
+_PROTOCOL_KEYS = frozenset({"thread_id", "session_id"})
+_PROTOCOL_TYPES = frozenset(
+    {
+        "thread.started",
+        "item.completed",
+        "response.completed",
+        "response",
+        "message",
+        "agent_message",
+    }
+)
+
+
+def _unwrap_list(val: Any) -> Any:
+    """Unwrap single-element lists; prefer domain objects inside lists."""
+    if not isinstance(val, list):
+        return val
+    for item in val:
+        if isinstance(item, dict) and ("claim_id" in item or "evidence_id" in item):
+            return item
+    if len(val) == 1 and isinstance(val[0], dict):
+        return val[0]
+    return val
+
+
 def _prefer_domain_object(candidates: list[Any]) -> Any | None:
-    """Prefer Claim/Evidence objects over bare arrays or unrelated JSON."""
+    """Prefer Claim/Evidence objects over bare arrays or protocol envelopes."""
     if not candidates:
         return None
 
     def score(val: Any) -> int:
+        val = _unwrap_list(val)
         if isinstance(val, dict):
             if "claim_id" in val or "evidence_id" in val:
-                return 3
+                return 6
+            if "kind" in val and "payload" in val:
+                return 5
+            if "gaps" in val or "audit_progress" in val or "artifacts" in val:
+                return 4
+            # Codex / agent protocol envelopes — never treat as Claim
+            if "thread_id" in val or val.get("type") in _PROTOCOL_TYPES:
+                if not ({"kind", "payload", "gaps"} & set(val)):
+                    return -2
+            if _PROTOCOL_KEYS & set(val) and "claim_id" not in val and "evidence_id" not in val:
+                if "kind" not in val and "gaps" not in val:
+                    return -1
             return 2
         if isinstance(val, list):
-            for item in val:
-                if isinstance(item, dict) and ("claim_id" in item or "evidence_id" in item):
-                    return 1
-            if len(val) == 1 and isinstance(val[0], dict):
-                return 1
             return 0
         return -1
 
-    best = max(candidates, key=score)
-    if isinstance(best, list):
-        for item in best:
-            if isinstance(item, dict) and ("claim_id" in item or "evidence_id" in item):
-                return item
-        if len(best) == 1 and isinstance(best[0], dict):
-            return best[0]
-    return best
+    # Stable: among equal scores, prefer later candidates (later agent messages)
+    best_i = 0
+    best_s = score(candidates[0])
+    for i, cand in enumerate(candidates[1:], start=1):
+        s = score(cand)
+        if s >= best_s:
+            best_s = s
+            best_i = i
+    if best_s < 0:
+        return None
+    return _unwrap_list(candidates[best_i])
 
 
 def _candidates_from_text(text: str) -> list[Any]:
@@ -132,15 +167,21 @@ def _candidates_from_text(text: str) -> list[Any]:
 def extract_json(text: str) -> Any:
     """Best-effort JSON extraction from LLM stdout.
 
-    Prefer unwrapped agent JSONL bodies (each message tried separately), then fenced
+    Prefer unwrapped agent JSONL bodies (later messages first), then fenced
     ```json blocks, then balanced ``{...}`` / ``[...]`` spans. Prefer Claim/Evidence
-    objects over arrays. Raises ``ValueError`` if nothing parses.
+    objects over arrays / protocol envelopes. Raises ``ValueError`` if nothing parses.
     """
     if not text or not text.strip():
         raise ValueError("empty model output")
 
     bodies = agent_message_bodies(text)
-    corpus = [*bodies, "\n".join(bodies)] if bodies else [text]
+    # Later agent messages first — models often emit chatter then the real Claim
+    corpus: list[str]
+    if bodies:
+        corpus = list(reversed(bodies))
+        corpus.append("\n".join(bodies))
+    else:
+        corpus = [text]
 
     candidates: list[Any] = []
     for chunk in corpus:
@@ -148,7 +189,5 @@ def extract_json(text: str) -> Any:
 
     chosen = _prefer_domain_object(candidates)
     if isinstance(chosen, dict):
-        return chosen
-    if chosen is not None and not isinstance(chosen, (list, dict)):
         return chosen
     raise ValueError("no JSON object found in model output")

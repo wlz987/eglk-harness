@@ -83,3 +83,75 @@ async def test_format_repair_retries_once(tmp_path: Path) -> None:
     result = await run_with_format_repair(adapter, req, leaf_block="[LEAF]")
     assert result.ok and isinstance(result.parsed, dict)
     assert adapter.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_format_repair_retries_twice(tmp_path: Path) -> None:
+    class TwiceFlaky:
+        name = "twice"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
+            self.calls += 1
+            if self.calls < 3:
+                return EpisodeResult(ok=False, text="still bad", error="unparseable:y", backend=self.name)
+            claim = {
+                "claim_id": "c2",
+                "tick": 0,
+                "maker_session_id": "m",
+                "kind": "files",
+                "done_progress": 1.0,
+                "confidence": 0.9,
+                "alternatives": ["none"],
+                "payload": {},
+                "step_review": {
+                    "gains": ["g"],
+                    "losses": ["l"],
+                    "benefits": ["b"],
+                    "risks": ["r"],
+                },
+            }
+            return EpisodeResult(ok=True, text="{}", parsed=claim, backend=self.name)
+
+    adapter = TwiceFlaky()
+    req = EpisodeRequest(
+        role="maker",
+        prompt="go",
+        workdir=tmp_path,
+        tools_allowed=True,
+        expect="claim",
+    )
+    result = await run_with_format_repair(adapter, req, leaf_block="[LEAF]", max_repairs=2)
+    assert result.ok
+    assert adapter.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_format_repair_recovers_without_llm_when_coerce_works(tmp_path: Path) -> None:
+    class Once:
+        name = "once"
+        calls = 0
+
+        async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
+            self.calls += 1
+            # Missing ids / extras — coerce should salvage without a second LLM call
+            text = (
+                '{"kind":"files","payload":{"files":{"a.txt":"x"}},'
+                '"thread_id":"t","alternatives":["n"],'
+                '"step_review":{"gains":["g"],"losses":["l"],"benefits":["b"],"risks":["r"]}}'
+            )
+            return EpisodeResult(ok=False, text=text, error="unparseable:missing", backend=self.name)
+
+    adapter = Once()
+    req = EpisodeRequest(
+        role="maker",
+        prompt="go",
+        workdir=tmp_path,
+        tools_allowed=True,
+        expect="claim",
+    )
+    result = await run_with_format_repair(adapter, req, leaf_block="[LEAF]")
+    assert result.ok and result.parsed and result.parsed["kind"] == "files"
+    assert adapter.calls == 1

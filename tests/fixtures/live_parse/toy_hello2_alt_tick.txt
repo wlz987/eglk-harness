@@ -1,0 +1,13 @@
+{
+  "claim_id": "c1",
+  "tick": "2026-08-06T14:20:05Z",
+  "maker_session_id": "m",
+  "kind": "files",
+  "done_progress": 1.0,
+  "confidence": 0.9,
+  "alternatives": [{"id": "alt_print_to_stdout", "reason": "Rejected: needs file"}],
+  "payload": {"files": {"hello.txt": "hello from eglk"}},
+  "step_review": {"得": "wrote file", "失": "skipped stdout", "收益": "acceptance", "风险": "none"},
+  "thread_id": "should-strip",
+  "type": "noise"
+}

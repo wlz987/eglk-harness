@@ -1,0 +1,3 @@
+{"type":"item.completed","item":{"type":"agent_message","text":"[1, 2, 3]"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"{\"note\": \"not a claim\"}"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"{\n  \"claim_id\": \"last\",\n  \"tick\": 1,\n  \"maker_session_id\": \"m\",\n  \"kind\": \"files\",\n  \"done_progress\": 1.0,\n  \"confidence\": 0.8,\n  \"alternatives\": [\"none\"],\n  \"payload\": {\"files\": {\"a.txt\": \"x\"}},\n  \"step_review\": {\"gains\": [\"g\"], \"losses\": [\"l\"], \"benefits\": [\"b\"], \"risks\": [\"r\"]}\n}"}}

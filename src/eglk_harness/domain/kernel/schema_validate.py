@@ -34,7 +34,15 @@ def validate_document(name: str, doc: Mapping[str, Any]) -> list[str]:
 
 def _coerce_tick(doc: dict[str, Any]) -> None:
     tick = doc.get("tick")
+    if tick is None:
+        doc["tick"] = 0
+        return
     if isinstance(tick, bool):
+        doc["tick"] = 0
+        return
+    if isinstance(tick, int):
+        if tick < 0:
+            doc["tick"] = 0
         return
     if isinstance(tick, float) and tick.is_integer():
         doc["tick"] = int(tick)
@@ -45,6 +53,8 @@ def _coerce_tick(doc: dict[str, Any]) -> None:
         except ValueError:
             # Timestamps / free text — placeholder; actors overwrite with leaf tick.
             doc["tick"] = 0
+        return
+    doc["tick"] = 0
 
 
 def _coerce_claim_alternatives(doc: dict[str, Any]) -> None:
@@ -140,6 +150,98 @@ def _coerce_claim_step_review(doc: dict[str, Any]) -> None:
     doc["step_review"] = fixed
 
 
+def _allowed_keys(name: str) -> set[str]:
+    props = _load_schema(name).get("properties") or {}
+    return set(props) if isinstance(props, dict) else set()
+
+
+def _strip_unknown(doc: dict[str, Any], name: str) -> None:
+    """Drop keys not in schema properties (keep additionalProperties: false strict)."""
+    allowed = _allowed_keys(name)
+    for key in list(doc.keys()):
+        if key not in allowed:
+            doc.pop(key, None)
+
+
+def _coerce_claim_defaults(doc: dict[str, Any]) -> None:
+    tick = doc.get("tick", 0)
+    if not isinstance(tick, int):
+        tick = 0
+    if not isinstance(doc.get("claim_id"), str) or not str(doc.get("claim_id")).strip():
+        doc["claim_id"] = f"claim-{tick}"
+    if not isinstance(doc.get("maker_session_id"), str) or not str(doc.get("maker_session_id")).strip():
+        doc["maker_session_id"] = "unknown"
+    kind = doc.get("kind")
+    if kind not in {"patch", "actions", "commands", "mixed", "files"}:
+        doc["kind"] = "mixed"
+    if not isinstance(doc.get("done_progress"), (int, float)) or isinstance(doc.get("done_progress"), bool):
+        doc["done_progress"] = 0.0
+    else:
+        doc["done_progress"] = max(0.0, min(1.0, float(doc["done_progress"])))
+    if not isinstance(doc.get("confidence"), (int, float)) or isinstance(doc.get("confidence"), bool):
+        doc["confidence"] = 0.0
+    else:
+        doc["confidence"] = max(0.0, min(1.0, float(doc["confidence"])))
+    alts = doc.get("alternatives")
+    if not isinstance(alts, list) or not alts:
+        doc["alternatives"] = ["(none)"]
+    if not isinstance(doc.get("payload"), dict):
+        doc["payload"] = {}
+    sr = doc.get("step_review")
+    if not isinstance(sr, dict):
+        doc["step_review"] = {
+            "gains": ["(coerced) unspecified gains"],
+            "losses": ["(coerced) unspecified losses"],
+            "benefits": ["(coerced) unspecified benefits"],
+            "risks": ["(coerced) unspecified risks"],
+        }
+
+
+def _coerce_evidence_defaults(doc: dict[str, Any]) -> None:
+    tick = doc.get("tick", 0)
+    if not isinstance(tick, int):
+        tick = 0
+        doc["tick"] = 0
+    if not isinstance(doc.get("evidence_id"), str) or not str(doc.get("evidence_id")).strip():
+        doc["evidence_id"] = f"evidence-{tick}"
+    if not isinstance(doc.get("checker_session_id"), str) or not str(doc.get("checker_session_id")).strip():
+        doc["checker_session_id"] = "unknown"
+    if not isinstance(doc.get("audit_progress"), (int, float)) or isinstance(doc.get("audit_progress"), bool):
+        doc["audit_progress"] = 0.0
+    else:
+        doc["audit_progress"] = max(0.0, min(1.0, float(doc["audit_progress"])))
+    if not isinstance(doc.get("audit_confidence"), (int, float)) or isinstance(
+        doc.get("audit_confidence"), bool
+    ):
+        doc["audit_confidence"] = 0.0
+    else:
+        doc["audit_confidence"] = max(0.0, min(1.0, float(doc["audit_confidence"])))
+    for key in ("gaps", "alternatives", "challenges", "artifacts"):
+        if not isinstance(doc.get(key), list):
+            doc[key] = []
+    if "alternatives_missing" not in doc or not isinstance(doc.get("alternatives_missing"), bool):
+        doc["alternatives_missing"] = False
+    if not isinstance(doc.get("cost_usd"), (int, float)) or isinstance(doc.get("cost_usd"), bool):
+        doc["cost_usd"] = 0.0
+    else:
+        doc["cost_usd"] = max(0.0, float(doc["cost_usd"]))
+
+
+def _ensure_step_review_complete(doc: dict[str, Any]) -> None:
+    sr = doc.get("step_review")
+    if not isinstance(sr, dict):
+        return
+    for key, placeholder in (
+        ("gains", "(coerced) unspecified gains"),
+        ("losses", "(coerced) unspecified losses"),
+        ("benefits", "(coerced) unspecified benefits"),
+        ("risks", "(coerced) unspecified risks"),
+    ):
+        val = sr.get(key)
+        if not isinstance(val, list) or not val or not all(isinstance(x, str) and x.strip() for x in val):
+            sr[key] = [placeholder]
+
+
 def coerce_document(name: str, doc: dict[str, Any]) -> dict[str, Any]:
     """Best-effort normalize common live-model drift before schema validation."""
     out = dict(doc)
@@ -147,9 +249,18 @@ def coerce_document(name: str, doc: dict[str, Any]) -> dict[str, Any]:
     if name == "claim":
         _coerce_claim_alternatives(out)
         _coerce_claim_step_review(out)
+        _coerce_claim_defaults(out)
+        _ensure_step_review_complete(out)
     elif name == "evidence":
         _coerce_evidence_lists(out)
+        _coerce_evidence_defaults(out)
+    _strip_unknown(out, name)
     return out
+
+
+def try_parse_document(name: str, text: str) -> tuple[dict[str, Any] | None, list[str]]:
+    """Extract + coerce + validate; used by format_repair before LLM retries."""
+    return parse_and_validate(name, text)
 
 
 def parse_and_validate(name: str, text: str) -> tuple[dict[str, Any] | None, list[str]]:

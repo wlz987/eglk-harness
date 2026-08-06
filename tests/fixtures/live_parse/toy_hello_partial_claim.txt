@@ -1,0 +1,2 @@
+{"type":"item.completed","item":{"type":"agent_message","text":"I will write the file."}}
+{"type":"item.completed","item":{"type":"agent_message","text":"{\n  \"kind\": \"files\",\n  \"payload\": {\"files\": {\"hello.txt\": \"hello from eglk\"}},\n  \"thread_id\": \"thr_x\",\n  \"type\": \"claim_draft\"\n}"}}

@@ -1,0 +1,6 @@
+{
+  "gaps": ["need more proof"],
+  "type": "audit",
+  "thread_id": "t1",
+  "artifacts": [{"path": "a.txt"}]
+}
