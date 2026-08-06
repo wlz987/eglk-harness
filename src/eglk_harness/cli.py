@@ -43,17 +43,18 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
-    return app_run(
-        RunRequest(
-            workdir=workdir,
-            goal=args.goal,
-            agent=resolve_agent(args.agent, workdir),
-            swarm=resolve_swarm(args.swarm),
-            mcp_config=Path(args.mcp_config) if args.mcp_config else None,
-            mcp_add_dirs=list(args.mcp_add_dir or []),
-            compile=resolve_compile(args.compile, workdir),
-        )
-    )
+    kwargs: dict = {
+        "workdir": workdir,
+        "goal": args.goal,
+        "agent": resolve_agent(args.agent, workdir),
+        "swarm": resolve_swarm(args.swarm),
+        "mcp_config": Path(args.mcp_config) if args.mcp_config else None,
+        "mcp_add_dirs": list(args.mcp_add_dir or []),
+        "compile": resolve_compile(args.compile, workdir),
+    }
+    if args.max_ticks is not None:
+        kwargs["max_ticks"] = args.max_ticks
+    return app_run(RunRequest(**kwargs))
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
@@ -119,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help="Extra readable dir for Maker/Checker MCP (repeatable)",
+    )
+    run_p.add_argument(
+        "--max-ticks",
+        type=int,
+        default=None,
+        help="Soft tick safety cap (default 32); does NOT replace cognitive/repairs abort",
     )
     run_p.set_defaults(func=_cmd_run)
 

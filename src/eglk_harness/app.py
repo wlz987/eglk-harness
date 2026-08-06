@@ -24,11 +24,14 @@ from eglk_harness.domain.goal_parse import done_criteria, goal_id, read_goal_tex
 from eglk_harness.domain.manifest import build_manifest, new_run_id, write_manifest
 from eglk_harness.domain.models import resolve_model
 from eglk_harness.domain import paths
+from eglk_harness.domain import projections as P
 from eglk_harness.domain.init_project import init_project
 from eglk_harness.protocol import keys, topics
 
 _MOCK_TIMEOUT_S = 30.0
 _LIVE_TIMEOUT_S = 600.0
+# Soft safety only — never replaces cognitive_tokens / repairs_max as abort authority.
+_DEFAULT_MAX_TICKS_SOFT = 32
 
 
 @dataclass
@@ -44,10 +47,30 @@ class RunRequest:
     compile: str | None = None
     focus_score: float = 1.0
     uncertainty: float = 0.0
+    max_ticks: int = _DEFAULT_MAX_TICKS_SOFT
 
 
 def _request_timeout(agent: str) -> float:
     return _MOCK_TIMEOUT_S if agent in {"mock", "fake"} else _LIVE_TIMEOUT_S
+
+
+def _should_continue(job: TickJob) -> bool:
+    """Continue when work remains after admit, or Gate asked for repair retry."""
+    decision = job.decision or {}
+    kind = str(decision.get("decision") or "")
+    answer = (job.outcome or {}).get("answer") if isinstance(job.outcome, dict) else {}
+    if not isinstance(answer, dict):
+        answer = {}
+    if kind == "abort":
+        return False
+    if kind == "admit":
+        return not bool(answer.get("root_done"))
+    if kind == "repair":
+        return bool(decision.get("should_run_next", True))
+    # stage failure / unknown
+    if job.outcome and job.outcome.get("ok") is False:
+        return False
+    return False
 
 
 def _assemble_actors(
@@ -119,7 +142,16 @@ def _assemble_actors(
     return bus, actors, host, gid, title, criteria
 
 
-async def _run_one_tick(request: RunRequest) -> dict[str, Any]:
+async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
+    async with asyncio.timeout(timeout_s):
+        while len(host.jobs) <= index or not getattr(host.jobs[index], "finished", False):
+            await asyncio.sleep(0.005)
+    job = host.jobs[index]
+    assert isinstance(job, TickJob)
+    return job
+
+
+async def _run_loop(request: RunRequest) -> dict[str, Any]:
     workdir = request.workdir.resolve()
     if not paths.harness_root(workdir).is_dir():
         init_project(workdir)
@@ -130,31 +162,56 @@ async def _run_one_tick(request: RunRequest) -> dict[str, Any]:
         raise RuntimeError(f"STEP0 compile failed: {compiled.detail}")
 
     bus, actors, host, gid, title, criteria = _assemble_actors(request, workdir)
+    max_ticks = max(1, int(request.max_ticks or _DEFAULT_MAX_TICKS_SOFT))
+    per_tick_timeout = _request_timeout(request.agent)
 
     async def work() -> dict[str, Any]:
-        await bus.publish(
-            make_envelope(
-                topic=topics.RUN_START,
-                payload={
-                    "args": {
-                        "tick": request.tick,
-                        "goal_id": gid,
-                        "goal_title": title,
-                        "done_criteria": criteria,
-                        "swarm_soft": request.swarm,
-                        "focus_score": request.focus_score,
-                        "uncertainty": request.uncertainty,
-                    }
-                },
-                sender=ActorId("cli"),
+        tick = int(request.tick)
+        decisions: list[dict[str, Any]] = []
+        written_all: list[str] = []
+        last_job: TickJob | None = None
+        stop_reason = "completed"
+
+        for i in range(max_ticks):
+            await bus.publish(
+                make_envelope(
+                    topic=topics.RUN_START,
+                    payload={
+                        "args": {
+                            "tick": tick,
+                            "goal_id": gid,
+                            "goal_title": title,
+                            "done_criteria": criteria,
+                            "swarm_soft": request.swarm,
+                            "focus_score": request.focus_score,
+                            "uncertainty": request.uncertainty,
+                        }
+                    },
+                    sender=ActorId("cli"),
+                )
             )
-        )
-        async with asyncio.timeout(_request_timeout(request.agent)):
-            while not (host.jobs and getattr(host.jobs[0], "finished", False)):
-                await asyncio.sleep(0.005)
-        job = host.jobs[0]
-        outcome = getattr(job, "outcome", None) or {}
-        decision = getattr(job, "decision", None) or {}
+            last_job = await _await_job(host, index=i, timeout_s=per_tick_timeout)
+            decision = last_job.decision if isinstance(last_job.decision, dict) else {}
+            decisions.append(dict(decision))
+            written_all.extend(list(last_job.written or []))
+
+            if not _should_continue(last_job):
+                kind = str(decision.get("decision") or "")
+                answer = (last_job.outcome or {}).get("answer") if last_job.outcome else {}
+                if kind == "admit" and isinstance(answer, dict) and answer.get("root_done"):
+                    stop_reason = "root_admitted"
+                elif kind == "abort":
+                    stop_reason = f"abort:{decision.get('reason')}"
+                elif last_job.outcome and last_job.outcome.get("ok") is False:
+                    stop_reason = f"error:{last_job.outcome.get('error')}"
+                else:
+                    stop_reason = "halt"
+                break
+            tick += 1
+        else:
+            stop_reason = "max_ticks_soft"
+
+        last_decision = decisions[-1] if decisions else {}
         manifest_path = write_manifest(
             workdir,
             build_manifest(
@@ -165,33 +222,49 @@ async def _run_one_tick(request: RunRequest) -> dict[str, Any]:
                 model=resolve_model("maker"),
                 mcp_config=request.mcp_config,
                 swarm=request.swarm,
-                decision=decision if isinstance(decision, dict) else {},
+                decision=last_decision,
+                extra={
+                    "ticks_run": len(decisions),
+                    "max_ticks_soft": max_ticks,
+                    "stop_reason": stop_reason,
+                    "budget_note": (
+                        "max_ticks_soft is safety only; abort authority remains "
+                        f"cognitive_tokens_max={P.COGNITIVE_TOKENS_MAX} + "
+                        f"repairs_max={P.REPAIRS_MAX}"
+                    ),
+                },
             ),
         )
+        outcome = last_job.outcome if last_job else {}
         return {
             "goal_id": gid,
             "outcome": outcome,
-            "decision": decision if isinstance(decision, dict) else None,
-            "written": list(getattr(job, "written", []) or []),
+            "decision": last_decision or None,
+            "decisions": decisions,
+            "ticks_run": len(decisions),
+            "stop_reason": stop_reason,
+            "written": written_all,
             "agent": request.agent,
             "compile": compiled.action,
-            "swarm_plan": getattr(job, "swarm_plan", None),
+            "swarm_plan": getattr(last_job, "swarm_plan", None) if last_job else None,
             "manifest": str(manifest_path),
-            "integrity_mutations": list(getattr(job, "integrity_mutations", []) or []),
+            "integrity_mutations": list(getattr(last_job, "integrity_mutations", []) or [])
+            if last_job
+            else [],
         }
 
     return await run_actors(actors, work, grace=1.0)
 
 
 def run(request: RunRequest) -> int:
-    """Run one tick: STEP 0 compile → four phases → Manifest."""
+    """STEP 0 compile → multi-tick four-phase loop → Manifest."""
     workdir = request.workdir.resolve()
     if not paths.goal_path(workdir).is_file() and not request.goal:
         print("error: missing .goal.md — run `eglk-harness init` or pass --goal", flush=True)
         return 2
 
     try:
-        result = asyncio.run(_run_one_tick(request))
+        result = asyncio.run(_run_loop(request))
     except TimeoutError:
         print("error: tick timed out", flush=True)
         return 1
@@ -212,6 +285,7 @@ def run(request: RunRequest) -> int:
         f"  agent={result.get('agent')}\n"
         f"  compile={result.get('compile')}\n"
         f"  goal_id={result.get('goal_id')}\n"
+        f"  ticks={result.get('ticks_run')} stop={result.get('stop_reason')}\n"
         f"  swarm={swarm_s}\n"
         f"  decision={decision.get('decision')} ({decision.get('reason')})\n"
         f"  written={result.get('written')}\n"
@@ -220,5 +294,7 @@ def run(request: RunRequest) -> int:
         flush=True,
     )
     if outcome.get("ok") is False and decision.get("decision") != "repair":
+        return 1
+    if result.get("stop_reason", "").startswith("abort"):
         return 1
     return 0
