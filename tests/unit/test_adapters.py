@@ -139,6 +139,8 @@ def test_unwrap_codex_jsonl_agent_message() -> None:
 def test_skills_load() -> None:
     assert "Maker" in load_skill("maker")
     assert "Checker" in load_skill("checker")
+    assert "Governor" in load_skill("governor")
+    assert "Explorer" in load_skill("explorer")
     prompt = render_prompt("maker", leaf_block="[LEAF]")
     assert "[LEAF]" in prompt
     assert "JSON" in prompt

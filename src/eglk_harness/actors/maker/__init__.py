@@ -9,7 +9,9 @@ from eba import RequestResponseActor
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
+from eglk_harness.domain.format_repair import run_with_format_repair
 from eglk_harness.domain.leaf_contract import LeafContract
+from eglk_harness.domain.models import resolve_model
 from eglk_harness.domain.skills import render_prompt
 from eglk_harness.protocol import messages, payload, topics
 
@@ -45,29 +47,36 @@ class MakerActor(RequestResponseActor):
         criteria = [str(x) for x in (args.get("done_criteria") or ["done"])]
         title = str(args.get("goal_title") or args.get("title") or subgoal_id)
         workdir = Path(args.get("workdir") or self.workdir).resolve()
-
+        tee_path = args.get("tee_path")
         leaf = LeafContract(
             leaf_id=subgoal_id,
             goal=title,
             acceptance=criteria,
             tick=tick,
         )
-        prompt = render_prompt("maker", leaf_block=leaf.render_maker_block())
-        result = await self.adapter.run_episode(
-            EpisodeRequest(
-                role="maker",
-                prompt=prompt,
-                workdir=workdir,
-                tools_allowed=self.tools_allowed,
-                mcp_config=self.mcp_config if self.tools_allowed else None,
-                add_dirs=self.add_dirs if self.tools_allowed else (),
-                expect="claim",
-                meta={"tick": tick, "subgoal_id": subgoal_id},
-            )
+        leaf_block = leaf.render_maker_block()
+        prompt = render_prompt("maker", leaf_block=leaf_block)
+        request = EpisodeRequest(
+            role="maker",
+            prompt=prompt,
+            workdir=workdir,
+            tools_allowed=self.tools_allowed,
+            mcp_config=self.mcp_config if self.tools_allowed else None,
+            add_dirs=self.add_dirs if self.tools_allowed else (),
+            expect="claim",
+            model=resolve_model("maker"),
+            timeout_s=float(args.get("timeout_s") or 600.0),
+            meta={"tick": tick, "subgoal_id": subgoal_id},
+            tee_path=str(tee_path) if tee_path else None,
         )
+        result = await run_with_format_repair(self.adapter, request, leaf_block=leaf_block)
         if not result.ok or not isinstance(result.parsed, dict):
             return messages.err_body(result.error or "maker_episode_failed")
         claim = dict(result.parsed)
         claim["tick"] = tick
         claim["subgoal_id"] = subgoal_id
-        return messages.ok_body(claim=claim)
+        return messages.ok_body(
+            claim=claim,
+            tokens=int(result.tokens or 0),
+            cost_usd=float(result.cost_usd or 0.0),
+        )

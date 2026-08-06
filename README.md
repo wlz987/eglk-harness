@@ -21,6 +21,7 @@ eglk-harness init
 # edit .goal.md — add verifiable done criteria
 eglk-harness run --agent mock --compile auto
 eglk-harness status          # read-only; no approval UI
+eglk-harness dashboard       # read-only HTTP; never an approval gate
 ```
 
 Thin wrapper (same as `eglk-harness run`):
@@ -36,14 +37,19 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | Command | Role |
 |---------|------|
 | `init` | Scaffold `.eglk-harness/` + `.goal.md` |
-| `doctor` | PATH / schemas / skills / MCP (check-only) |
+| `doctor` | PATH / schemas / skills / MCP；`--install-codex-gui` 显式装插件 |
 | `run` | STEP 0 compile → four-phase tick |
 | `status` | Read-only tree / decision / quota / leaf |
+| `dashboard` | Read-only HTTP browse（无 approve/inject） |
+| `check-update` | PyPI version hint（不自动升级） |
+| `eval` | 辅尺：`experiment/eval/` 薄调度；scorer 不进 Gate |
+| `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
 | `check-projections` | CI pin vs `design/kernel/projections.md` |
 
-`run` flags: `--goal/--task`, `--agent`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`.
+`run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`.
 
-Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).
+Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
+评测资产 SSOT：设计仓 `experiment/eval/`（主尺 WA-Hard；Weave/OSWorld 辅）。
 
 ## Develop
 

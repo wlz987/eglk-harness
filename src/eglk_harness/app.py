@@ -49,6 +49,8 @@ class RunRequest:
     focus_score: float = 1.0
     uncertainty: float = 0.0
     max_ticks: int = _DEFAULT_MAX_TICKS_SOFT
+    maker_timeout_s: float | None = None
+    checker_timeout_s: float | None = None
 
 
 def _request_timeout(agent: str) -> float:
@@ -147,12 +149,22 @@ def _assemble_actors(
         CheckerActor(actor_id=ActorId(keys.CHECKER), bus=bus, inbox=_inbox(), **tool_kw),
         GateActor(actor_id=ActorId(keys.GATE), bus=bus, inbox=_inbox()),
         GovernorActor(
-            actor_id=ActorId(keys.GOVERNOR), bus=bus, inbox=_inbox(), workdir=workdir
+            actor_id=ActorId(keys.GOVERNOR),
+            bus=bus,
+            inbox=_inbox(),
+            workdir=workdir,
+            adapter=adapter,
         ),
-        ExplorerActor(actor_id=ActorId(keys.EXPLORER), bus=bus, inbox=_inbox()),
-        VerifierActor(actor_id=ActorId(keys.VERIFIER), bus=bus, inbox=_inbox()),
-        PrunerActor(actor_id=ActorId(keys.PRUNER), bus=bus, inbox=_inbox()),
-        RefinerActor(actor_id=ActorId(keys.REFINER), bus=bus, inbox=_inbox()),
+        ExplorerActor(
+            actor_id=ActorId(keys.EXPLORER), bus=bus, inbox=_inbox(), adapter=adapter
+        ),
+        VerifierActor(
+            actor_id=ActorId(keys.VERIFIER), bus=bus, inbox=_inbox(), adapter=adapter
+        ),
+        PrunerActor(actor_id=ActorId(keys.PRUNER), bus=bus, inbox=_inbox(), adapter=adapter),
+        RefinerActor(
+            actor_id=ActorId(keys.REFINER), bus=bus, inbox=_inbox(), adapter=adapter
+        ),
     ]
     host = RunHost(
         actor_id=ActorId(keys.HOST),
@@ -166,6 +178,8 @@ def _assemble_actors(
         swarm_soft=request.swarm,
         focus_score=request.focus_score,
         uncertainty=request.uncertainty,
+        maker_timeout_s=request.maker_timeout_s,
+        checker_timeout_s=request.checker_timeout_s,
         request_timeout=_request_timeout(request.agent),
     )
     actors.append(host)
@@ -204,20 +218,27 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
         stop_reason = "completed"
 
         for i in range(max_ticks):
+            tick_args: dict[str, Any] = {
+                "tick": tick,
+                "goal_id": gid,
+                "goal_title": title,
+                "done_criteria": criteria,
+                "swarm_soft": request.swarm,
+                "focus_score": request.focus_score,
+                "uncertainty": request.uncertainty,
+            }
+            if last_job is not None:
+                tick_args["focus_score"] = float(last_job.focus_score)
+                tick_args["uncertainty"] = float(last_job.uncertainty)
+                tick_args["quota"] = dict(last_job.quota)
+            if request.maker_timeout_s is not None:
+                tick_args["maker_timeout_s"] = request.maker_timeout_s
+            if request.checker_timeout_s is not None:
+                tick_args["checker_timeout_s"] = request.checker_timeout_s
             await bus.publish(
                 make_envelope(
                     topic=topics.RUN_START,
-                    payload={
-                        "args": {
-                            "tick": tick,
-                            "goal_id": gid,
-                            "goal_title": title,
-                            "done_criteria": criteria,
-                            "swarm_soft": request.swarm,
-                            "focus_score": request.focus_score,
-                            "uncertainty": request.uncertainty,
-                        }
-                    },
+                    payload={"args": tick_args},
                     sender=ActorId("cli"),
                 )
             )

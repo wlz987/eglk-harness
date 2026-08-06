@@ -35,6 +35,7 @@ class EpisodeRequest:
     timeout_s: float = 600.0
     expect: Literal["claim", "evidence", "text"] = "text"
     meta: dict[str, Any] = field(default_factory=dict)
+    tee_path: str | None = None
 
     def __post_init__(self) -> None:
         # Frozen dataclass: validate after init

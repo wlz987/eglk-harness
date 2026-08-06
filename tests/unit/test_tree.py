@@ -112,3 +112,55 @@ def test_fail_current() -> None:
     tree = make_root("g", ["done"])
     tree.fail_current()
     assert tree.root.status == "failed"
+
+
+def test_try_merge_siblings_after_admit() -> None:
+    tree = TaskTree.from_document(
+        {
+            "subgoals_tree": {
+                "id": "root",
+                "title": "goal",
+                "status": "pending",
+                "done_criteria": ["all"],
+                "children": [
+                    {
+                        "id": "sg_01",
+                        "title": "a",
+                        "status": "in_progress",
+                        "done_criteria": ["shared token rule", "a-only"],
+                        "children": [],
+                        "parent_id": "root",
+                    },
+                    {
+                        "id": "sg_02",
+                        "title": "b",
+                        "status": "pending",
+                        "done_criteria": ["shared token rule", "b-only"],
+                        "children": [],
+                        "parent_id": "root",
+                    },
+                    {
+                        "id": "sg_03",
+                        "title": "c",
+                        "status": "pending",
+                        "done_criteria": ["unrelated"],
+                        "children": [],
+                        "parent_id": "root",
+                    },
+                ],
+                "parent_id": None,
+            }
+        }
+    )
+    tree.admit_current()
+    ev = tree.try_merge_siblings_after_admit("sg_01")
+    assert ev is not None
+    assert ev["nodes"] == ["sg_02"]
+    assert tree.find("sg_01").status == "admitted"
+    assert tree.find("sg_02").status == "merged"
+    assert tree.find("sg_03").status in {"pending", "in_progress"}
+    merged = tree.find(ev["into"])
+    assert merged is not None and merged.status in {"pending", "in_progress"}
+    assert "shared token rule" in merged.done_criteria
+    assert "b-only" in merged.done_criteria
+    assert tree.in_progress() is not None

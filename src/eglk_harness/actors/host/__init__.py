@@ -32,6 +32,8 @@ class RunHost(JobHost[Job]):
         swarm_soft: str | None = None,
         focus_score: float = 1.0,
         uncertainty: float = 0.0,
+        maker_timeout_s: float | None = None,
+        checker_timeout_s: float | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -43,6 +45,8 @@ class RunHost(JobHost[Job]):
         self.swarm_soft = swarm_soft
         self.focus_score = float(focus_score)
         self.uncertainty = float(uncertainty)
+        self.maker_timeout_s = maker_timeout_s
+        self.checker_timeout_s = checker_timeout_s
         self.jobs: list[Job] = []
 
     def make_job(self, root: Envelope[Any]) -> Job:
@@ -60,6 +64,9 @@ class RunHost(JobHost[Job]):
             swarm_soft=args.get("swarm_soft", self.swarm_soft),
             focus_score=float(args.get("focus_score", self.focus_score)),
             uncertainty=float(args.get("uncertainty", self.uncertainty)),
+            quota=dict(args["quota"]) if isinstance(args.get("quota"), dict) else None,
+            maker_timeout_s=args.get("maker_timeout_s", self.maker_timeout_s),
+            checker_timeout_s=args.get("checker_timeout_s", self.checker_timeout_s),
         )
         self.jobs.append(job)
         return job

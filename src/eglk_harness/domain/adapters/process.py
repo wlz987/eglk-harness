@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+
+from eglk_harness.domain.environment.local import LocalEnvironment, default_environment
+from eglk_harness.domain.redact import redact_secrets
 
 
 @dataclass
@@ -23,31 +24,22 @@ async def run_cli(
     stdin_text: str = "",
     timeout_s: float = 600.0,
     env: dict[str, str] | None = None,
+    environment: LocalEnvironment | None = None,
+    tee_path: str | None = None,
 ) -> ProcResult:
-    merged = dict(os.environ)
-    if env:
-        merged.update(env)
-    proc = await asyncio.create_subprocess_exec(
-        *argv,
+    env_runner = environment or default_environment()
+    result = await env_runner.exec(
+        argv,
         cwd=str(cwd),
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=merged,
+        stdin_text=stdin_text,
+        timeout_s=timeout_s,
+        env=env,
+        tee_path=tee_path,
     )
-    try:
-        out_b, err_b = await asyncio.wait_for(
-            proc.communicate(stdin_text.encode("utf-8") if stdin_text else None),
-            timeout=timeout_s,
-        )
-    except TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise
     return ProcResult(
-        returncode=int(proc.returncode or 0),
-        stdout=out_b.decode("utf-8", errors="replace"),
-        stderr=err_b.decode("utf-8", errors="replace"),
+        returncode=result.returncode,
+        stdout=redact_secrets(result.stdout),
+        stderr=redact_secrets(result.stderr),
     )
 
 

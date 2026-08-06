@@ -18,11 +18,12 @@ class LeafContract:
     tick: int | None = None
     parent_id: str | None = None
     attempt_index: int | None = None
+    learned_skills_block: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
-        # drop Nones for cleaner JSON
-        return {k: v for k, v in d.items() if v is not None}
+        # drop Nones / empty optional strings for cleaner JSON
+        return {k: v for k, v in d.items() if v is not None and v != ""}
 
     def render_maker_block(self) -> str:
         lines = [
@@ -45,6 +46,8 @@ class LeafContract:
                 lines.append(f"  - {p}")
         if not self.prior_evidence:
             lines.append("  - (none)")
+        if self.learned_skills_block:
+            lines.extend(["", self.learned_skills_block])
         return "\n".join(lines)
 
     def render_checker_block(self) -> str:
@@ -81,6 +84,9 @@ def assemble_leaf_contract(
     boundary: Sequence[str] | None = None,
     prior_evidence: Sequence[Any] | None = None,
     goal_constraints: Sequence[str] | None = None,
+    sigma_lessons: Sequence[Mapping[str, Any]] | None = None,
+    skill_hints: Sequence[str] | None = None,
+    learned_skills_block: str = "",
 ) -> LeafContract:
     """Build a LeafContract for an in_progress (or any) leaf node.
 
@@ -93,6 +99,18 @@ def assemble_leaf_contract(
     for c in goal_constraints or []:
         if c not in bounds:
             bounds.append(str(c))
+    for hint in skill_hints or []:
+        line = str(hint)
+        if line and line not in bounds:
+            bounds.append(line)
+    for lesson in sigma_lessons or []:
+        if not isinstance(lesson, Mapping):
+            continue
+        text = str(lesson.get("text") or lesson.get("cond") or "")
+        if text:
+            line = f"Σ:{text[:120]}"
+            if line not in bounds:
+                bounds.append(line)
 
     priors: list[Any] = list(prior_evidence or [])
     for ch in leaf.verifier_challenges:
@@ -108,4 +126,5 @@ def assemble_leaf_contract(
         tick=tick,
         parent_id=leaf.parent_id,
         attempt_index=attempt,
+        learned_skills_block=learned_skills_block.strip(),
     )

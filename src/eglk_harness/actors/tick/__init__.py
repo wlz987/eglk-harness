@@ -8,9 +8,12 @@ from typing import Any
 
 from eba_job import Job
 
-from eglk_harness.domain import integrity, loop_store, phase3, sigma, worldref
+from eglk_harness.domain import integrity, loop_store, phase3, sigma, skill_lib, worldref
 from eglk_harness.domain.leaf_contract import assemble_leaf_contract
+from eglk_harness.domain.projections import COGNITIVE_TOKENS_MAX
+from eglk_harness.domain.repair_counts import load_runtime_state, repair_counts_from_decisions
 from eglk_harness.domain.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
+from eglk_harness.domain.tokens import add_tokens
 from eglk_harness.domain.tree import TaskTree, make_root
 from eglk_harness.protocol import topics
 
@@ -38,6 +41,8 @@ class TickJob(Job):
         focus_score: float = 1.0,
         uncertainty: float = 0.0,
         quota: dict[str, Any] | None = None,
+        maker_timeout_s: float | None = None,
+        checker_timeout_s: float | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -49,7 +54,17 @@ class TickJob(Job):
         self.swarm_soft = swarm_soft
         self.focus_score = float(focus_score)
         self.uncertainty = float(uncertainty)
-        self.quota = dict(quota or {"cognitive_tokens": 0})
+        self.maker_timeout_s = maker_timeout_s
+        self.checker_timeout_s = checker_timeout_s
+        self.quota = dict(
+            quota
+            or {
+                "cognitive_tokens": 0,
+                "cognitive_tokens_max": COGNITIVE_TOKENS_MAX,
+            }
+        )
+        if "cognitive_tokens_max" not in self.quota:
+            self.quota["cognitive_tokens_max"] = COGNITIVE_TOKENS_MAX
         self.loop_dir: Path | None = None
         self.tree: TaskTree | None = None
         self.world: worldref.WorldRef | None = None
@@ -66,14 +81,86 @@ class TickJob(Job):
         self._pre_checker_fp: integrity.WorldFingerprint | None = None
         self.integrity_mutations: list[str] = []
 
+    def _hydrate_runtime_from_state(self) -> None:
+        """Resume quota / focus / uncertainty from prior tick state.json when unset."""
+        assert self.loop_dir is not None
+        st = load_runtime_state(self.loop_dir)
+        if not st:
+            return
+        q = st.get("quota") if isinstance(st.get("quota"), dict) else {}
+        if int(self.quota.get("cognitive_tokens") or 0) == 0 and q:
+            self.quota["cognitive_tokens"] = int(q.get("cognitive_tokens") or 0)
+            if q.get("cognitive_tokens_max") is not None:
+                self.quota["cognitive_tokens_max"] = int(q["cognitive_tokens_max"])
+            if q.get("usd_used") is not None:
+                self.quota["usd_used"] = float(q["usd_used"])
+        if "focus_score" in st:
+            self.focus_score = float(st["focus_score"])
+        if "uncertainty" in st:
+            self.uncertainty = float(st["uncertainty"])
+
+    def _apply_pending_merge_suggestions(self) -> None:
+        """Apply Refiner Σ-similarity merge suggestions from prior tick (candidates/)."""
+        assert self.loop_dir is not None and self.tree is not None
+        cand = self.loop_dir / "candidates"
+        if not cand.is_dir():
+            return
+        log = self.loop_dir / "reasoning_log.jsonl"
+        any_applied = False
+        for path in sorted(cand.glob("merge_suggest_*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                path.unlink(missing_ok=True)
+                continue
+            parent_id = str(data.get("parent_id") or "")
+            nodes = [str(x) for x in (data.get("nodes") or []) if str(x)]
+            new_id = str(data.get("into") or f"{parent_id}.m{self.tick:03d}")
+            title = str(data.get("title") or new_id)
+            criteria = [str(x) for x in (data.get("done_criteria") or []) if str(x).strip()]
+            applied = False
+            if parent_id and len(nodes) >= 2 and criteria:
+                try:
+                    if self.tree.find(new_id) is None:
+                        self.tree.merge_sibling_leaves(
+                            parent_id=parent_id,
+                            source_ids=nodes,
+                            new_id=new_id,
+                            title=title,
+                            done_criteria=criteria,
+                        )
+                        self.tree.ensure_pointer()
+                        applied = True
+                        any_applied = True
+                except (KeyError, ValueError):
+                    applied = False
+            with log.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "tick": self.tick,
+                            "event": "merge_suggest_apply",
+                            "applied": applied,
+                            "suggestion": data,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+            path.unlink(missing_ok=True)
+        if any_applied:
+            loop_store.save_tree(self.loop_dir, self.tree)
+
     async def begin(self) -> None:
         self.loop_dir = loop_store.ensure_loop_layout(self.workdir, self.goal_id)
+        self._hydrate_runtime_from_state()
         tree = loop_store.load_tree(self.loop_dir)
         if tree is None:
             tree = make_root(self.goal_title, self.done_criteria, leaf=True)
         tree.ensure_pointer()
         loop_store.save_tree(self.loop_dir, tree)
         self.tree = tree
+        self._apply_pending_merge_suggestions()
 
         snap = loop_store.world_pre_dir(self.loop_dir, self.tick)
         self.world = worldref.snapshot_workdir(
@@ -106,6 +193,10 @@ class TickJob(Job):
                         "tick": self.tick,
                         "loop_dir": str(self.loop_dir),
                         "subgoal_id": cur.id if cur else "root",
+                        "goal_title": cur.title if cur else self.goal_title,
+                        "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
+                        "repair_streak": int(cur.repair_streak) if cur else 0,
+                        "workdir": str(self.workdir),
                     }
                 },
             )
@@ -150,6 +241,9 @@ class TickJob(Job):
                     "tick": self.tick,
                     "loop_dir": str(self.loop_dir),
                     "subgoal_id": cur.id if cur else "root",
+                    "goal_title": cur.title if cur else self.goal_title,
+                    "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
+                    "workdir": str(self.workdir),
                 }
             },
         )
@@ -182,11 +276,23 @@ class TickJob(Job):
         if cur is None:
             await self.finish(ok=False, error="no_in_progress_leaf")
             return
+        lessons = [x for x in sigma.load_active(self.workdir) if x.get("kind") == "lesson"][-5:]
+        hints = skill_lib.boundary_hints(self.workdir, leaf_id=cur.id, title=cur.title)
+        matched = skill_lib.match_skills(
+            self.workdir,
+            leaf_id=cur.id,
+            title=cur.title,
+            acceptance=list(cur.done_criteria),
+        )
+        learned = skill_lib.render_learned_skills_block(matched)
         try:
             contract = assemble_leaf_contract(
                 cur,
                 tick=self.tick,
                 prior_evidence=self._load_phase0_priors(),
+                sigma_lessons=lessons,
+                skill_hints=hints,
+                learned_skills_block=learned,
             )
         except ValueError as exc:
             await self.finish(ok=False, error=f"leaf_contract:{exc}")
@@ -212,6 +318,10 @@ class TickJob(Job):
                     "goal_title": cur.title,
                     "leaf_contract": self.leaf_contract,
                     "workdir": str(self.workdir),
+                    "timeout_s": self.maker_timeout_s or 600.0,
+                    "tee_path": str(
+                        self.loop_dir / "agent_logs" / f"maker_{self.tick:03d}.jsonl"
+                    ),
                 }
             },
         )
@@ -249,6 +359,10 @@ class TickJob(Job):
                 await self.finish(ok=False, error="maker_missing_claim")
                 return
             self.claim = claim
+            self.quota = add_tokens(self.quota, int(body.get("tokens") or 0))
+            self.quota["usd_used"] = float(self.quota.get("usd_used") or 0) + float(
+                body.get("cost_usd") or 0
+            )
             loop_store.write_claim(self.loop_dir, self.tick, claim)
             try:
                 self.written = worldref.apply_claim_payload(
@@ -272,7 +386,13 @@ class TickJob(Job):
                         "claim": claim,
                         "written": list(self.written),
                         "goal_id": self.goal_id,
+                        "goal_title": cur.title if cur else self.goal_title,
+                        "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
                         "workdir": str(self.workdir),
+                        "timeout_s": self.checker_timeout_s or 600.0,
+                        "tee_path": str(
+                            self.loop_dir / "agent_logs" / f"checker_{self.tick:03d}.jsonl"
+                        ),
                     }
                 },
             )
@@ -283,6 +403,10 @@ class TickJob(Job):
             if not isinstance(evidence, dict):
                 await self.finish(ok=False, error="checker_missing_evidence")
                 return
+            self.quota = add_tokens(self.quota, int(body.get("tokens") or 0))
+            self.quota["usd_used"] = float(self.quota.get("usd_used") or 0) + float(
+                body.get("cost_usd") or 0
+            )
             # Invariant #11: Checker must not mutate the task world
             if self._pre_checker_fp is not None:
                 after_fp = integrity.fingerprint_workdir(self.workdir)
@@ -291,12 +415,14 @@ class TickJob(Job):
                 )
             self.evidence = evidence
             loop_store.write_evidence(self.loop_dir, self.tick, evidence)
-            # Gate inputs: Claim + Evidence only (truth-blind; no candidates/Σ)
+            cur = self.tree.in_progress()
+            leaf_id = cur.id if cur else None
+            # Gate inputs: Claim + Evidence + quota + repair_counts (truth-blind; no candidates/Σ)
             gate_args = {
                 "claim": self.claim,
                 "evidence": evidence,
                 "quota": dict(self.quota),
-                "repair_counts": {},
+                "repair_counts": repair_counts_from_decisions(self.loop_dir, subgoal_id=leaf_id),
             }
             self.gate_payload_keys = tuple(sorted(gate_args.keys()))
             await self.request(
@@ -312,6 +438,10 @@ class TickJob(Job):
             if not isinstance(decision, dict):
                 await self.finish(ok=False, error="gate_missing_decision")
                 return
+            cur = self.tree.in_progress()
+            decision = dict(decision)
+            if cur is not None and "subgoal_id" not in decision:
+                decision["subgoal_id"] = cur.id
             self.decision = decision
             loop_store.write_decision(self.loop_dir, self.tick, decision)
             await self._apply_gate_tree(decision)
@@ -325,7 +455,8 @@ class TickJob(Job):
                 and self.decision.get("decision") == "admit"
                 and should_veto_after_admit(self.evidence)
             ):
-                cur = self.tree.in_progress() or self.tree.root
+                leaf_id = str(self.decision.get("subgoal_id") or "root")
+                cur = self.tree.find(leaf_id) or self.tree.root
                 await self.request(
                     stage="veto",
                     request_prefix=topics.ROLE_VERIFIER_RUN,
@@ -334,7 +465,9 @@ class TickJob(Job):
                         "args": {
                             "tick": self.tick,
                             "loop_dir": str(self.loop_dir),
-                            "subgoal_id": cur.id,
+                            "subgoal_id": leaf_id,
+                            "goal_title": cur.title,
+                            "done_criteria": list(cur.done_criteria),
                             "veto_audit": True,
                         }
                     },
@@ -353,8 +486,24 @@ class TickJob(Job):
         assert self.loop_dir is not None and self.tree is not None
         kind = str(decision.get("decision") or "")
         if kind == "admit":
+            cur = self.tree.in_progress()
             self.tree.admit_current()
+            merge_event = None
+            if cur is not None:
+                merge_event = self.tree.try_merge_siblings_after_admit(cur.id)
             loop_store.save_tree(self.loop_dir, self.tree)
+            if merge_event is not None:
+                log = self.loop_dir / "reasoning_log.jsonl"
+                with log.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({"tick": self.tick, **merge_event}, ensure_ascii=False) + "\n")
+            if cur is not None:
+                skill_lib.record_admit(
+                    self.workdir,
+                    leaf_id=cur.id,
+                    title=cur.title,
+                    tick=self.tick,
+                    claim=self.claim,
+                )
             return
         if kind == "repair":
             if self.world is not None:
@@ -370,6 +519,8 @@ class TickJob(Job):
         assert self.loop_dir is not None
         kind = str(decision.get("decision") or "")
         active_len = len(sigma.load_active(self.workdir))
+        leaf_id = str(decision.get("subgoal_id") or "root")
+        cur = self.tree.find(leaf_id) if self.tree else None
         if decide_refiner(decision=kind, active_len=active_len, focus_score=self.focus_score):
             await self.request(
                 stage="refiner",
@@ -381,13 +532,16 @@ class TickJob(Job):
                         "loop_dir": str(self.loop_dir),
                         "decision": kind,
                         "reason": str(decision.get("reason") or ""),
+                        "subgoal_id": leaf_id,
+                        "claim": self.claim,
+                        "evidence": self.evidence,
+                        "workdir": str(self.workdir),
                     }
                 },
             )
             return
         # Skip refiner; maybe still veto
         if kind == "admit" and should_veto_after_admit(self.evidence):
-            cur = self.tree.in_progress() if self.tree else None
             await self.request(
                 stage="veto",
                 request_prefix=topics.ROLE_VERIFIER_RUN,
@@ -396,7 +550,9 @@ class TickJob(Job):
                     "args": {
                         "tick": self.tick,
                         "loop_dir": str(self.loop_dir),
-                        "subgoal_id": cur.id if cur else "root",
+                        "subgoal_id": leaf_id,
+                        "goal_title": cur.title if cur else self.goal_title,
+                        "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
                         "veto_audit": True,
                     }
                 },
@@ -420,6 +576,10 @@ class TickJob(Job):
             uncertainty=self.uncertainty,
             soft=self.swarm_soft,
         )
+        # Persist updated scores for next tick hydration
+        if self.phase3_record:
+            self.focus_score = float(self.phase3_record.get("focus_score", self.focus_score))
+            self.uncertainty = float(self.phase3_record.get("uncertainty", self.uncertainty))
         kind = str(self.decision.get("decision") or "")
         done = bool(self.tree and self.tree.all_work_admitted()) if kind == "admit" else False
         answer = {
@@ -430,6 +590,9 @@ class TickJob(Job):
             "phase3": self.phase3_record,
             "gate_payload_keys": list(self.gate_payload_keys or ()),
             "refined_staged_before_phase3": len(refined_before),
+            "quota": dict(self.quota),
+            "focus_score": self.focus_score,
+            "uncertainty": self.uncertainty,
         }
         if kind == "abort":
             await self.finish(ok=False, error=str(self.decision.get("reason") or "abort"), answer=answer)

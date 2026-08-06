@@ -62,18 +62,34 @@ def merge_refined_into_active(workdir: Path, loop_dir: Path) -> int:
     """Phase 3: atomically fold refined/ into memory sigma active; clear staging.
 
     Returns number of items merged. Must run *after* Gate so same-tick Gate
-    never sees these Σ updates.
+    never sees these Σ updates. Dedupes by ``id``; overflows to archived when
+    active exceeds ``SIGMA_ACTIVE_MAX``.
     """
+    from eglk_harness.domain import projections as P
+
     refined = list_refined(loop_dir)
     if not refined:
         return 0
     active = load_active(workdir)
+    by_id = {str(it.get("id")): it for it in active if it.get("id")}
     merged = 0
     for path in refined:
         item = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(item, dict):
-            active.append(item)
+            iid = str(item.get("id") or f"anon-{path.stem}")
+            item = dict(item)
+            item["id"] = iid
+            by_id[iid] = item
             merged += 1
         path.unlink(missing_ok=True)
+    active = list(by_id.values())
+    archived = load_json_list(archived_path(workdir))
+    if len(active) > P.SIGMA_ACTIVE_MAX:
+        overflow = active[: -P.SIGMA_ACTIVE_MAX]
+        keep = active[-P.SIGMA_ACTIVE_MAX :]
+        for item in overflow:
+            archived.append({**item, "status": "frozen"})
+        active = keep
+        save_json_list(archived_path(workdir), archived)
     save_active(workdir, active)
     return merged

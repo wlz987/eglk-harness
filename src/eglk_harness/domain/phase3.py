@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from eglk_harness.domain import sigma
-from eglk_harness.domain.swarm import SwarmPlan, decide_swarm
+from eglk_harness.domain import sigma, skill_lib
+from eglk_harness.domain.swarm import SwarmPlan
 
 
 _ARCHIVE_GLOBS = (
@@ -17,6 +17,7 @@ _ARCHIVE_GLOBS = (
     "pruner_*.json",
     "leaf_contract_*.json",
 )
+# Note: merge_suggest_*.json survives Phase-3 for next-tick apply (then deleted).
 
 
 def archive_candidates(loop_dir: Path, *, tick: int) -> list[str]:
@@ -63,20 +64,40 @@ def run_phase3(
 ) -> dict[str, Any]:
     """Merge refined→active, archive candidates, compute next swarm plan, append ticks.jsonl."""
     merged = sigma.merge_refined_into_active(workdir, loop_dir)
+    distilled = skill_lib.distill_from_sigma(workdir) if merged else []
     archived = archive_candidates(loop_dir, tick=tick)
 
     quota = dict(quota or {})
     tokens = int(quota.get("cognitive_tokens", 0) or 0)
     tokens_max = int(quota.get("cognitive_tokens_max", 64000) or 64000)
-    cand_count = len(list((loop_dir / "candidates").glob("*.json"))) if (loop_dir / "candidates").is_dir() else 0
-    next_plan = decide_swarm(
+    kind = str(decision.get("decision") or "")
+    cand_count = (
+        len(list((loop_dir / "candidates").glob("*.json")))
+        if (loop_dir / "candidates").is_dir()
+        else 0
+    )
+    from eglk_harness.domain.context_compress import compress_tick_signals
+
+    compressed = compress_tick_signals(
+        decision=kind,
         focus_score=focus_score,
         uncertainty=uncertainty,
-        candidate_count=cand_count,
         cognitive_tokens=tokens,
         cognitive_tokens_max=tokens_max,
+        candidate_count=cand_count,
         soft=soft,
+        usd_used=float(quota.get("usd_used") or 0.0),
     )
+    focus_score = float(compressed["focus_score"])
+    uncertainty = float(compressed["uncertainty"])
+    ns = compressed["next_swarm"]
+    next_plan = SwarmPlan(
+        explorer=bool(ns.get("explorer")),
+        verifier=bool(ns.get("verifier")),
+        pruner=bool(ns.get("pruner")),
+        reasons=tuple(ns.get("reasons") or ()),
+    )
+    model_downgrade = compressed.get("model_downgrade") or {"active": False, "roles": {}}
 
     if isinstance(swarm_enabled, SwarmPlan):
         enabled = swarm_enabled.to_dict()
@@ -91,11 +112,12 @@ def run_phase3(
         "swarm_enabled": enabled,
         "next_swarm": next_plan.to_dict(),
         "sigma_merged": merged,
+        "skills_distilled": [d.get("id") for d in distilled],
         "candidates_archived": archived,
-        "quota": {
-            "cognitive_tokens": tokens,
-            "cognitive_tokens_max": tokens_max,
-        },
+        "quota": dict(compressed.get("quota") or {"cognitive_tokens": tokens, "cognitive_tokens_max": tokens_max}),
+        "focus_score": focus_score,
+        "uncertainty": uncertainty,
+        "model_downgrade": model_downgrade,
     }
     path = loop_dir / "ticks.jsonl"
     with path.open("a", encoding="utf-8") as f:
@@ -106,12 +128,15 @@ def run_phase3(
     state = {
         "tick": tick,
         "quota": record["quota"],
+        "focus_score": focus_score,
+        "uncertainty": uncertainty,
         "last_decision": {
             "decision": decision.get("decision"),
             "reason": decision.get("reason"),
         },
         "swarm_enabled": enabled,
         "sigma_active_len": len(sigma.load_active(workdir)),
+        "model_downgrade": model_downgrade,
     }
     state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return record

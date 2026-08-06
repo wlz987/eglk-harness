@@ -93,6 +93,15 @@ def check_projections() -> ProjectionReport:
             detail="TaskTree present; MAX_SPLIT_DEPTH pinned",
         )
     )
+    from eglk_harness.domain import context_compress
+
+    report.checks.append(
+        ProjectionCheck(
+            name="context_compress.module",
+            ok=hasattr(context_compress, "compress_tick_signals"),
+            detail="Phase-3 compress_tick_signals present",
+        )
+    )
     return report
 
 

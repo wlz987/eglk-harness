@@ -31,6 +31,62 @@ class MockAdapter:
             text = json.dumps(evidence, ensure_ascii=False)
             return EpisodeResult(ok=True, text=text, parsed=evidence, backend=self.name)
 
+        if request.role == "governor":
+            doc = {
+                "split_node": subgoal_id,
+                "children": [
+                    {
+                        "id": f"{subgoal_id}.01",
+                        "title": f"Implement {subgoal_id}",
+                        "done_criteria": ["implementation complete"],
+                    },
+                    {
+                        "id": f"{subgoal_id}.02",
+                        "title": f"Verify {subgoal_id}",
+                        "done_criteria": ["verification evidence recorded"],
+                    },
+                ],
+            }
+            return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
+
+        if request.role == "explorer":
+            doc = {
+                "alternatives": [
+                    {"id": "alt-1", "text": "direct implement", "prob": 0.8, "impact": 0.9},
+                    {"id": "alt-2", "text": "incremental", "prob": 0.5, "impact": 0.6},
+                    {"id": "alt-3", "text": "cosmetic only", "prob": 0.1, "impact": 0.05},
+                ]
+            }
+            return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
+
+        if request.role == "verifier":
+            doc = {
+                "challenges": [
+                    {"id": "ch-1", "title": "missing artifact", "text": "ensure deliverable exists"},
+                ],
+                "veto": False,
+            }
+            return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
+
+        if request.role == "refiner":
+            doc = {
+                "id": f"sigma-hit-{tick:03d}",
+                "kind": "hit",
+                "text": "mock refined hit",
+                "conf": 0.75,
+            }
+            return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
+
+        if request.role == "compile":
+            doc = {
+                "title": "Mock Goal",
+                "direction": "Pursue mock goal",
+                "acceptance": ["mock acceptance"],
+                "constraints": ["Preserve .eglk-harness/"],
+                "notes": "mock compile",
+            }
+            return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
+
         return EpisodeResult(
             ok=False,
             error=f"mock unsupported role/expect: {request.role}/{request.expect}",
