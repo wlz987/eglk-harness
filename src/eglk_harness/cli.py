@@ -54,6 +54,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     }
     if args.max_ticks is not None:
         kwargs["max_ticks"] = args.max_ticks
+    if getattr(args, "tick", None) is not None:
+        kwargs["tick"] = args.tick
     return app_run(RunRequest(**kwargs))
 
 
@@ -126,6 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Soft tick safety cap (default 32); does NOT replace cognitive/repairs abort",
+    )
+    run_p.add_argument(
+        "--tick",
+        type=int,
+        default=None,
+        help="Start tick index (default: auto-resume from state.json + 1)",
     )
     run_p.set_defaults(func=_cmd_run)
 

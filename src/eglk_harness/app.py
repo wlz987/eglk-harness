@@ -21,6 +21,7 @@ from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
 from eglk_harness.domain.compile_goal import compile_goal
 from eglk_harness.domain.goal_parse import done_criteria, goal_id, read_goal_text, title_from_goal
+from eglk_harness.domain.loop_store import load_tree, read_json
 from eglk_harness.domain.manifest import build_manifest, new_run_id, write_manifest
 from eglk_harness.domain.models import resolve_model
 from eglk_harness.domain import paths
@@ -43,7 +44,7 @@ class RunRequest:
     mcp_config: Path | None = None
     mcp_add_dirs: list[str] = field(default_factory=list)
     fake_mode: str = "admit"
-    tick: int = 0
+    tick: int | None = None  # None → auto-resume from state.json
     compile: str | None = None
     focus_score: float = 1.0
     uncertainty: float = 0.0
@@ -52,6 +53,35 @@ class RunRequest:
 
 def _request_timeout(agent: str) -> float:
     return _MOCK_TIMEOUT_S if agent in {"mock", "fake"} else _LIVE_TIMEOUT_S
+
+
+def resolve_start_tick(workdir: Path, goal_id_str: str, explicit: int | None) -> int:
+    """Resume after the last completed tick when ``state.json`` exists.
+
+    Explicit ``--tick`` always wins. Otherwise start at ``state.tick + 1`` so a
+    failed tick can retry without rewriting earlier claim/evidence artifacts.
+    """
+    if explicit is not None:
+        return max(0, int(explicit))
+    state_path = paths.loop_goal_dir(workdir, goal_id_str) / "state.json"
+    if not state_path.is_file():
+        return 0
+    try:
+        data = read_json(state_path)
+    except (OSError, ValueError):
+        return 0
+    if not isinstance(data, dict):
+        return 0
+    try:
+        last = int(data.get("tick", -1))
+    except (TypeError, ValueError):
+        return 0
+    if last < 0:
+        return 0
+    tree = load_tree(paths.loop_goal_dir(workdir, goal_id_str))
+    if tree is not None and tree.all_work_admitted():
+        return last
+    return last + 1
 
 
 def _should_continue(job: TickJob) -> bool:
@@ -164,9 +194,10 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
     bus, actors, host, gid, title, criteria = _assemble_actors(request, workdir)
     max_ticks = max(1, int(request.max_ticks or _DEFAULT_MAX_TICKS_SOFT))
     per_tick_timeout = _request_timeout(request.agent)
+    start_tick = resolve_start_tick(workdir, gid, request.tick)
 
     async def work() -> dict[str, Any]:
-        tick = int(request.tick)
+        tick = int(start_tick)
         decisions: list[dict[str, Any]] = []
         written_all: list[str] = []
         last_job: TickJob | None = None
@@ -225,6 +256,7 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
                 decision=last_decision,
                 extra={
                     "ticks_run": len(decisions),
+                    "start_tick": start_tick,
                     "max_ticks_soft": max_ticks,
                     "stop_reason": stop_reason,
                     "budget_note": (
@@ -242,6 +274,7 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
             "decision": last_decision or None,
             "decisions": decisions,
             "ticks_run": len(decisions),
+            "start_tick": start_tick,
             "stop_reason": stop_reason,
             "written": written_all,
             "agent": request.agent,
@@ -285,7 +318,8 @@ def run(request: RunRequest) -> int:
         f"  agent={result.get('agent')}\n"
         f"  compile={result.get('compile')}\n"
         f"  goal_id={result.get('goal_id')}\n"
-        f"  ticks={result.get('ticks_run')} stop={result.get('stop_reason')}\n"
+        f"  ticks={result.get('ticks_run')} start_tick={result.get('start_tick')} "
+        f"stop={result.get('stop_reason')}\n"
         f"  swarm={swarm_s}\n"
         f"  decision={decision.get('decision')} ({decision.get('reason')})\n"
         f"  written={result.get('written')}\n"

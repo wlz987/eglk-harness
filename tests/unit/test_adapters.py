@@ -76,6 +76,28 @@ def test_extract_json_fenced() -> None:
     assert extract_json(text) == {"a": 1}
 
 
+def test_extract_json_prefers_claim_object_over_leading_array() -> None:
+    text = """
+    ["tests/test_store.py", "tests/test_cli.py"]
+    ```json
+    {
+      "claim_id": "c1",
+      "tick": 0,
+      "maker_session_id": "m",
+      "kind": "files",
+      "done_progress": 1.0,
+      "confidence": 0.9,
+      "alternatives": [{"text": "alt", "status": "reject"}],
+      "payload": {"files": {}}
+    }
+    ```
+    """
+    doc = extract_json(text)
+    assert isinstance(doc, dict)
+    assert doc["claim_id"] == "c1"
+
+
+
 def test_unwrap_codex_jsonl_agent_message() -> None:
     stream = (
         '{"type":"thread.started","thread_id":"t1"}\n'

@@ -129,8 +129,9 @@ class TaskTree:
         for n, _ in self.walk():
             if not n.children:
                 continue
-            if n.status in {"split", "merged", "failed"}:
+            if n.status in {"merged", "failed"}:
                 continue
+            # ``split`` parents may still become admitted once all work leaves succeed.
             leaf_like = [c for c in self._descendant_work_nodes(n)]
             if leaf_like and all(c.status == "admitted" for c in leaf_like):
                 n.status = "admitted"
