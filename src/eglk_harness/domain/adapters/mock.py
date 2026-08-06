@@ -48,6 +48,12 @@ class MockAdapter:
                 "confidence": 0.9,
                 "alternatives": [{"text": "noop", "status": "reject", "reason": "worse"}],
                 "payload": {"files": {}},
+                "step_review": {
+                    "gains": ["empty payload for repair path"],
+                    "losses": ["no durable artifact"],
+                    "benefits": ["exercises no_evidence_grounding"],
+                    "risks": ["should not admit"],
+                },
                 "shortcut_hit": False,
                 "subgoal_id": subgoal_id,
             }
@@ -63,6 +69,12 @@ class MockAdapter:
                 {"text": "leave file unchanged", "status": "reject", "reason": "incomplete"},
             ],
             "payload": {"files": {"hello.txt": content}},
+            "step_review": {
+                "gains": ["wrote hello.txt via payload.files"],
+                "losses": ["skipped broader packaging"],
+                "benefits": ["leaf can be audited by file presence"],
+                "risks": ["content may be wrong relative to acceptance"],
+            },
             "shortcut_hit": False,
             "subgoal_id": subgoal_id,
         }

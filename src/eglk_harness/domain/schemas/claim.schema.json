@@ -12,7 +12,8 @@
     "done_progress",
     "confidence",
     "alternatives",
-    "payload"
+    "payload",
+    "step_review"
   ],
   "properties": {
     "claim_id": { "type": "string", "minLength": 1 },
@@ -50,6 +51,38 @@
       }
     },
     "payload": { "type": "object" },
+    "step_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "本叶这一步的显式自评：得失 / 收益 / 风险。Gate 不据此判真值，但 schema 强制 Maker 写出。",
+      "required": ["gains", "losses", "benefits", "risks"],
+      "properties": {
+        "gains": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "得：本步实际获得什么（能力、产物、信息）"
+        },
+        "losses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "失：为做本步放弃或推迟了什么"
+        },
+        "benefits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "收益：对本叶/总目标的正向回报"
+        },
+        "risks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "风险：残留不确定性、副作用、回滚成本"
+        }
+      }
+    },
     "skill_proposal": { "type": "string" },
     "rationale_ref": { "type": ["string", "null"] },
     "subgoal_id": { "type": "string" },

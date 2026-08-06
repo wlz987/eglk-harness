@@ -29,4 +29,9 @@ def render_prompt(role: str, *, leaf_block: str, extra: str = "") -> str:
         parts.extend(["", extra.strip()])
     parts.append("")
     parts.append("Respond with a single JSON object only (no prose outside JSON).")
+    if role == "maker":
+        parts.append(
+            "Required: step_review with gains/losses/benefits/risks "
+            "(本步得失、收益、风险；each a non-empty string array)."
+        )
     return "\n".join(parts)

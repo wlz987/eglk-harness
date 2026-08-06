@@ -88,14 +88,19 @@ def test_extract_json_prefers_claim_object_over_leading_array() -> None:
       "done_progress": 1.0,
       "confidence": 0.9,
       "alternatives": [{"text": "alt", "status": "reject"}],
-      "payload": {"files": {}}
+      "payload": {"files": {}},
+      "step_review": {
+        "gains": ["parsed claim object"],
+        "losses": ["ignored leading path array"],
+        "benefits": ["schema-ready claim"],
+        "risks": ["array-first stdout still appears"]
+      }
     }
     ```
     """
     doc = extract_json(text)
     assert isinstance(doc, dict)
     assert doc["claim_id"] == "c1"
-
 
 
 def test_unwrap_codex_jsonl_agent_message() -> None:
@@ -105,7 +110,9 @@ def test_unwrap_codex_jsonl_agent_message() -> None:
         '"text":"```json\\n{\\"claim_id\\":\\"c1\\",\\"tick\\":0,\\"maker_session_id\\":\\"m\\",'
         '\\"kind\\":\\"files\\",\\"done_progress\\":1.0,\\"confidence\\":0.9,'
         '\\"alternatives\\":[{\\"text\\":\\"alt\\",\\"status\\":\\"reject\\"}],'
-        '\\"payload\\":{\\"files\\":{\\"a.txt\\":\\"x\\"}}}\\n```"}}\n'
+        '\\"payload\\":{\\"files\\":{\\"a.txt\\":\\"x\\"}},'
+        '\\"step_review\\":{\\"gains\\":[\\"g\\"],\\"losses\\":[\\"l\\"],'
+        '\\"benefits\\":[\\"b\\"],\\"risks\\":[\\"r\\"]}}\\n```"}}\n'
         '{"type":"turn.completed","usage":{"input_tokens":1}}\n'
     )
     body = unwrap_agent_jsonl(stream)
@@ -135,6 +142,8 @@ def test_skills_load() -> None:
     prompt = render_prompt("maker", leaf_block="[LEAF]")
     assert "[LEAF]" in prompt
     assert "JSON" in prompt
+    assert "step_review" in prompt
+    assert "风险" in prompt
 
 
 @pytest.mark.asyncio
@@ -186,13 +195,20 @@ def test_parse_and_validate_claim() -> None:
       "done_progress": 1.0,
       "confidence": 0.9,
       "alternatives": [{"text": "alt", "status": "reject"}],
-      "payload": {"files": {"a.txt": "x"}}
+      "payload": {"files": {"a.txt": "x"}},
+      "step_review": {
+        "gains": ["wrote a.txt"],
+        "losses": ["no tests"],
+        "benefits": ["leaf done criteria closer"],
+        "risks": ["content unchecked"]
+      }
     }
     ```
     """
     doc, errs = parse_and_validate("claim", text)
     assert errs == []
     assert doc and doc["claim_id"] == "c1"
+    assert doc["step_review"]["risks"]
 
 
 def test_parse_claim_coerces_alt_id_and_timestamp_tick() -> None:
@@ -205,7 +221,13 @@ def test_parse_claim_coerces_alt_id_and_timestamp_tick() -> None:
       "done_progress": 1.0,
       "confidence": 0.9,
       "alternatives": [{"id": "alt_print", "reason": "needs a file"}],
-      "payload": {"files": {"a.txt": "x"}}
+      "payload": {"files": {"a.txt": "x"}},
+      "step_review": {
+        "得": "wrote file",
+        "失": ["skipped other paths"],
+        "收益": ["acceptance closer"],
+        "风险": "may be wrong"
+      }
     }
     """
     doc, errs = parse_and_validate("claim", text)
@@ -214,6 +236,8 @@ def test_parse_claim_coerces_alt_id_and_timestamp_tick() -> None:
     assert doc["tick"] == 0  # placeholder; MakerActor overwrites with leaf tick
     assert doc["alternatives"][0]["text"] == "alt_print"
     assert doc["alternatives"][0]["status"] == "reject"
+    assert doc["step_review"]["gains"] == ["wrote file"]
+    assert doc["step_review"]["risks"] == ["may be wrong"]
 
 
 def test_codex_build_argv_includes_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

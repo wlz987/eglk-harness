@@ -98,12 +98,55 @@ def _coerce_evidence_lists(doc: dict[str, Any]) -> None:
         ]
 
 
+def _as_str_list(val: Any) -> list[str] | None:
+    if isinstance(val, str) and val.strip():
+        return [val.strip()]
+    if isinstance(val, list):
+        out = [
+            json.dumps(x, ensure_ascii=False) if isinstance(x, (dict, list)) else str(x).strip()
+            for x in val
+            if x is not None and str(x).strip()
+        ]
+        return out or None
+    return None
+
+
+def _coerce_claim_step_review(doc: dict[str, Any]) -> None:
+    raw = doc.get("step_review")
+    if raw is None:
+        # common Chinese / alternate top-level keys
+        for alt in ("本步自评", "review", "stepReview"):
+            if isinstance(doc.get(alt), dict):
+                raw = doc.pop(alt)
+                break
+    if not isinstance(raw, dict):
+        return
+    mapping = {
+        "gains": ("gains", "得", "gain", "所得"),
+        "losses": ("losses", "失", "loss", "sacrifices", "放弃"),
+        "benefits": ("benefits", "收益", "benefit", "回报"),
+        "risks": ("risks", "风险", "risk", "残留风险"),
+    }
+    fixed: dict[str, Any] = {}
+    for canon, aliases in mapping.items():
+        val = None
+        for key in aliases:
+            if key in raw:
+                val = raw[key]
+                break
+        coerced = _as_str_list(val)
+        if coerced is not None:
+            fixed[canon] = coerced
+    doc["step_review"] = fixed
+
+
 def coerce_document(name: str, doc: dict[str, Any]) -> dict[str, Any]:
     """Best-effort normalize common live-model drift before schema validation."""
     out = dict(doc)
     _coerce_tick(out)
     if name == "claim":
         _coerce_claim_alternatives(out)
+        _coerce_claim_step_review(out)
     elif name == "evidence":
         _coerce_evidence_lists(out)
     return out

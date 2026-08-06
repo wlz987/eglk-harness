@@ -16,6 +16,12 @@ def _claim(**over: Any) -> dict[str, Any]:
         "confidence": 0.9,
         "alternatives": [{"text": "alt", "status": "reject", "reason": "worse"}],
         "payload": {"files": {"a.txt": "ok"}},
+        "step_review": {
+            "gains": ["file written"],
+            "losses": ["no broader refactor"],
+            "benefits": ["leaf acceptance checkable"],
+            "risks": ["content may be wrong"],
+        },
         "shortcut_hit": False,
         "subgoal_id": "root",
     }
