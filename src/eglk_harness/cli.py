@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from eglk_harness import __version__
 from eglk_harness.app import RunRequest, run as app_run
+from eglk_harness.domain.config_resolve import resolve_agent, resolve_compile, resolve_swarm
 from eglk_harness.domain.doctor import run_doctor
 from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain import paths
+from eglk_harness.domain.status import collect_status
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -29,7 +29,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if args.install_codex_gui or args.uninstall_codex_gui:
         print(
             "error: Codex GUI install/uninstall is reserved for a later milestone; "
-            "doctor remains check-only in M0.",
+            "doctor remains check-only.",
             flush=True,
         )
         return 2
@@ -41,33 +41,23 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    workdir = Path(args.workdir).resolve()
     return app_run(
         RunRequest(
-            workdir=Path(args.workdir).resolve(),
+            workdir=workdir,
             goal=args.goal,
-            agent=args.agent,
-            swarm=args.swarm,
+            agent=resolve_agent(args.agent, workdir),
+            swarm=resolve_swarm(args.swarm),
             mcp_config=Path(args.mcp_config) if args.mcp_config else None,
             mcp_add_dirs=list(args.mcp_add_dir or []),
-            compile=args.compile,
+            compile=resolve_compile(args.compile, workdir),
         )
     )
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
-    workdir = Path(args.workdir).resolve()
-    harness = paths.harness_root(workdir)
-    loop = paths.loop_root(workdir)
-    memory = paths.memory_root(workdir)
-    print(f"workdir:  {workdir}")
-    print(f"harness:  {harness}  ({'yes' if harness.is_dir() else 'no'})")
-    print(f"loop:     {loop}  ({'yes' if loop.is_dir() else 'no'})")
-    print(f"memory:   {memory}  ({'yes' if memory.is_dir() else 'no'})")
-    print(f"goal:     {paths.goal_path(workdir)}  ({'yes' if paths.goal_path(workdir).is_file() else 'no'})")
-    if loop.is_dir():
-        runs = sorted(p.name for p in loop.iterdir() if p.is_dir())
-        print(f"runs:     {', '.join(runs) if runs else '(none)'}")
-    print("(status is read-only; no approval controls)")
+    report = collect_status(Path(args.workdir).resolve(), run_id=args.run)
+    print(report.render())
     return 0
 
 
@@ -89,12 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
     doc_p.add_argument(
         "--install-codex-gui",
         action="store_true",
-        help="Explicitly install Codex Computer Use (not in M0)",
+        help="Explicitly install Codex Computer Use (not automatic on run)",
     )
     doc_p.add_argument(
         "--uninstall-codex-gui",
         action="store_true",
-        help="Explicitly uninstall Codex Computer Use (not in M0)",
+        help="Explicitly uninstall Codex Computer Use",
     )
     doc_p.set_defaults(func=_cmd_doctor)
 
@@ -103,9 +93,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--goal", "--task", dest="goal", default=None, help="Goal text or path")
     run_p.add_argument(
         "--agent",
-        default="mock",
+        default=None,
         choices=("mock", "codex", "claude_code"),
-        help="Backend agent (default: mock until live adapters are configured)",
+        help="Backend agent (default: EGLK_AGENT / config.toml / mock)",
     )
     run_p.add_argument("--swarm", default=None, help="0|1 soft switch for Phase-0 SWARM")
     run_p.add_argument(
@@ -125,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     st_p = sub.add_parser("status", help="Read-only status of harness dirs / runs")
     st_p.add_argument("--workdir", default=".", help="Project root (default: cwd)")
+    st_p.add_argument("--run", default=None, help="Select loop/<run_id> (default: newest)")
     st_p.set_defaults(func=_cmd_status)
 
     return p

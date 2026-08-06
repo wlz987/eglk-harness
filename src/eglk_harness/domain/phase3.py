@@ -92,8 +92,26 @@ def run_phase3(
         "next_swarm": next_plan.to_dict(),
         "sigma_merged": merged,
         "candidates_archived": archived,
+        "quota": {
+            "cognitive_tokens": tokens,
+            "cognitive_tokens_max": tokens_max,
+        },
     }
     path = loop_dir / "ticks.jsonl"
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    # Mirror for status (read-only consumers); Gate does not read this file.
+    state_path = loop_dir / "state.json"
+    state = {
+        "tick": tick,
+        "quota": record["quota"],
+        "last_decision": {
+            "decision": decision.get("decision"),
+            "reason": decision.get("reason"),
+        },
+        "swarm_enabled": enabled,
+        "sigma_active_len": len(sigma.load_active(workdir)),
+    }
+    state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return record
