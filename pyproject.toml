@@ -29,7 +29,7 @@ where = ["src"]
 eglk_harness = [
   "domain/schemas/*.json",
   "domain/schemas/README.md",
-  "domain/skills/*.md",
+  "domain/memory/skills/*.md",
 ]
 
 [tool.pytest.ini_options]

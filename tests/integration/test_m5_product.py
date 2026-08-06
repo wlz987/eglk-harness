@@ -8,8 +8,8 @@ import pytest
 
 from eglk_harness.app import RunRequest, run
 from eglk_harness.cli import main
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain.status import collect_status
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.product.status import collect_status
 
 
 def test_status_after_toy_run(tmp_path: Path) -> None:

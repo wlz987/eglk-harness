@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from eglk_harness.domain.worldref import (
+from eglk_harness.domain.kernel.worldref import (
     apply_claim_payload,
     apply_files,
     restore,

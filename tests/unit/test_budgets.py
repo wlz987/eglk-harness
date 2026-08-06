@@ -1,4 +1,4 @@
-from eglk_harness.domain.budgets import resolve_role_budgets
+from eglk_harness.domain.runtime.budgets import resolve_role_budgets
 
 
 def test_env_maker_timeout_overrides_default(monkeypatch):

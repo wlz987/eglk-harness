@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from eglk_harness.domain import projections as P
-from eglk_harness.domain import sigma
-from eglk_harness.domain.compile_goal import compile_goal
-from eglk_harness.domain.swarm import decide_refiner, decide_swarm, should_veto_after_admit
+from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.kernel.compile_goal import compile_goal
+from eglk_harness.domain.kernel.swarm import decide_refiner, decide_swarm, should_veto_after_admit
 
 
 def test_decide_swarm_default_explorer() -> None:
@@ -66,8 +66,8 @@ def test_compile_fails_without_backend(tmp_path: Path) -> None:
 
 
 def test_sigma_refined_merges_only_in_phase3(tmp_path: Path) -> None:
-    from eglk_harness.domain.init_project import init_project
-    from eglk_harness.domain import loop_store, paths
+    from eglk_harness.domain.product.init_project import init_project
+    from eglk_harness.domain.kernel import loop_store, paths
 
     init_project(tmp_path)
     loop = loop_store.ensure_loop_layout(tmp_path, "g1")

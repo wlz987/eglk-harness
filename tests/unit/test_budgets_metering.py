@@ -1,4 +1,4 @@
-from eglk_harness.domain.budgets import timeout_for_role
+from eglk_harness.domain.runtime.budgets import timeout_for_role
 from eglk_harness.domain.adapters.mcp import resolve_mcp_config
 
 

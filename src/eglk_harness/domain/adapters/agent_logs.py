@@ -163,7 +163,7 @@ def write_trajectory_sidecars(tee_path: str | None, raw: str) -> dict[str, str]:
     """Write visible.txt and steps.json beside a tee file; return written paths."""
     if not tee_path:
         return {}
-    from eglk_harness.domain.redact import redact_secrets
+    from eglk_harness.domain.runtime.redact import redact_secrets
 
     src = Path(tee_path)
     if src.name.endswith(".jsonl"):

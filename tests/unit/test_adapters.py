@@ -18,9 +18,9 @@ from eglk_harness.domain.adapters.mcp import (
 )
 from eglk_harness.domain.adapters.mock import MockAdapter
 from eglk_harness.domain.adapters.parse import episode_from_text
-from eglk_harness.domain.json_extract import extract_json, unwrap_agent_jsonl
-from eglk_harness.domain.schema_validate import parse_and_validate, validate_document
-from eglk_harness.domain.skills import load_skill, render_prompt
+from eglk_harness.domain.runtime.json_extract import extract_json, unwrap_agent_jsonl
+from eglk_harness.domain.kernel.schema_validate import parse_and_validate, validate_document
+from eglk_harness.domain.memory.skills import load_skill, render_prompt
 
 
 def test_tool_roles_pin() -> None:

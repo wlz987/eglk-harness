@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eglk_harness.domain.wa_hard import score_external
+from eglk_harness.domain.eval.wa_hard import score_external
 
 
 def test_score_external_reads_scores(tmp_path: Path):

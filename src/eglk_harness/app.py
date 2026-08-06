@@ -19,14 +19,14 @@ from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
 from eglk_harness.actors.tick import TickJob
 from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
-from eglk_harness.domain.compile_goal import compile_goal
-from eglk_harness.domain.goal_parse import done_criteria, goal_id, read_goal_text, title_from_goal
-from eglk_harness.domain.loop_store import load_tree, read_json
-from eglk_harness.domain.manifest import build_manifest, new_run_id, write_manifest
-from eglk_harness.domain.models import resolve_model
-from eglk_harness.domain import paths
-from eglk_harness.domain import projections as P
-from eglk_harness.domain.init_project import init_project
+from eglk_harness.domain.kernel.compile_goal import compile_goal
+from eglk_harness.domain.kernel.goal_parse import done_criteria, goal_id, read_goal_text, title_from_goal
+from eglk_harness.domain.kernel.loop_store import load_tree, read_json
+from eglk_harness.domain.product.manifest import build_manifest, new_run_id, write_manifest
+from eglk_harness.domain.runtime.models import resolve_model
+from eglk_harness.domain.kernel import paths
+from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.product.init_project import init_project
 from eglk_harness.protocol import keys, topics
 
 _MOCK_TIMEOUT_S = 30.0

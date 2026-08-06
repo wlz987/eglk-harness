@@ -8,10 +8,10 @@ from typing import Any, Mapping
 
 from eba import RequestResponseActor
 
-from eglk_harness.domain import sigma
+from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.adapters.base import AgentAdapter
-from eglk_harness.domain.budgets import timeout_for_role
-from eglk_harness.domain.bypass_llm import coerce_refiner, run_bypass_json
+from eglk_harness.domain.runtime.budgets import timeout_for_role
+from eglk_harness.domain.runtime.bypass_llm import coerce_refiner, run_bypass_json
 from eglk_harness.protocol import messages, payload, topics
 
 
@@ -125,8 +125,8 @@ class RefinerActor(RequestResponseActor):
 
         # Σ-similarity merge suggestions for next tick Governor/orchestrator (not Gate)
         try:
-            from eglk_harness.domain.loop_store import load_tree
-            from eglk_harness.domain.sigma_merge import suggest_sibling_merges
+            from eglk_harness.domain.kernel.loop_store import load_tree
+            from eglk_harness.domain.memory.sigma_merge import suggest_sibling_merges
 
             tree = load_tree(loop_dir)
             if tree is not None:

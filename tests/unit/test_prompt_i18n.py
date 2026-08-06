@@ -1,4 +1,4 @@
-from eglk_harness.domain.prompt_i18n import constraint_block, prompt_language
+from eglk_harness.domain.runtime.prompt_i18n import constraint_block, prompt_language
 
 
 def test_en_contains_no_tools():

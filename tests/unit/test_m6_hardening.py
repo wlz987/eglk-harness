@@ -17,13 +17,13 @@ from eglk_harness.actors.refiner import RefinerActor
 from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
 from eglk_harness.actors.tick import TickJob
 from eglk_harness.cli import main
-from eglk_harness.domain import projections as P
+from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.adapters import MockAdapter
-from eglk_harness.domain.check_projections import EXPECTED, check_projections
-from eglk_harness.domain.integrity import apply_integrity_flag, fingerprint_workdir
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain.manifest import build_manifest, local_runs_root, write_manifest
-from eglk_harness.domain.models import NEVER_DOWNGRADE_ROLES, may_downgrade, resolve_model
+from eglk_harness.domain.product.check_projections import EXPECTED, check_projections
+from eglk_harness.domain.kernel.integrity import apply_integrity_flag, fingerprint_workdir
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.product.manifest import build_manifest, local_runs_root, write_manifest
+from eglk_harness.domain.runtime.models import NEVER_DOWNGRADE_ROLES, may_downgrade, resolve_model
 from eglk_harness.protocol import keys, topics, payload as pl
 
 

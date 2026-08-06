@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from eglk_harness.domain import projections as P
-from eglk_harness.domain.gate import decide
+from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.gate import decide
 
 
 def _claim(**over: Any) -> dict[str, Any]:

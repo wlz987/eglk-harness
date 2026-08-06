@@ -9,29 +9,29 @@ from pathlib import Path
 
 from eglk_harness import __version__
 from eglk_harness.app import RunRequest, run as app_run
-from eglk_harness.domain.check_projections import check_projections
-from eglk_harness.domain.codex_plugins import (
+from eglk_harness.domain.product.check_projections import check_projections
+from eglk_harness.domain.plugins.codex_computer_use import (
     COMPUTER_USE_PLUGIN_ID,
     CodexPluginError,
     get_codex_plugin_state,
     install_computer_use_plugin,
     uninstall_computer_use_plugin,
 )
-from eglk_harness.domain.config_resolve import resolve_agent, resolve_compile, resolve_swarm
-from eglk_harness.domain.doctor import run_doctor
-from eglk_harness.domain.eval_runner import (
+from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
+from eglk_harness.domain.product.doctor import run_doctor
+from eglk_harness.domain.eval.eval_runner import (
     default_eval_root,
     prepare_task_workdir,
     score_offline,
 )
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain.manifest import build_manifest, new_run_id, write_manifest
-from eglk_harness.domain.models import resolve_model
-from eglk_harness.domain.observe.dashboard import serve_dashboard
-from eglk_harness.domain.status import collect_status
-from eglk_harness.domain.update_check import check_update
-from eglk_harness.domain import wa_hard as wa_hard_mod
-from eglk_harness.domain import osworld as osworld_mod
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.product.manifest import build_manifest, new_run_id, write_manifest
+from eglk_harness.domain.runtime.models import resolve_model
+from eglk_harness.domain.product.observe.dashboard import serve_dashboard
+from eglk_harness.domain.product.status import collect_status
+from eglk_harness.domain.product.update_check import check_update
+from eglk_harness.domain.eval import wa_hard as wa_hard_mod
+from eglk_harness.domain.eval import osworld as osworld_mod
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -231,7 +231,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
-    from eglk_harness.domain.runtime_bootstrap import (
+    from eglk_harness.domain.product.runtime_bootstrap import (
         bootstrap_workdir,
         soft_max_ticks,
         want_dashboard,
@@ -263,7 +263,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         "maker_timeout_s": args.maker_timeout,
         "checker_timeout_s": args.checker_timeout,
     }
-    from eglk_harness.domain.budgets import resolve_role_budgets
+    from eglk_harness.domain.runtime.budgets import resolve_role_budgets
 
     budgets = resolve_role_budgets(args)
     if kwargs["maker_timeout_s"] is None:
@@ -317,7 +317,7 @@ def _cmd_soak_bypass(args: argparse.Namespace) -> int:
     import asyncio
 
     from eglk_harness.domain.adapters.factory import create_adapter
-    from eglk_harness.domain.bypass_soak import soak_bypass_roles
+    from eglk_harness.domain.eval.bypass_soak import soak_bypass_roles
 
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)

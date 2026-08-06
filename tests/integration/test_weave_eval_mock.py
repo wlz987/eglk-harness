@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eglk_harness.domain.eval_runner import default_eval_root, prepare_task_workdir, score_offline
-from eglk_harness.domain.init_project import init_project
+from eglk_harness.domain.eval.eval_runner import default_eval_root, prepare_task_workdir, score_offline
+from eglk_harness.domain.product.init_project import init_project
 
 
 def test_weave_thin_offline_score_after_materialize(tmp_path: Path):

@@ -1,4 +1,4 @@
-"""Gate actor — envelope in/out around ``domain.gate.decide`` (no LLM)."""
+"""Gate actor — envelope in/out around ``domain.kernel.gate.decide`` (no LLM)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 from eba import RequestResponseActor
 
-from eglk_harness.domain.gate import decide
+from eglk_harness.domain.kernel.gate import decide
 from eglk_harness.protocol import messages, payload, topics
 
 

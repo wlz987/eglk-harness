@@ -8,13 +8,18 @@ from typing import Any
 
 from eba_job import Job
 
-from eglk_harness.domain import integrity, loop_store, phase3, sigma, skill_lib, worldref
-from eglk_harness.domain.leaf_contract import assemble_leaf_contract
-from eglk_harness.domain.projections import effective_cognitive_tokens_max, effective_repairs_max
-from eglk_harness.domain.repair_counts import load_runtime_state, repair_counts_from_decisions
-from eglk_harness.domain.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
-from eglk_harness.domain.tokens import add_tokens
-from eglk_harness.domain.tree import TaskTree, make_root
+from eglk_harness.domain.kernel import integrity
+from eglk_harness.domain.kernel import loop_store
+from eglk_harness.domain.memory import phase3
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.memory import skill_lib
+from eglk_harness.domain.kernel import worldref
+from eglk_harness.domain.kernel.leaf_contract import assemble_leaf_contract
+from eglk_harness.domain.kernel.projections import effective_cognitive_tokens_max, effective_repairs_max
+from eglk_harness.domain.kernel.repair_counts import load_runtime_state, repair_counts_from_decisions
+from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
+from eglk_harness.domain.memory.tokens import add_tokens
+from eglk_harness.domain.kernel.tree import TaskTree, make_root
 from eglk_harness.protocol import topics
 
 

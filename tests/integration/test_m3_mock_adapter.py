@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from eglk_harness.domain import loop_store, paths
+from eglk_harness.domain.kernel import loop_store
+from eglk_harness.domain.kernel import paths
 from eglk_harness.domain.adapters.base import EpisodeRequest
 from helpers.tick_runtime import run_tick
 

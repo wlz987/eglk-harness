@@ -10,9 +10,10 @@ import pytest
 from eglk_harness.domain.adapters.codex_overrides import provider_overrides
 from eglk_harness.domain.adapters.agent_logs import visible_output
 from eglk_harness.domain.environment.local import LocalEnvironment
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain import skill_lib, sigma
-from eglk_harness.domain import wa_hard as wa_hard_mod
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.memory import skill_lib
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.eval import wa_hard as wa_hard_mod
 
 
 def test_provider_overrides_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,7 +70,7 @@ def test_skill_deconstruct(tmp_path: Path) -> None:
 
 
 def test_osworld_materialize(tmp_path: Path) -> None:
-    from eglk_harness.domain import osworld as osworld_mod
+    from eglk_harness.domain.eval import osworld as osworld_mod
 
     eval_root = Path("/home/wlz/alw/experiment/eval")
     if not (eval_root / "osworld_aux" / "pack.example.json").is_file():
@@ -85,7 +86,7 @@ def test_osworld_materialize(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_bypass_llm_auto_skips_mock() -> None:
     from eglk_harness.domain.adapters import MockAdapter
-    from eglk_harness.domain.bypass_llm import bypass_llm_enabled, run_bypass_json
+    from eglk_harness.domain.runtime.bypass_llm import bypass_llm_enabled, run_bypass_json
 
     adapter = MockAdapter()
     assert bypass_llm_enabled(adapter) is False
@@ -107,7 +108,7 @@ async def test_bypass_llm_auto_skips_mock() -> None:
 
 
 def test_context_compress_tick_signals() -> None:
-    from eglk_harness.domain.context_compress import compress_tick_signals
+    from eglk_harness.domain.memory.context_compress import compress_tick_signals
 
     out = compress_tick_signals(
         decision="admit",

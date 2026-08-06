@@ -16,7 +16,7 @@ from eglk_harness.actors.refiner import RefinerActor
 from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
 from eglk_harness.actors.tick import TickJob
 from eglk_harness.domain.adapters import MockAdapter
-from eglk_harness.domain.init_project import init_project
+from eglk_harness.domain.product.init_project import init_project
 from eglk_harness.protocol import keys, topics
 
 

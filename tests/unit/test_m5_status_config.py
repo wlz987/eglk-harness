@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from eglk_harness.domain.config_resolve import resolve_agent, resolve_compile, resolve_swarm
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain.status import collect_status
+from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.product.status import collect_status
 
 
 def test_resolve_priority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

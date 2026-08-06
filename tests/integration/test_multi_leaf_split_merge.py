@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eglk_harness.domain.tree import make_root
+from eglk_harness.domain.kernel.tree import make_root
 
 
 def test_structural_split_creates_children():

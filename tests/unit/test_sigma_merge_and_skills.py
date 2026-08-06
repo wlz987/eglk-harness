@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain import skill_lib, sigma
-from eglk_harness.domain.sigma_merge import suggest_sibling_merges, text_similarity
-from eglk_harness.domain.tree import TaskTree
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.memory import skill_lib
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.memory.sigma_merge import suggest_sibling_merges, text_similarity
+from eglk_harness.domain.kernel.tree import TaskTree
 
 
 def test_text_similarity_overlap() -> None:

@@ -8,8 +8,9 @@ import pytest
 
 from eglk_harness.app import RunRequest, run
 from eglk_harness.domain.adapters.mock import MockAdapter
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain import loop_store, paths
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.kernel import loop_store
+from eglk_harness.domain.kernel import paths
 
 
 class FlipThenAdmitAdapter(MockAdapter):

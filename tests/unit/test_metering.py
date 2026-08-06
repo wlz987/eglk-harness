@@ -1,4 +1,4 @@
-from eglk_harness.domain.metering import tokens_and_cost_from_codex_jsonl
+from eglk_harness.domain.runtime.metering import tokens_and_cost_from_codex_jsonl
 
 
 def test_meter_turn_completed():

@@ -1,4 +1,4 @@
-from eglk_harness.domain.evidence_guard import normalize_evidence
+from eglk_harness.domain.runtime.evidence_guard import normalize_evidence
 
 
 def test_strips_oracle_keys():

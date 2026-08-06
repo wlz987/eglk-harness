@@ -8,17 +8,17 @@ from unittest.mock import patch
 
 import pytest
 
-from eglk_harness.domain.codex_plugins import (
+from eglk_harness.domain.plugins.codex_computer_use import (
     COMPUTER_USE_PLUGIN_ID,
     CodexPluginError,
     CodexPluginState,
     get_codex_plugin_state,
     install_computer_use_plugin,
 )
-from eglk_harness.domain.eval_runner import prepare_task_workdir, score_offline
-from eglk_harness.domain.observe.dashboard import assert_read_only_routes, list_routes, serve_dashboard
-from eglk_harness.domain.update_check import _is_newer, check_update
-from eglk_harness.domain.gate import decide
+from eglk_harness.domain.eval.eval_runner import prepare_task_workdir, score_offline
+from eglk_harness.domain.product.observe.dashboard import assert_read_only_routes, list_routes, serve_dashboard
+from eglk_harness.domain.product.update_check import _is_newer, check_update
+from eglk_harness.domain.kernel.gate import decide
 
 
 def test_dashboard_routes_read_only() -> None:
@@ -73,7 +73,7 @@ def test_check_update_handles_404() -> None:
     import urllib.error
 
     with patch(
-        "eglk_harness.domain.update_check.urllib.request.urlopen",
+        "eglk_harness.domain.product.update_check.urllib.request.urlopen",
         side_effect=urllib.error.HTTPError("x", 404, "nf", hdrs=None, fp=None),
     ):
         r = check_update()
@@ -99,8 +99,8 @@ def test_codex_plugin_state_from_json() -> None:
         stderr = ""
         returncode = 0
 
-    with patch("eglk_harness.domain.codex_plugins._run_codex", return_value=R()):
-        with patch("eglk_harness.domain.codex_plugins._resolve_codex_binary", return_value="codex"):
+    with patch("eglk_harness.domain.plugins.codex_computer_use._run_codex", return_value=R()):
+        with patch("eglk_harness.domain.plugins.codex_computer_use._resolve_codex_binary", return_value="codex"):
             st = get_codex_plugin_state(COMPUTER_USE_PLUGIN_ID)
     assert st.ready and st.version == "1.0"
 
@@ -108,18 +108,18 @@ def test_codex_plugin_state_from_json() -> None:
 def test_install_plugin_already_ready() -> None:
     ready = CodexPluginState(COMPUTER_USE_PLUGIN_ID, True, True, True, "1")
     with patch(
-        "eglk_harness.domain.codex_plugins.get_codex_plugin_state", return_value=ready
+        "eglk_harness.domain.plugins.codex_computer_use.get_codex_plugin_state", return_value=ready
     ):
-        with patch("eglk_harness.domain.codex_plugins._resolve_codex_binary", return_value="codex"):
+        with patch("eglk_harness.domain.plugins.codex_computer_use._resolve_codex_binary", return_value="codex"):
             assert install_computer_use_plugin() is ready
 
 
 def test_install_plugin_unavailable() -> None:
     missing = CodexPluginState(COMPUTER_USE_PLUGIN_ID, False, False, False)
     with patch(
-        "eglk_harness.domain.codex_plugins.get_codex_plugin_state", return_value=missing
+        "eglk_harness.domain.plugins.codex_computer_use.get_codex_plugin_state", return_value=missing
     ):
-        with patch("eglk_harness.domain.codex_plugins._resolve_codex_binary", return_value="codex"):
+        with patch("eglk_harness.domain.plugins.codex_computer_use._resolve_codex_binary", return_value="codex"):
             with pytest.raises(CodexPluginError):
                 install_computer_use_plugin()
 

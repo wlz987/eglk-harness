@@ -1,5 +1,5 @@
-from eglk_harness.domain import projections as P
-from eglk_harness.domain.tree import TaskTree, make_root
+from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.tree import TaskTree, make_root
 
 
 def test_admit_advances_next_leaf() -> None:
@@ -78,7 +78,7 @@ def test_max_split_depth() -> None:
     n = tree.root
     for i in range(P.MAX_SPLIT_DEPTH):
         child_id = f"sg_{i}"
-        from eglk_harness.domain.tree import TreeNode
+        from eglk_harness.domain.kernel.tree import TreeNode
 
         child = TreeNode(
             id=child_id,

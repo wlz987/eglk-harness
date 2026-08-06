@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
-from eglk_harness.domain.format_repair import run_with_format_repair
-from eglk_harness.domain.models import (
+from eglk_harness.domain.runtime.format_repair import run_with_format_repair
+from eglk_harness.domain.runtime.models import (
     get_active_downgrade,
     plan_model_downgrade,
     resolve_model,
     set_active_downgrade,
 )
-from eglk_harness.domain.redact import redact_secrets
+from eglk_harness.domain.runtime.redact import redact_secrets
 
 
 def test_redact_secrets_masks_keys() -> None:

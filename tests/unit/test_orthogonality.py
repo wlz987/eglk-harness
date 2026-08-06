@@ -51,3 +51,13 @@ def test_actor_families_do_not_cross_import() -> None:
                 assert top == fam.name or top == "__init__", (
                     f"{path} imports foreign actor {name}"
                 )
+
+
+def test_kernel_does_not_import_product_or_eval() -> None:
+    kernel = DOMAIN / "kernel"
+    forbidden = ("eglk_harness.domain.product", "eglk_harness.domain.eval")
+    for path in kernel.rglob("*.py"):
+        for name in _imports_of(path):
+            assert not any(name == f or name.startswith(f + ".") for f in forbidden), (
+                f"{path} imports {name}"
+            )

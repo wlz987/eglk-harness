@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eglk_harness.domain.init_project import init_project
-from eglk_harness.domain import paths
+from eglk_harness.domain.product.init_project import init_project
+from eglk_harness.domain.kernel import paths
 
 
 def test_init_creates_skeleton(tmp_path: Path) -> None:

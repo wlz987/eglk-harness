@@ -7,11 +7,12 @@ from pathlib import Path
 
 from eglk_harness.domain.adapters.base import EpisodeRequest
 from eglk_harness.domain.adapters.parse import episode_from_text
-from eglk_harness.domain.compile_goal import compile_goal, format_goal_frame
-from eglk_harness.domain.governor_split import propose_children
-from eglk_harness.domain.repair_counts import repair_counts_from_decisions
-from eglk_harness.domain import skill_lib, sigma
-from eglk_harness.domain.tokens import add_tokens, tokens_from_codex_jsonl, update_focus_uncertainty
+from eglk_harness.domain.kernel.compile_goal import compile_goal, format_goal_frame
+from eglk_harness.domain.kernel.governor_split import propose_children
+from eglk_harness.domain.kernel.repair_counts import repair_counts_from_decisions
+from eglk_harness.domain.memory import skill_lib
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.memory.tokens import add_tokens, tokens_from_codex_jsonl, update_focus_uncertainty
 from eglk_harness.actors.swarm import explore_alternatives
 
 
@@ -96,7 +97,7 @@ def test_explore_alternatives_leaf_aware() -> None:
 
 
 def test_skill_lib_record_and_hints(tmp_path: Path) -> None:
-    from eglk_harness.domain.init_project import init_project
+    from eglk_harness.domain.product.init_project import init_project
 
     init_project(tmp_path)
     skill_lib.record_admit(
@@ -131,8 +132,8 @@ def test_repair_counts_and_focus(tmp_path: Path) -> None:
 
 
 def test_sigma_merge_dedupes(tmp_path: Path) -> None:
-    from eglk_harness.domain.init_project import init_project
-    from eglk_harness.domain import paths
+    from eglk_harness.domain.product.init_project import init_project
+    from eglk_harness.domain.kernel import paths
 
     init_project(tmp_path)
     loop = paths.loop_goal_dir(tmp_path, "g1")

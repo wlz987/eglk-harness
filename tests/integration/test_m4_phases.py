@@ -8,8 +8,9 @@ import pytest
 from eba import ActorId, Bus, Inbox
 
 from eglk_harness.actors.swarm import ExplorerActor
-from eglk_harness.domain import paths, sigma
-from eglk_harness.domain.init_project import init_project
+from eglk_harness.domain.kernel import paths
+from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.product.init_project import init_project
 from helpers.tick_runtime import run_tick
 
 

@@ -9,7 +9,7 @@ import pytest
 
 from eglk_harness.domain.adapters import MockAdapter
 from eglk_harness.domain.adapters.factory import create_adapter
-from eglk_harness.domain.bypass_soak import soak_bypass_roles
+from eglk_harness.domain.eval.bypass_soak import soak_bypass_roles
 
 
 @pytest.mark.asyncio

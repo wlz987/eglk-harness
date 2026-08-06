@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from eglk_harness.cli import build_parser
-from eglk_harness.domain.config_resolve import resolve_agent, resolve_compile, resolve_swarm
-from eglk_harness.domain.runtime_bootstrap import (
+from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
+from eglk_harness.domain.product.runtime_bootstrap import (
     apply_config_toml,
     apply_dotenv,
     bootstrap_workdir,
@@ -85,7 +85,7 @@ def test_dotenv_then_config_bootstrap(tmp_path: Path, monkeypatch):
     assert resolve_agent(None, tmp_path) == "codex"
     assert want_dashboard(cli_flag=None) is False  # dashboard default false
     # prompt_language from observe
-    from eglk_harness.domain.prompt_i18n import prompt_language
+    from eglk_harness.domain.runtime.prompt_i18n import prompt_language
 
     assert prompt_language() == "zh"
 

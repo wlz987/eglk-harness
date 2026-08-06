@@ -9,8 +9,8 @@ from typing import Any, Sequence
 from eba import RequestResponseActor
 
 from eglk_harness.domain.adapters.base import AgentAdapter
-from eglk_harness.domain.budgets import timeout_for_role
-from eglk_harness.domain.bypass_llm import coerce_explorer, coerce_verifier, run_bypass_json
+from eglk_harness.domain.runtime.budgets import timeout_for_role
+from eglk_harness.domain.runtime.bypass_llm import coerce_explorer, coerce_verifier, run_bypass_json
 from eglk_harness.protocol import messages, payload, topics
 
 

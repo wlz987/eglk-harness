@@ -1,7 +1,7 @@
 import pytest
 
-from eglk_harness.domain.leaf_contract import assemble_leaf_contract
-from eglk_harness.domain.tree import make_root
+from eglk_harness.domain.kernel.leaf_contract import assemble_leaf_contract
+from eglk_harness.domain.kernel.tree import make_root
 
 
 def test_assemble_basic() -> None:

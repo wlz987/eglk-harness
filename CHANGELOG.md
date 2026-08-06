@@ -2,6 +2,7 @@
 
 ## 0.1.0a1 — 2026-08-07
 
+- Split `domain/` into `kernel/` · `memory/` · `runtime/` · `product/` · `eval/` (clean-cut imports; `paths` under `kernel` so kernel never imports product/eval).
 - Deepen `agent_logs` (format detect, steps, runtime signals, sidecars).
 - Add `domain.plugins` + `eglk-harness plugin` CLI (computer-use opt-in; `run` never installs).
 - Per-role `RoleBudgets` / `EGLK_TIMEOUT_*`; bypass prompt `en|zh` constraint blocks.

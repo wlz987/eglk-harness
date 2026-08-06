@@ -9,10 +9,10 @@ from eba import RequestResponseActor
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
-from eglk_harness.domain.format_repair import run_with_format_repair
-from eglk_harness.domain.leaf_contract import LeafContract
-from eglk_harness.domain.models import resolve_model
-from eglk_harness.domain.skills import render_prompt
+from eglk_harness.domain.runtime.format_repair import run_with_format_repair
+from eglk_harness.domain.kernel.leaf_contract import LeafContract
+from eglk_harness.domain.runtime.models import resolve_model
+from eglk_harness.domain.memory.skills import render_prompt
 from eglk_harness.protocol import messages, payload, topics
 
 
