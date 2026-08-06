@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eglk.local/schemas/claim.schema.json",
+  "title": "Claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claim_id",
+    "tick",
+    "maker_session_id",
+    "kind",
+    "done_progress",
+    "confidence",
+    "alternatives",
+    "payload"
+  ],
+  "properties": {
+    "claim_id": { "type": "string", "minLength": 1 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "maker_session_id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "enum": ["patch", "actions", "commands", "mixed", "files"]
+    },
+    "done_progress": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "subgoals_hit": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "shortcut_hit": { "type": "boolean" },
+    "alternatives_missing": { "type": "boolean" },
+    "alternatives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "status"],
+            "properties": {
+              "text": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["adopt", "reject"] },
+              "reason": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "payload": { "type": "object" },
+    "skill_proposal": { "type": "string" },
+    "rationale_ref": { "type": ["string", "null"] },
+    "subgoal_id": { "type": "string" },
+    "attempt_index": { "type": "integer", "minimum": 0 },
+    "note": { "type": "string" }
+  }
+}

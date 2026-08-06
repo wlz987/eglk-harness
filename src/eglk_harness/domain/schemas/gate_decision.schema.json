@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eglk.local/schemas/gate_decision.schema.json",
+  "title": "GateDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "Gate 比较 Maker Claim 与 Checker Evidence 后的机械判定。",
+  "required": ["decision", "reason", "maker_progress", "checker_progress", "perception_gap", "gaps_count", "should_run_next"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["admit", "repair", "abort"]
+    },
+    "reason": { "type": "string" },
+    "maker_progress": { "type": "number", "minimum": 0, "maximum": 1 },
+    "checker_progress": { "type": "number", "minimum": 0, "maximum": 1 },
+    "perception_gap": { "type": "number", "minimum": 0, "maximum": 1 },
+    "gaps_count": { "type": "integer", "minimum": 0, "description": "未满足条件的计数（evidence.gaps 长度），frontend ev.gaps 的语义" },
+    "next_action": { "type": ["string", "null"] },
+    "should_run_next": { "type": "boolean" },
+    "subgoal_id": { "type": "string" },
+    "tick": { "type": "integer", "minimum": 0 }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eglk.local/schemas/subgoals_tree.schema.json",
+  "title": "SubgoalsTree",
+  "description": "Governor 在 Phase 0 输出的任务树。见 ../task_tree.md。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["subgoals_tree"],
+  "properties": {
+    "subgoals_tree": {
+      "$ref": "#/$defs/TreeNode"
+    }
+  },
+  "$defs": {
+    "TreeNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "status", "done_criteria", "children"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "节点 ID。根节点为 'root'；子节点为 'sg_NN' 或 'sg_NN_MM'（层级递进）。"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "admitted", "failed", "split", "merged"],
+          "description": "pending=待执行；in_progress=Maker 当前攻击；admitted=Gate 放行；failed=abort；split=被拆分为子树；merged=被合并入兄弟。"
+        },
+        "done_criteria": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TreeNode" },
+          "description": "子节点。叶节点的 children 为空数组。"
+        },
+        "parent_id": {
+          "type": ["string", "null"],
+          "description": "父节点 ID。根节点为 null。"
+        },
+        "split_from": {
+          "type": ["string", "null"],
+          "description": "若本节点由分裂产生，记录被分裂的源节点 ID。"
+        },
+        "merged_from": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "若本节点由合并产生，记录被合并的源节点 ID 列表。"
+        },
+        "verifier_challenges": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "SWARM verifier 独立审计发现的真实缺陷（如浮点噪声、溢出、静默丢弃输入）。admit 后保留在节点上，使独立审计可见、可追溯，而非被丢弃。"
+        }
+      }
+    }
+  }
+}

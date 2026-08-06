@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eglk.local/schemas/goal.schema.json",
+  "title": "LoopKernelGoal",
+  "type": "object",
+  "additionalProperties": false,
+  "description": "RESERVED: the structured in-repo goal spec shape (.goal.md parsed to JSON). NOTE: the current kernel does NOT emit this object — init_run writes state.json with a different shape (see state.schema.json). Kept as the forward-looking contract for a structured .goal.md.",
+  "required": [
+    "schema_version",
+    "goal_id",
+    "status",
+    "revision",
+    "summary",
+    "done_criteria",
+    "constraints",
+    "context_prefs",
+    "quota"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "0.2.2" },
+    "goal_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "succeeded", "aborted"]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "summary": { "type": "string", "minLength": 1 },
+    "done_criteria": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "codebase_path": { "type": "string" },
+        "allowed_scope": { "type": "string" },
+        "forbidden_actions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "context_prefs": {
+      "type": "object",
+      "properties": {
+        "pinned_sigma": { "type": "array", "items": { "type": "string" } },
+        "enabled_skills": { "type": "array", "items": { "type": "string" } },
+        "disabled_skills": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "sigma_ref": { "type": ["string", "null"] },
+    "task": { "$ref": "task_spec.schema.json" },
+    "quota": { "$ref": "quota.schema.json" }
+  }
+}
