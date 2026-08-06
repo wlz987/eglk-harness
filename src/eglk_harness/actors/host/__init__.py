@@ -29,6 +29,9 @@ class RunHost(JobHost[Job]):
         goal_id: str,
         goal_title: str = "goal",
         done_criteria: list[str] | None = None,
+        swarm_soft: str | None = None,
+        focus_score: float = 1.0,
+        uncertainty: float = 0.0,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -37,6 +40,9 @@ class RunHost(JobHost[Job]):
         self.goal_id = goal_id
         self.goal_title = goal_title
         self.done_criteria = list(done_criteria or ["hello.txt exists"])
+        self.swarm_soft = swarm_soft
+        self.focus_score = float(focus_score)
+        self.uncertainty = float(uncertainty)
         self.jobs: list[Job] = []
 
     def make_job(self, root: Envelope[Any]) -> Job:
@@ -51,6 +57,9 @@ class RunHost(JobHost[Job]):
             tick=tick,
             goal_title=str(args.get("goal_title") or self.goal_title),
             done_criteria=list(args.get("done_criteria") or self.done_criteria),
+            swarm_soft=args.get("swarm_soft", self.swarm_soft),
+            focus_score=float(args.get("focus_score", self.focus_score)),
+            uncertainty=float(args.get("uncertainty", self.uncertainty)),
         )
         self.jobs.append(job)
         return job
