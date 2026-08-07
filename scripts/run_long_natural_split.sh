@@ -63,8 +63,9 @@ p = Path(".eglk-harness/config.toml")
 want_tokens = "cognitive_tokens_max = 8000000"
 if p.is_file():
     t = p.read_text()
-    if re.search(r"cognitive_tokens_max\s*=", t):
-        t = re.sub(r"cognitive_tokens_max\s*=\s*\d+", "cognitive_tokens_max = 8000000", t)
+    # Must uncomment `# cognitive_tokens_max = …` — bare search matched comments but left them inert.
+    if re.search(r"(?m)^#?\s*cognitive_tokens_max\s*=", t):
+        t = re.sub(r"(?m)^#?\s*cognitive_tokens_max\s*=\s*\d+", want_tokens, t)
     elif "[limits]" in t:
         t = t.replace("[limits]", "[limits]\n" + want_tokens)
     else:
