@@ -65,6 +65,8 @@ eglk-harness check-projections
 eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
 make maturity                                  # pytest + projections + soak + weave CI
 make release-check                             # maturity + CLI/version contract
+make eval-doctor                               # vendor/docker/kvm readiness JSON
+make eval-smokes                               # weave_lh + osworld + wa_hard batch
 # Live soak (manual gate):
 # EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
 # Eval smoke (from design repo):
@@ -72,6 +74,10 @@ make release-check                             # maturity + CLI/version contract
 # bash experiment/eval/scripts/run_wa_hard_batch.sh
 # Natural long run (Codex; split or ≥30min):
 # bash scripts/run_long_natural_split.sh
+# List eval tasks:
+# eglk-harness eval --suite wa_hard --list-tasks
 # New live run scaffold:
 # bash ../experiment/runs/scripts/new_live_run.sh my_run
 ```
+
+Maturity sheet: [`MATURITY.md`](./MATURITY.md) · LH compare: `../experiment/eval/COMPARE_LH.md`.
