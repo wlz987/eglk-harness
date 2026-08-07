@@ -223,6 +223,9 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             _doctor_line("WARN", "Codex GUI", str(exc))
 
     report = run_doctor(workdir)
+    if getattr(args, "json", False):
+        print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        return 0 if report.ok else 1
     for c in report.checks:
         mark = "ok  " if c.ok else "FAIL"
         print(f"{mark}  {c.name}: {c.detail}")
@@ -623,6 +626,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     doc_p = sub.add_parser("doctor", help="Check environment; optional Codex GUI install")
     doc_p.add_argument("--workdir", default=".", help="Project root (default: cwd)")
+    doc_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Machine-readable JSON (still read-only; never installs)",
+    )
     doc_p.add_argument(
         "--install-codex-gui",
         action="store_true",

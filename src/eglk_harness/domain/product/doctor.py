@@ -9,6 +9,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from eglk_harness import __version__
 from eglk_harness.domain.kernel import paths
@@ -31,6 +32,14 @@ class DoctorReport:
     @property
     def ok(self) -> bool:
         return all(c.ok for c in self.checks)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "checks": [{"name": c.name, "ok": c.ok, "detail": c.detail} for c in self.checks],
+            "read_only": True,
+            "hitl": False,
+        }
 
 
 def run_doctor(workdir: Path | None = None) -> DoctorReport:

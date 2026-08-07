@@ -20,6 +20,10 @@ def test_doctor_reports_eval_and_core_fields(tmp_path: Path) -> None:
     tick = next(c for c in report.checks if c.name == "host_tick_timeout")
     assert "cognitive_tokens" in tick.detail
     assert "repairs_max" in tick.detail
+    payload = report.to_dict()
+    assert payload["read_only"] is True
+    assert payload["hitl"] is False
+    assert any(c["name"] == "host_tick_timeout" for c in payload["checks"])
     # eval_wa_vendor / eval_lh_vendor only when sibling alw eval exists
     detail = " | ".join(f"{c.name}:{c.detail}" for c in report.checks)
     assert "python" in names

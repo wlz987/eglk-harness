@@ -6,6 +6,7 @@
 - Doctor reports eval WA/LH vendor hints; `EGLK_TICK_TIMEOUT` documented via tests
 - Status surfaces tick / focus / unc (signal-only) and decision count; doctor `host_tick_timeout`
 - `status --json` + `EVAL_SUITES` constant; `make pulse` read-only maturity pulse
+- `doctor --json`; SWARM/bypass skills document coerce-aligned JSON shapes
 - Long-run script hardened (1800s bench, admit fallback); release-check remains the packaging gate
 
 ## 0.1.0a2 — 2026-08-07
