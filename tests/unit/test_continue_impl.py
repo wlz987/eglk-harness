@@ -23,6 +23,13 @@ def test_provider_overrides_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert any("model_provider=" in x for x in ov)
 
 
+def test_provider_overrides_key_alone_preserves_codex_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EGLK_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-local-vllm")
+    assert provider_overrides() == []
+
+
 def test_visible_output_codex_jsonl() -> None:
     stream = (
         '{"type":"item.completed","item":{"type":"agent_message","text":"hello visible"}}\n'

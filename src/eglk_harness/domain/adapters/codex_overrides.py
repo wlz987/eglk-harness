@@ -10,7 +10,6 @@ import os
 from typing import Any
 
 _PROVIDER_ID = "eglk_harness"
-_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 
 def provider_overrides(
@@ -18,10 +17,15 @@ def provider_overrides(
     base_url: str | None = None,
     api_key: str | None = None,
 ) -> list[str]:
-    """Build ``-c key=value`` overrides that point Codex at an OpenAI-compatible endpoint."""
+    """Build ``-c key=value`` overrides for an OpenAI-compatible endpoint.
+
+    Only emits overrides when an explicit base URL is set (arg / ``EGLK_BASE_URL`` /
+    ``OPENAI_BASE_URL``). A lone API key must **not** redirect Codex away from
+    ``~/.codex/config.toml`` (e.g. local vLLM on :18000).
+    """
     base_url = base_url or os.environ.get("EGLK_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
     api_key = api_key or os.environ.get("EGLK_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not base_url and not api_key:
+    if not base_url:
         return []
     provider: dict[str, Any] = {
         "name": "eglk-harness",
@@ -36,9 +40,7 @@ def provider_overrides(
     ]
 
 
-def _normalize_base_url(base_url: str | None) -> str:
-    if not base_url:
-        return _DEFAULT_BASE_URL
+def _normalize_base_url(base_url: str) -> str:
     trimmed = base_url.rstrip("/")
     return trimmed if trimmed.endswith("/v1") else f"{trimmed}/v1"
 
