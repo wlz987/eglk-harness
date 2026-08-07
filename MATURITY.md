@@ -7,7 +7,7 @@ Updated: 2026-08-07. Scores/scorers never feed Gate.
 | 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；183+ tests |
 | LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/eval/release-check |
 | 评测可复现 | ≥70% | ~72% | HAR-offline；weave_lh/osworld smoke；WA batch SUMMARY；COMPARE_LH；LH vendor 已拉 |
-| Live 长程 | 自然 split 或 ≥30min | 进行中 | `long_natural_split`（1800s bench） |
+| Live 长程 | 自然 split 或 ≥30min | 重跑中 | 首轮 bench=1800s 成功但 Claim 经 `cat` 未进 agent_message → 已修 parse + format-repair tools-off；脚本改 /tmp freeze |
 
 ## 仍开放
 

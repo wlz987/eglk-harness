@@ -1,7 +1,23 @@
 #!/usr/bin/env bash
 # Natural multi-leaf long run (no pre-split). Live Codex; wall clock soft limit.
+#
+# Bash re-reads scripts by byte/line offset while running — editing this file
+# mid-flight corrupts control flow. Freeze a private /tmp copy before work.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"  # alw/
+
+_SRC="$(readlink -f "$0")"
+_ALW_DEFAULT="$(cd "$(dirname "$_SRC")/../.." && pwd)"
+export EGLK_ALW_ROOT="${EGLK_ALW_ROOT:-$_ALW_DEFAULT}"
+
+if [[ -z "${EGLK_LONG_SCRIPT_FROZEN:-}" ]]; then
+  _copy="$(mktemp /tmp/eglk-long-natural-XXXXXX.sh)"
+  cp -a "$_SRC" "$_copy"
+  chmod +x "$_copy"
+  export EGLK_LONG_SCRIPT_FROZEN=1
+  exec bash "$_copy" "$@"
+fi
+
+ROOT="${EGLK_ALW_ROOT}"
 RUN="${LONG_RUN_DIR:-$ROOT/experiment/runs/long_natural_split}"
 MAX_TICKS="${EGLK_LONG_MAX_TICKS:-24}"
 WALL_MIN="${EGLK_LONG_WALL_MIN:-45}"
@@ -25,7 +41,7 @@ Multi-criterion leaf. Do **not** assume a pre-split tree — the harness may spl
 - [ ] Create \`Makefile\` with targets \`test-a\`, \`test-b\`, \`test-bridge\`, and \`test\` (runs all three); \`make test\` must exit 0 with pytest
 - [ ] Create \`SHA256SUMS\` listing sha256 hex digests (GNU \`sha256sum\` format) for \`svc_a/core.py\`, \`svc_b/core.py\`, and \`bridge/compose.py\` — digests must match a fresh \`sha256sum\` of those files
 - [ ] Create \`bridge/report.md\` that quotes both return values, mentions \`make test\`, and embeds the three digests from \`SHA256SUMS\`
-- [ ] Create \`perf/bench.py\` that does \`time.sleep(${BENCH_SLEEP_S})\` (single blocking wait ≥${BENCH_SLEEP_S}s) then writes \`perf/bench_result.json\` as \`{"elapsed_s": <number >= ${BENCH_SLEEP_S}, "note": "wall-sleep"}\`. **Run it once** via one blocking shell call — do **not** poll/restart. When it returns, emit Claim immediately.
+- [ ] Create \`perf/bench.py\` that does \`time.sleep(${BENCH_SLEEP_S})\` (single blocking wait ≥${BENCH_SLEEP_S}s) then writes \`perf/bench_result.json\` as \`{"elapsed_s": <number >= ${BENCH_SLEEP_S}, "note": "wall-sleep"}\`. **Run it once** via one blocking shell call — do **not** poll/restart. When it returns, emit Claim as your **final assistant message** (raw JSON object), not only via shell \`cat\`.
 - [ ] Create \`INTEGRITY.md\` listing which criteria remain open after **each** Maker step (append-only log)
 
 ## Constraints
@@ -33,6 +49,7 @@ Multi-criterion leaf. Do **not** assume a pre-split tree — the harness may spl
 - Do not modify \`.goal.md\` or \`.eglk-harness/\`
 - Finish packages **before** the bench; after bench returns, prioritize Claim/Evidence JSON
 - Keep Claim/Evidence schema-valid; do not invent passing tests without files on disk
+- Prefer Claim JSON in the final assistant message (adapters parse agent_message + tool stdout)
 EOF
 
 rm -rf .eglk-harness/loop .local svc_a svc_b bridge tests Makefile SHA256SUMS INTEGRITY.md \
@@ -59,16 +76,18 @@ export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-4000}"
 export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
-echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO bench_sleep=$BENCH_SLEEP_S"
-cat > ACCEPTANCE.md <<EOF
-# Acceptance
-
-status=running
-started_epoch=$(date +%s)
-bench_sleep_s=$BENCH_SLEEP_S
-tick_timeout_s=$EGLK_TICK_TIMEOUT
-note=in progress — final ok/split/elapsed written when run exits
-EOF
+echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO bench_sleep=$BENCH_SLEEP_S frozen=1"
+python3 - <<PY
+from pathlib import Path
+import time
+Path("ACCEPTANCE.md").write_text(
+    "# Acceptance\n\n"
+    f"status=running\nstarted_epoch={int(time.time())}\n"
+    f"bench_sleep_s=$BENCH_SLEEP_S\n"
+    f"tick_timeout_s=$EGLK_TICK_TIMEOUT\n"
+    "note=in progress; final ok/split/elapsed written when run exits\n"
+)
+PY
 pkill -f '[Pp]ython.*perf/bench' 2>/dev/null || true
 sleep 1
 START=$(date +%s)
