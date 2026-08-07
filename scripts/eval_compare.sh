@@ -96,6 +96,15 @@ fi
 echo "-- list-tasks smoke --"
 eglk-harness eval --suite weave_lh --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
 eglk-harness eval --suite wa_hard --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
+eglk-harness eval --suite tb21 --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
+eglk-harness eval --suite osworld_aux --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
+
+echo "-- tb21 fixture --"
+if [[ -x "$EVAL_ROOT/scripts/run_tb21_smoke.sh" ]]; then
+  TB21_OUT="$OUT/tb21" bash "$EVAL_ROOT/scripts/run_tb21_smoke.sh"
+else
+  echo "skip tb21 smoke script"
+fi
 
 python3 - <<PY
 import json
@@ -113,8 +122,9 @@ if ws.is_file():
 rows.append({"suite": "weave_thin", "status": "ran"})
 rows.append({"suite": "weave_lh", "status": "fixture_or_skipped"})
 rows.append({"suite": "osworld_aux", "status": "prepared_or_skipped"})
+rows.append({"suite": "tb21", "status": "fixture_or_skipped"})
 cmp_path = out / "compare_summary.json"
-cmp_path.write_text(json.dumps({"note": "scores never Gate", "rows": rows}, indent=2) + "\n")
+cmp_path.write_text(json.dumps({"note": "scores never Gate; see LH_PARITY.md", "rows": rows}, indent=2) + "\n")
 print(cmp_path.read_text())
 print("eval_compare: OK")
 PY

@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep
+.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity
 test:
 	pytest -q
 projections:
@@ -16,7 +16,10 @@ eval-doctor:
 eval-smokes:
 	bash ../experiment/eval/scripts/run_weave_lh_smoke.sh
 	bash ../experiment/eval/scripts/run_osworld_smoke.sh
+	bash ../experiment/eval/scripts/run_tb21_smoke.sh
 	WA_HARD_LIMIT=3 bash ../experiment/eval/scripts/run_wa_hard_batch.sh
+lh-parity:
+	bash ../experiment/eval/scripts/run_lh_parity_matrix.sh
 release-check:
 	@echo "== release-check =="
 	pytest -q
@@ -34,5 +37,6 @@ eval-full-dry:
 	bash ../experiment/eval/scripts/run_wa_hard_live_attempt.sh
 	bash ../experiment/eval/scripts/run_weave_lh_full.sh
 	bash ../experiment/eval/scripts/run_osworld_full.sh
+	bash ../experiment/eval/scripts/run_tb21_full.sh
 sweep:
 	bash scripts/full_maturity_sweep.sh

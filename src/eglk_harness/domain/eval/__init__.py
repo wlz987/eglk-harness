@@ -9,6 +9,7 @@ EVAL_SUITES: frozenset[str] = frozenset(
         "weave_lh",
         "wa_hard",
         "osworld_aux",
+        "tb21",
         "scenarios",
     }
 )

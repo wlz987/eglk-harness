@@ -12,5 +12,7 @@ make eval-smokes
 bash "$EVAL/scripts/run_wa_hard_live_attempt.sh"
 bash "$EVAL/scripts/run_weave_lh_full.sh"
 bash "$EVAL/scripts/run_osworld_full.sh"
+bash "$EVAL/scripts/run_tb21_full.sh"
+bash "$EVAL/scripts/run_lh_parity_matrix.sh"
 make pulse || true
 echo "full_maturity_sweep: OK (long_natural_split not auto-started)"

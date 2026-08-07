@@ -210,6 +210,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     from eglk_harness.domain.eval.eval_runner import default_eval_root
     from eglk_harness.domain.eval import wa_hard as wa_hard_mod
     from eglk_harness.domain.eval import osworld as osworld_mod
+    from eglk_harness.domain.eval import tb21 as tb21_mod
 
     eval_root = default_eval_root()
     if eval_root is None:
@@ -223,6 +224,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     else:
         wa_st = wa_hard_mod.vendor_status(eval_root)
         os_hint = osworld_mod.path_hint(eval_root)
+        tb_st = tb21_mod.vendor_status(eval_root)
         lh_weave = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness"
         lh_os = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness"
         report.checks.append(
@@ -251,6 +253,17 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                     f"weave={'yes' if lh_weave.is_dir() else 'no'} "
                     f"osworld_lh={'yes' if lh_os.is_dir() else 'no'} "
                     f"osworld_hint={os_hint or 'none'}"
+                ),
+            )
+        )
+        report.checks.append(
+            DoctorCheck(
+                name="eval_tb21",
+                ok=True,
+                detail=(
+                    f"pack={'yes' if (eval_root / 'tb21' / 'pack.json').is_file() else 'no'} "
+                    f"vendor_ready={tb_st.get('vendor_ready')} "
+                    f"vendor={tb_st.get('vendor_path') or 'none'}"
                 ),
             )
         )

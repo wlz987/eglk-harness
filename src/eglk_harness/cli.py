@@ -34,6 +34,7 @@ from eglk_harness.domain.eval import EVAL_SUITES
 from eglk_harness.domain.eval import wa_hard as wa_hard_mod
 from eglk_harness.domain.eval import osworld as osworld_mod
 from eglk_harness.domain.eval import weave_lh as weave_lh_mod
+from eglk_harness.domain.eval import tb21 as tb21_mod
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -428,6 +429,10 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             rows = [
                 {"id": t.task_id, "summary": t.summary} for t in weave_lh_mod.load_pack_index(eval_root)
             ]
+        elif args.suite == "tb21":
+            rows = [
+                {"id": t.task_id, "summary": t.summary} for t in tb21_mod.load_pack_index(eval_root)
+            ]
         elif args.suite == "weave_thin":
             tasks_path = eval_root / "weave_thin" / "tasks.example.json"
             if tasks_path.is_file():
@@ -490,6 +495,13 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             print(f"error: unknown weave_lh task_id={args.task_id}", flush=True)
             return 2
         weave_lh_mod.materialize_goal(task, out)
+    elif args.suite == "tb21":
+        tasks = {t.task_id: t for t in tb21_mod.load_pack_index(eval_root)}
+        task = tasks.get(args.task_id)
+        if task is None:
+            print(f"error: unknown tb21 task_id={args.task_id}", flush=True)
+            return 2
+        tb21_mod.materialize_goal(task, out)
     else:
         prepare_task_workdir(eval_root, suite=args.suite, task_id=args.task_id, out_dir=out)
     init_project(out)
@@ -557,6 +569,28 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
             print("note: offline scores are Manifest-only — never Gate inputs")
             return 0
+        if args.suite == "tb21" and getattr(args, "external_score", None):
+            scores = tb21_mod.score_from_judge_result(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
+                "status"
+            ) == "external_scored"
+            detail = "tb21_external"
+            run_id = new_run_id("eval")
+            manifest = build_manifest(
+                run_id=run_id,
+                workdir=out,
+                goal_id=f"eval-{args.suite}-{args.task_id}",
+                agent=str(args.agent),
+                model=resolve_model("maker"),
+                swarm=args.swarm,
+                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+            )
+            path = write_manifest(out, manifest)
+            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
+            print("note: offline scores are Manifest-only — never Gate inputs")
+            return 0 if ok else 1
         return 0
     rc = app_run(
         RunRequest(
@@ -607,6 +641,19 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             detail = "external_scored"
         else:
             scores = weave_lh_mod.score_placeholder(
+                task_id=args.task_id, workdir=out, eval_root=eval_root
+            )
+            ok = True
+            detail = scores.get("status") or "recorded_only"
+    elif args.suite == "tb21":
+        if getattr(args, "external_score", None):
+            scores = tb21_mod.score_from_judge_result(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = True
+            detail = "external_scored"
+        else:
+            scores = tb21_mod.score_placeholder(
                 task_id=args.task_id, workdir=out, eval_root=eval_root
             )
             ok = True
