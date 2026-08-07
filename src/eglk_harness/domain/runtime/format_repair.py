@@ -8,11 +8,13 @@ from eglk_harness.domain.memory.skills import render_prompt
 
 
 def repair_prompt(*, role: str, leaf_block: str, previous_error: str, previous_text: str = "") -> str:
-    """Build a no-tools-friendly repair prompt (still tools_allowed follows request)."""
+    """Build a no-tools repair prompt — emit schema JSON only; do not re-mutate the world."""
     extra = (
         f"FORMAT REPAIR: previous output failed validation ({previous_error}).\n"
         "Return a single JSON object only that satisfies the schema.\n"
         "Do not wrap in markdown. Do not include prose outside JSON.\n"
+        "Do **not** re-run tools, shell, or long benches — world artifacts already exist; "
+        "only emit the missing Claim/Evidence JSON as your final assistant message.\n"
     )
     if previous_text.strip():
         extra += f"\nPrevious output (truncated):\n```\n{previous_text[:2000]}\n```\n"
@@ -74,9 +76,10 @@ async def run_with_format_repair(
                 previous_text=previous_text,
             ),
             workdir=request.workdir,
-            tools_allowed=request.tools_allowed,
-            mcp_config=request.mcp_config,
-            add_dirs=request.add_dirs,
+            # Repair is JSON-only — never re-open tools/MCP (avoids re-running 30min benches).
+            tools_allowed=False,
+            mcp_config=None,
+            add_dirs=(),
             model=request.model,
             timeout_s=min(float(request.timeout_s), 300.0),
             expect=request.expect,

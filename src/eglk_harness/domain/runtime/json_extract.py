@@ -34,11 +34,48 @@ def agent_message_bodies(text: str) -> list[str]:
     return messages
 
 
+def command_output_bodies(text: str) -> list[str]:
+    """Collect Codex ``command_execution`` stdout that looks like Claim/Evidence JSON.
+
+    Live Makers often ``cat <<EOF`` the Claim — that lands in tool output, not
+    ``agent_message``. Without this, unwrap/extract only see prose and fail.
+    """
+    if not text or not text.strip():
+        return []
+    outs: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        item = obj.get("item") if obj.get("type") == "item.completed" else None
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") not in {"command_execution", "bash", "shell"}:
+            continue
+        agg = item.get("aggregated_output")
+        if not isinstance(agg, str) or not agg.strip():
+            continue
+        if "claim_id" in agg or "evidence_id" in agg or '"kind"' in agg:
+            outs.append(agg)
+    return outs
+
+
 def unwrap_agent_jsonl(text: str) -> str:
-    """If stdout is a Codex/Claude NDJSON event stream, return agent message bodies."""
+    """If stdout is a Codex/Claude NDJSON event stream, return parseable bodies.
+
+    Prefer tool stdout that carries Claim/Evidence, then assistant messages.
+    """
+    tools = command_output_bodies(text)
     msgs = agent_message_bodies(text)
-    if msgs:
-        return "\n".join(msgs)
+    parts = tools + msgs
+    if parts:
+        return "\n".join(parts)
     return text
 
 
@@ -175,12 +212,17 @@ def extract_json(text: str) -> Any:
         raise ValueError("empty model output")
 
     bodies = agent_message_bodies(text)
-    # Later agent messages first — models often emit chatter then the real Claim
-    corpus: list[str]
+    tool_bodies = command_output_bodies(text)
+    # Prefer later tool outputs (Claim via `cat`) and later agent messages.
+    corpus: list[str] = []
+    if tool_bodies:
+        corpus.extend(reversed(tool_bodies))
     if bodies:
-        corpus = list(reversed(bodies))
+        corpus.extend(reversed(bodies))
         corpus.append("\n".join(bodies))
-    else:
+    # Always scan full tee last — domain JSON may only appear in tool streams.
+    corpus.append(text)
+    if not tool_bodies and not bodies:
         corpus = [text]
 
     candidates: list[Any] = []

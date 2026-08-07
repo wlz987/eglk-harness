@@ -78,3 +78,25 @@ def test_sparse_evidence_fills_defaults() -> None:
     assert isinstance(doc["artifacts"], list)
     assert all(isinstance(x, str) for x in doc["artifacts"])
     assert "thread_id" not in doc
+
+
+def test_claim_emitted_via_shell_cat_in_codex_jsonl() -> None:
+    """Live failure mode: Claim only in command_execution stdout, prose in agent_message."""
+    from eglk_harness.domain.adapters.base import EpisodeRequest
+    from eglk_harness.domain.adapters.parse import episode_from_text
+
+    raw = _load("claim_via_shell_cat.txt")
+    doc, errs = parse_and_validate("claim", raw)
+    assert errs == [], errs
+    assert doc is not None
+    assert doc["claim_id"] == "c-root-0"
+    req = EpisodeRequest(
+        role="maker",
+        prompt="x",
+        workdir=Path("."),
+        tools_allowed=True,
+        expect="claim",
+    )
+    res = episode_from_text(req, raw, backend="codex")
+    assert res.ok and res.parsed is not None
+    assert res.parsed["claim_id"] == "c-root-0"

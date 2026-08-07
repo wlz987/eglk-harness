@@ -7,6 +7,7 @@
 - Status surfaces tick / focus / unc (signal-only) and decision count; doctor `host_tick_timeout`
 - `status --json` + `EVAL_SUITES` constant; `make pulse` read-only maturity pulse
 - `doctor --json`; SWARM/bypass skills document coerce-aligned JSON shapes
+- Parse Claim/Evidence from Codex `command_execution` stdout (`cat` Claim); format-repair is tools-off
 - Long-run script hardened (1800s bench, admit fallback); release-check remains the packaging gate
 
 ## 0.1.0a2 — 2026-08-07
