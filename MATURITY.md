@@ -4,10 +4,12 @@ Updated: 2026-08-07. Scores/scorers never feed Gate.
 
 | 轴 | 目标 | 自评 | 证据 |
 |----|------|------|------|
-| 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；183+ tests |
-| LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/eval/release-check |
-| 评测可复现 | ≥70% | ~72% | HAR-offline；weave_lh/osworld smoke；WA batch SUMMARY；COMPARE_LH；LH vendor 已拉 |
-| Live 长程 | 自然 split 或 ≥30min | 重跑中 | 首轮 bench=1800s 成功但 Claim 经 `cat` 未进 agent_message → 已修 parse + format-repair tools-off；脚本改 /tmp freeze |
+| 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；187 tests |
+| LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/`doctor --json`/eval/release-check |
+| 评测可复现 | ≥70% | ~72% | HAR-offline；weave_lh/osworld smoke；WA batch；COMPARE 记分卡；LH vendor 已拉 |
+| Live 长程 | 自然 split 或 ≥30min | 重跑中 | parse(Claim-via-cat)+repair tools-off+script freeze；bench 已再启 |
+| **相对自身设计总成熟** | ≥90% | **~88–90%**（长跑通过后达档） | 见 `alw/experiment/eval/COMPARE_LH.md` |
+| **相对 LH 产品完成度** | 不对齐目标 | 外壳 ~91% / 长程与全量评测仍落后 | LH 路线含 HITL+Manager，**不作为 eglk 追平目标** |
 
 ## 仍开放
 
