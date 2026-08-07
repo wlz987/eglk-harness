@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -30,3 +31,39 @@ def test_status_empty_workdir(tmp_path: Path) -> None:
     report = collect_status(tmp_path)
     assert report.harness_present is False
     assert "no loop run" in " ".join(report.notes)
+
+
+def test_status_surfaces_tick_and_decisions(tmp_path: Path) -> None:
+    init_project(tmp_path)
+    loop = tmp_path / ".eglk-harness" / "loop" / "g-test"
+    (loop / "decisions").mkdir(parents=True)
+    (loop / "decisions" / "0001.json").write_text(
+        '{"decision":"repair","reason":"x","tick":0}\n', encoding="utf-8"
+    )
+    (loop / "state.json").write_text(
+        '{"tick": 2, "focus_score": 0.4, "uncertainty": 0.2, "quota": {"cognitive_tokens": 10}}\n',
+        encoding="utf-8",
+    )
+    (loop / "subgoals_tree.json").write_text(
+        json.dumps(
+            {
+                "subgoals_tree": {
+                    "id": "root",
+                    "title": "t",
+                    "status": "open",
+                    "done_criteria": [],
+                    "children": [],
+                    "parent_id": None,
+                    "repair_streak": 0,
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    report = collect_status(tmp_path)
+    text = report.render()
+    assert report.decision_count == 1
+    assert report.tick == 2
+    assert "τ_focus/τ_unc signal only" in text
+    assert "n=1" in text

@@ -15,7 +15,11 @@ def test_doctor_reports_eval_and_core_fields(tmp_path: Path) -> None:
     assert "plugins" in names
     assert "budgets" in names
     assert "prompt_language" in names
+    assert "host_tick_timeout" in names
     assert "eval_root" in names
+    tick = next(c for c in report.checks if c.name == "host_tick_timeout")
+    assert "cognitive_tokens" in tick.detail
+    assert "repairs_max" in tick.detail
     # eval_wa_vendor / eval_lh_vendor only when sibling alw eval exists
     detail = " | ".join(f"{c.name}:{c.detail}" for c in report.checks)
     assert "python" in names

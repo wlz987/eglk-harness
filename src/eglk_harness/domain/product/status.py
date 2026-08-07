@@ -23,6 +23,10 @@ class StatusReport:
     selected_run: str | None = None
     tree_summary: list[dict[str, Any]] = field(default_factory=list)
     latest_decision: dict[str, Any] | None = None
+    decision_count: int = 0
+    tick: int | None = None
+    focus_score: float | None = None
+    uncertainty: float | None = None
     quota: dict[str, Any] = field(default_factory=dict)
     leaf_contract: dict[str, Any] | None = None
     last_tick: dict[str, Any] | None = None
@@ -52,9 +56,19 @@ class StatusReport:
             d = self.latest_decision
             lines.append(
                 f"decision:    {d.get('decision')} ({d.get('reason')})  tick={d.get('tick')}"
+                f"  (n={self.decision_count})"
             )
         else:
-            lines.append("decision:    (none)")
+            lines.append(f"decision:    (none)  (n={self.decision_count})")
+
+        if self.tick is not None:
+            proj = []
+            if self.focus_score is not None:
+                proj.append(f"focus={self.focus_score}")
+            if self.uncertainty is not None:
+                proj.append(f"unc={self.uncertainty}")
+            extra = f"  {' '.join(proj)}" if proj else ""
+            lines.append(f"tick:        {self.tick}{extra}  (τ_focus/τ_unc signal only — never abort)")
 
         q = self.quota
         lines.append(
@@ -193,19 +207,34 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
     decision = _latest_json(loop_dir / "decisions")
     if decision:
         report.latest_decision = decision
+    dec_dir = loop_dir / "decisions"
+    if dec_dir.is_dir():
+        report.decision_count = sum(1 for _ in dec_dir.glob("*.json"))
 
     state_path = loop_dir / "state.json"
     if state_path.is_file():
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
-            if isinstance(state, dict) and isinstance(state.get("quota"), dict):
-                report.quota.update(state["quota"])
-        except (OSError, json.JSONDecodeError):
+            if isinstance(state, dict):
+                if isinstance(state.get("quota"), dict):
+                    report.quota.update(state["quota"])
+                if state.get("tick") is not None:
+                    report.tick = int(state["tick"])
+                if state.get("focus_score") is not None:
+                    report.focus_score = float(state["focus_score"])
+                if state.get("uncertainty") is not None:
+                    report.uncertainty = float(state["uncertainty"])
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
 
     report.last_tick = _last_jsonl(loop_dir / "ticks.jsonl")
     if report.last_tick and isinstance(report.last_tick.get("quota"), dict):
         report.quota.update(report.last_tick["quota"])
+    if report.tick is None and report.last_tick and report.last_tick.get("tick") is not None:
+        try:
+            report.tick = int(report.last_tick["tick"])
+        except (TypeError, ValueError):
+            pass
 
     report.leaf_contract = _leaf_from_reasoning(loop_dir)
     if report.leaf_contract is None:

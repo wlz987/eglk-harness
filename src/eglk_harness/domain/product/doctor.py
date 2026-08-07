@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -165,6 +166,26 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
             name="prompt_language",
             ok=True,
             detail=prompt_language(),
+        )
+    )
+    tick_raw = os.environ.get("EGLK_TICK_TIMEOUT")
+    try:
+        tick_s = float(tick_raw) if tick_raw not in (None, "") else 600.0
+    except ValueError:
+        tick_s = 600.0
+    report.checks.append(
+        DoctorCheck(
+            name="host_tick_timeout",
+            ok=True,
+            detail=(
+                f"{tick_s:g}s "
+                + (
+                    f"(EGLK_TICK_TIMEOUT={tick_raw})"
+                    if tick_raw not in (None, "")
+                    else "(live default 600; soft wall only)"
+                )
+                + "; abort authority remains cognitive_tokens + repairs_max"
+            ),
         )
     )
     try:
