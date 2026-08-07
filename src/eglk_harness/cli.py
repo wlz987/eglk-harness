@@ -179,6 +179,8 @@ def _cmd_plugin(args: argparse.Namespace) -> int:
 def _cmd_doctor(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     code = 0
+    as_json = bool(getattr(args, "json", False))
+    gui_detail: str | None = None
     if args.install_codex_gui or args.uninstall_codex_gui:
         try:
             if args.install_codex_gui:
@@ -190,42 +192,57 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                     on_status=lambda s, m: _doctor_line("…. ", s, m),
                 )
             if args.uninstall_codex_gui and not state.installed:
-                _doctor_line("ok", "Codex GUI", f"{state.plugin_id} is not installed")
+                gui_detail = f"{state.plugin_id} is not installed"
+                if not as_json:
+                    _doctor_line("ok", "Codex GUI", gui_detail)
             elif state.ready:
                 ver = f" v{state.version}" if state.version else ""
-                _doctor_line("ok", "Codex GUI", f"{state.plugin_id}{ver} is installed and enabled")
+                gui_detail = f"{state.plugin_id}{ver} is installed and enabled"
+                if not as_json:
+                    _doctor_line("ok", "Codex GUI", gui_detail)
             else:
-                _doctor_line(
-                    "FAIL",
-                    "Codex GUI",
-                    f"{state.plugin_id} installed={state.installed} enabled={state.enabled}",
-                )
+                gui_detail = f"{state.plugin_id} installed={state.installed} enabled={state.enabled}"
+                if not as_json:
+                    _doctor_line("FAIL", "Codex GUI", gui_detail)
                 code = 1
         except CodexPluginError as exc:
-            _doctor_line("FAIL", "Codex GUI", str(exc))
+            if as_json:
+                print(json.dumps({"ok": False, "error": str(exc), "read_only": True, "hitl": False}))
+            else:
+                _doctor_line("FAIL", "Codex GUI", str(exc))
             return 2
     else:
         try:
             state = get_codex_plugin_state(COMPUTER_USE_PLUGIN_ID)
             if state.ready:
                 ver = f" v{state.version}" if state.version else ""
-                _doctor_line("ok", "Codex GUI", f"{state.plugin_id}{ver} ready")
+                gui_detail = f"{state.plugin_id}{ver} ready"
+                if not as_json:
+                    _doctor_line("ok", "Codex GUI", gui_detail)
             elif state.available:
-                _doctor_line(
-                    "WARN",
-                    "Codex GUI",
+                gui_detail = (
                     f"{state.plugin_id} available but not ready; "
-                    "run `eglk-harness doctor --install-codex-gui`",
+                    "run `eglk-harness doctor --install-codex-gui`"
                 )
+                if not as_json:
+                    _doctor_line("WARN", "Codex GUI", gui_detail)
             else:
-                _doctor_line("WARN", "Codex GUI", f"{state.plugin_id} unavailable")
+                gui_detail = f"{state.plugin_id} unavailable"
+                if not as_json:
+                    _doctor_line("WARN", "Codex GUI", gui_detail)
         except CodexPluginError as exc:
-            _doctor_line("WARN", "Codex GUI", str(exc))
+            gui_detail = str(exc)
+            if not as_json:
+                _doctor_line("WARN", "Codex GUI", gui_detail)
 
     report = run_doctor(workdir)
-    if getattr(args, "json", False):
+    if gui_detail is not None:
+        from eglk_harness.domain.product.doctor import DoctorCheck
+
+        report.checks.append(DoctorCheck(name="codex_gui", ok=True, detail=gui_detail))
+    if as_json:
         print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
-        return 0 if report.ok else 1
+        return 0 if report.ok and code == 0 else 1
     for c in report.checks:
         mark = "ok  " if c.ok else "FAIL"
         print(f"{mark}  {c.name}: {c.detail}")
