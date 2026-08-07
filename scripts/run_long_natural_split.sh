@@ -10,8 +10,6 @@ mkdir -p "$RUN"
 cd "$RUN"
 eglk-harness init --workdir . >/dev/null || true
 
-# Multi-criterion leaf — no pre-split. Includes a verifiable long bench so the
-# ≥30min acceptance path is reachable when Codex one-shots the coding criteria.
 cat > .goal.md <<'EOF'
 # Natural split long run
 
@@ -25,43 +23,43 @@ Multi-criterion leaf. Do **not** assume a pre-split tree — the harness may spl
 - [ ] Create `Makefile` with targets `test-a`, `test-b`, `test-bridge`, and `test` (runs all three); `make test` must exit 0 with pytest
 - [ ] Create `SHA256SUMS` listing sha256 hex digests (GNU `sha256sum` format) for `svc_a/core.py`, `svc_b/core.py`, and `bridge/compose.py` — digests must match a fresh `sha256sum` of those files
 - [ ] Create `bridge/report.md` that quotes both return values, mentions `make test`, and embeds the three digests from `SHA256SUMS`
-- [ ] Create and **run** `perf/bench.py`: it must perform a real wall-clock CPU-bound workload of **at least 1200 seconds**, then write `perf/bench_result.json` shaped as `{"elapsed_s": <number >= 1200, "note": "cpu-bound"}` (do not fake the timer). **As soon as** `elapsed_s >= 1200` is on disk, stop the bench and **immediately** emit a schema-valid Claim (do not keep exploring or rewriting packages).
+- [ ] Create `perf/bench.py` that does `time.sleep(1200)` (or equivalent single blocking wait ≥1200s) then writes `perf/bench_result.json` as `{"elapsed_s": <number >= 1200, "note": "wall-sleep"}`. **Run it once** via one blocking shell call — do **not** poll/restart. When it returns, emit Claim immediately.
 - [ ] Create `INTEGRITY.md` listing which criteria remain open after **each** Maker step (append-only log)
 
 ## Constraints
 
 - Do not modify `.goal.md` or `.eglk-harness/`
-- Finish packages **before** starting the long bench; leave inspectable evidence for Checker
-- After the bench completes, prioritize Claim/Evidence JSON over further edits
+- Finish packages **before** the bench; after bench returns, prioritize Claim/Evidence JSON
 - Keep Claim/Evidence schema-valid; do not invent passing tests without files on disk
 EOF
 
 rm -rf .eglk-harness/loop .local svc_a svc_b bridge tests Makefile SHA256SUMS INTEGRITY.md \
   perf alpha beta gamma .pytest_cache 2>/dev/null || true
 eglk-harness init --workdir . >/dev/null
+
 python3 - <<'PY'
 from pathlib import Path
 import re
 p = Path(".eglk-harness/config.toml")
+# Codex reports large context windows per turn; long Maker needs headroom.
+# Soft run override — design pin remains projections.COGNITIVE_TOKENS_MAX.
+want_tokens = "cognitive_tokens_max = 8000000"
 if p.is_file():
     t = p.read_text()
-    if "cognitive_tokens_max = 500000" not in t:
-        if re.search(r"cognitive_tokens_max\s*=", t):
-            t = re.sub(r"cognitive_tokens_max\s*=\s*\d+", "cognitive_tokens_max = 500000", t)
-        elif "[limits]" in t:
-            t = t.replace("[limits]", "[limits]\ncognitive_tokens_max = 500000")
-        else:
-            t += "\n[limits]\ncognitive_tokens_max = 500000\n"
-        p.write_text(t)
+    if re.search(r"cognitive_tokens_max\s*=", t):
+        t = re.sub(r"cognitive_tokens_max\s*=\s*\d+", "cognitive_tokens_max = 8000000", t)
+    elif "[limits]" in t:
+        t = t.replace("[limits]", "[limits]\n" + want_tokens)
+    else:
+        t += "\n[limits]\n" + want_tokens + "\n"
+    p.write_text(t)
 PY
 
-# Host per-tick await + Maker episode must cover packaging + ≥1200s bench + Claim.
 export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-4000}"
 export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
 echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO"
-# Kill leftover benches from prior timed-out attempts
 pkill -f "perf/bench" 2>/dev/null || true
 sleep 1
 START=$(date +%s)
