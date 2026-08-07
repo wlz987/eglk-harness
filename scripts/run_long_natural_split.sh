@@ -75,6 +75,8 @@ PY
 
 export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-4000}"
 export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
+# Default off for headless long runs; set EGLK_MCP_DISABLE=0 to allow computer-use.
+export EGLK_MCP_DISABLE="${EGLK_MCP_DISABLE:-1}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
 echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO bench_sleep=$BENCH_SLEEP_S frozen=1"

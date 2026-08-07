@@ -75,11 +75,17 @@ def test_status_surfaces_tick_and_decisions(tmp_path: Path) -> None:
 
 
 def test_status_reads_limits_from_config(tmp_path: Path) -> None:
+    import re
+
     init_project(tmp_path)
     cfg = tmp_path / ".eglk-harness" / "config.toml"
     text = cfg.read_text(encoding="utf-8")
-    if "cognitive_tokens_max" in text:
-        text = text.replace("# cognitive_tokens_max = 64000", "cognitive_tokens_max = 123456")
+    if re.search(r"(?m)^#?\s*cognitive_tokens_max\s*=", text):
+        text = re.sub(
+            r"(?m)^#?\s*cognitive_tokens_max\s*=\s*\d+",
+            "cognitive_tokens_max = 123456",
+            text,
+        )
     else:
         text += "\n[limits]\ncognitive_tokens_max = 123456\n"
     cfg.write_text(text, encoding="utf-8")

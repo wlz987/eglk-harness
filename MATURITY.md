@@ -1,34 +1,36 @@
 # Maturity self-assessment · eglk-harness 0.1.0b1
 
-Updated: 2026-08-07. Four sibling repos. Scores/scorers never feed Gate.
+Updated: 2026-08-07 (full_maturity_true sweep). Scores/scorers never feed Gate.
 
 | 轴 | 目标 | 自评 | 证据 |
 |----|------|------|------|
-| 控制核 | ≥90% | **~95%** | Gate/树/Σ/WorldRef/SWARM；工具 profile 2+3；skills 加厚 |
-| LH 产品外壳 | ≥90% | **~93%** | CLI/plugin/dashboard RO/JSON；`make dist-check`；release-check |
-| 评测可复现 | ≥70% | **~92%** | 官方 Hard pack；**eval-tasks 真分路径**（demo 107/108 + `--score-agent-runs`）；LH 三角 A/B |
-| Live 长程 | ≥30min 或 split | **passed** | ACCEPTANCE elapsed_s=3966 |
-| **相对自身设计总成熟** | ≥90% | **~95%** | 官方判分工程路径已闭合；Hard 站点真跑 + PyPI upload 仍人工/env-gated |
-| **相对 LH 产品** | 不对齐 | 外壳 ~93% | HITL/Manager 不追平 |
+| 控制核 | ≥90% | **~96%** | Gate/树/Σ/WorldRef/SWARM；工具 2+3；`EGLK_MCP_DISABLE`；skills |
+| LH 产品外壳 | ≥90% | **~94%** | CLI/plugin（含 open-computer-use）；dashboard RO；dist-check |
+| 评测可复现 | ≥70% | **~93%** | Hard pack + 官方真分路径 + **sites 真起 + eglk live 剧本**；LH 三角 A/B/FULL playbook |
+| Live 长程 | ≥30min 或 split | **passed + 再跑中** | 历史 3966s；`long_natural_split_true` nohup（1800s bench · :18000） |
+| **相对自身设计总成熟** | ≥90% | **~96%** | 工程路径闭合；Hard 官方 agent_logs/浏览器轨迹仍在真跑中 |
+| **相对 LH 产品** | 不对齐 | 外壳 ~94% | HITL/Manager 不追平 |
 
-## 达档条件（相对自身设计）
+## 本轮完善
 
-已满足：控制核不变量 · 零 HITL · 长跑 · 工具策略 · WA 官方 ID pack · CLI dry-run ·
-**官方 eval-tasks → Manifest ingest** · LH 三角接线 · skill 操作厚度。
+- `init` 默认 `cognitive_tokens_max = 2000000`（避免 live 64k 误杀）
+- `EGLK_MCP_DISABLE=1`：已装 computer-use 时仍可无头跑 Codex
+- `run_wa_hard_eglk_live.sh` + `config.local.json`（本机 webarena 端口）
+- `run_full_maturity_true.sh` 一键真跑编排
+- 安装 `open-computer-use`（桌面 AT-SPI；WA 浏览器仍建议专用 browser MCP）
 
-## 人工 / 环境闸（不阻塞「工程成熟」）
-
-1. WA Hard **站点真跑**（Hard ids 的 agent 轨迹；demo 107/108 ≠ Hard 科学声明）
-2. PyPI `twine upload`（见 `RELEASE.md`；本地 `make dist-check` 已覆盖 check）
-3. Weave-114 / OSWorld-108 / TB 全量（`*_FULL=1`）
-
-## 一键
+## 真跑入口
 
 ```bash
-make release-check && make lh-parity && make pulse
-make dist-check   # build + twine check；不上传
-bash ../experiment/eval/scripts/sync_wa_hard_pack.sh
-bash ../experiment/eval/scripts/run_wa_hard_eval_dry.sh
-bash ../experiment/eval/scripts/run_wa_hard_official_score_demo.sh
-WA_HARD_LIVE=1 make eval-full-dry
+# 日志：experiment/runs/full_maturity_true_logs/
+bash experiment/eval/scripts/run_full_maturity_true.sh
+# 或已在跑的 long / WA：
+tail -f experiment/runs/full_maturity_true_logs/long2.out
+tail -f experiment/runs/full_maturity_true_logs/wa_eglk_live2.out
 ```
+
+## 仍人工/环境闸
+
+1. Hard **官方** `agent_response.json`+`network.har` 浏览器轨迹（open-computer-use ≠ 网页自动化）
+2. PyPI `twine upload`
+3. Weave-114 / OSWorld-108 上游全量（资产下载已 nohup；VM/API 仍外置）

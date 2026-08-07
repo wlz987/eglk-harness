@@ -50,6 +50,9 @@ def resolve_mcp_config(
     raw = env.get("EGLK_MCP_CONFIG") or ""
     if raw.strip():
         return Path(raw)
+    # Allow operators to keep a plugin installed but skip auto-mount (e.g. headless).
+    if str(env.get("EGLK_MCP_DISABLE") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return None
     # Opt-in use of a previously installed computer-use plugin MCP file.
     # ``run`` never installs; empty path (official Codex GUI) is skipped here.
     if agent and agent not in {"mock", "fake"}:
