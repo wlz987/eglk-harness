@@ -60,6 +60,15 @@ export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
 echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO bench_sleep=$BENCH_SLEEP_S"
+cat > ACCEPTANCE.md <<EOF
+# Acceptance
+
+status=running
+started_epoch=$(date +%s)
+bench_sleep_s=$BENCH_SLEEP_S
+tick_timeout_s=$EGLK_TICK_TIMEOUT
+note=in progress — final ok/split/elapsed written when run exits
+EOF
 pkill -f '[Pp]ython.*perf/bench' 2>/dev/null || true
 sleep 1
 START=$(date +%s)
