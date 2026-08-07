@@ -7,17 +7,17 @@ Updated: 2026-08-07. Workspace: four sibling git repos (`design`/`docs`/`eglk-ha
 | 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；191 tests |
 | LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/`doctor --json`/eval/release-check |
 | 评测可复现 | ≥70% | ~80% | HAR-offline；weave/osworld/**tb21** smoke；WA batch；`LH_PARITY.md`；LH vendor 已拉 |
-| Live 长程 | 自然 split 或 ≥30min | 重跑中 | parse(Claim-via-cat)+repair tools-off+script freeze；bench 已再启 |
-| **相对自身设计总成熟** | ≥90% | **~88–90%**（长跑通过后达档） | 见 `alw/experiment/eval/COMPARE_LH.md` |
+| Live 长程 | 自然 split 或 ≥30min | **passed** | `ACCEPTANCE` ok + elapsed_s=3966（≥30min）；root admit；未触发 split |
+| **相对自身设计总成熟** | ≥90% | **~91%** | 长跑达档；主尺 WA-Hard Docker 真分仍外置 |
 | **相对 LH 产品完成度** | 不对齐目标 | 外壳 ~91% / 长程与全量评测仍落后 | LH 路线含 HITL+Manager，**不作为 eglk 追平目标** |
 
 ## 下一步可完善（按杠杆）
 
-1. **P0** `long_natural_split` ACCEPTANCE passed（进行中；勿改 freeze 脚本）
-2. **P1** WA-Hard：`run_wa_hard_live_attempt` → vendor_ready_not_executed + NOTES + external-score demo ✅；官方 Docker 真跑仍外置
-3. **P1** `make sweep` / release-check；PyPI 上传按 RELEASE.md（人工）
-4. **P2** Weave/OSWorld/**TB2.1**：`run_*_full.sh` env-gated；`make lh-parity` 层 A/B ✅；全量 upstream 外置
-5. **P2** skill 厚度（checker/compile/context + SWARM JSON）✅；Claim final-message 提示已加
+1. **P0** `long_natural_split` ACCEPTANCE ✅（elapsed≈66min；split=False 可接受）
+2. **P1** WA-Hard：vendor_ready + NOTES + external-score demo ✅；官方 Docker 真跑仍外置
+3. **P1** PyPI 正式发布（按 RELEASE.md，人工）
+4. **P2** Weave/OSWorld/**TB2.1** 层 C 全量（env-gated；层 A/B 已绿）
+5. **P2** skill 厚度 ✅；Claim final-message 提示已加
 6. **P3** 网站/GIF/论文站（非控制核；LH 社区面优势）
 
 ## 仍开放
