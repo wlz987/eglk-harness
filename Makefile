@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check
+.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes
 test:
 	pytest -q
 projections:
@@ -9,6 +9,12 @@ weave:
 	bash ../experiment/eval/scripts/ci_weave_thin.sh
 maturity:
 	bash scripts/maturity_gate.sh
+eval-doctor:
+	bash ../experiment/eval/scripts/doctor_eval_env.sh
+eval-smokes:
+	bash ../experiment/eval/scripts/run_weave_lh_smoke.sh
+	bash ../experiment/eval/scripts/run_osworld_smoke.sh
+	WA_HARD_LIMIT=3 bash ../experiment/eval/scripts/run_wa_hard_batch.sh
 release-check:
 	@echo "== release-check =="
 	pytest -q

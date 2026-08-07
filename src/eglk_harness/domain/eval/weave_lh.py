@@ -26,15 +26,22 @@ def discover_vendor(eval_root: Path | None = None) -> Path | None:
                 er / "vendor" / "WeaveBench-harness",
             ]
         )
-    here = Path(__file__).resolve()
-    if len(here.parents) > 5:
-        alw = here.parents[5]
-        roots.extend(
-            [
-                alw / "experiment" / "eval" / "vendor" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
-                alw / "reference" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
-            ]
-        )
+    else:
+        here = Path(__file__).resolve()
+        if len(here.parents) > 5:
+            alw = here.parents[5]
+            roots.extend(
+                [
+                    alw
+                    / "experiment"
+                    / "eval"
+                    / "vendor"
+                    / "LongHorizon-Harness"
+                    / "eval"
+                    / "WeaveBench-harness",
+                    alw / "reference" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
+                ]
+            )
     for cand in roots:
         if cand.is_dir() and any(cand.iterdir()):
             return cand

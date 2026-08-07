@@ -384,6 +384,38 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             flush=True,
         )
         return 2
+
+    if getattr(args, "list_tasks", False):
+        rows: list[dict[str, str]] = []
+        if args.suite == "wa_hard":
+            rows = [{"id": t.task_id, "summary": t.intent} for t in wa_hard_mod.load_pack_index(eval_root)]
+        elif args.suite == "osworld_aux":
+            rows = [
+                {"id": t.task_id, "summary": t.instruction}
+                for t in osworld_mod.load_pack_index(eval_root)
+            ]
+        elif args.suite == "weave_lh":
+            rows = [
+                {"id": t.task_id, "summary": t.summary} for t in weave_lh_mod.load_pack_index(eval_root)
+            ]
+        elif args.suite == "weave_thin":
+            tasks_path = eval_root / "weave_thin" / "tasks.example.json"
+            if tasks_path.is_file():
+                data = json.loads(tasks_path.read_text(encoding="utf-8"))
+                tasks = data.get("tasks") if isinstance(data, dict) else data
+                if isinstance(tasks, list):
+                    for t in tasks:
+                        if isinstance(t, dict) and t.get("id"):
+                            rows.append(
+                                {
+                                    "id": str(t["id"]),
+                                    "summary": str(t.get("summary") or t.get("title") or ""),
+                                }
+                            )
+        print(json.dumps({"suite": args.suite, "count": len(rows), "tasks": rows}, indent=2))
+        print("note: listing only — scorers never feed Gate")
+        return 0
+
     out = Path(args.workdir).resolve()
 
     if getattr(args, "batch", False):
@@ -404,7 +436,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         return 0
 
     if not args.task_id:
-        print("error: --task-id required unless --batch", flush=True)
+        print("error: --task-id required unless --batch or --list-tasks", flush=True)
         return 2
 
     if args.suite == "wa_hard":
@@ -715,6 +747,11 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--compile", default="off", choices=("auto", "force", "off"))
     ev.add_argument("--max-ticks", type=int, default=4)
     ev.add_argument("--prepare-only", action="store_true", help="Only write .goal.md / init")
+    ev.add_argument(
+        "--list-tasks",
+        action="store_true",
+        help="List task ids for --suite (no run; scorers never Gate)",
+    )
     ev.add_argument(
         "--batch",
         action="store_true",
