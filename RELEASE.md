@@ -25,6 +25,15 @@ eglk-harness doctor   # includes eval WA/LH vendor hints
 2. `python -m build`
 3. `twine upload dist/*` (credentials required — do not automate without approval).
 
+## Full maturity sweep (CI-safe)
+
+```bash
+make sweep   # release-check + eval-smokes + WA live-attempt + Weave/OSWorld full dry
+make pulse   # doctor --json + long ACCEPTANCE
+```
+
+Does **not** auto-start `long_natural_split` (live Codex / ≥30min).
+
 ## Eval reproducibility
 
 ```bash

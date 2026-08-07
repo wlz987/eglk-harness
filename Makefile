@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse
+.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep
 test:
 	pytest -q
 projections:
@@ -29,3 +29,10 @@ assert eglk_harness.__version__"
 	eglk-harness --help >/dev/null
 	eglk-harness eval --help >/dev/null
 	@echo "release-check: OK"
+
+eval-full-dry:
+	bash ../experiment/eval/scripts/run_wa_hard_live_attempt.sh
+	bash ../experiment/eval/scripts/run_weave_lh_full.sh
+	bash ../experiment/eval/scripts/run_osworld_full.sh
+sweep:
+	bash scripts/full_maturity_sweep.sh

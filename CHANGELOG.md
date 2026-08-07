@@ -9,6 +9,7 @@
 - `doctor --json`; SWARM/bypass skills document coerce-aligned JSON shapes
 - Parse Claim/Evidence from Codex `command_execution` stdout (`cat` Claim); format-repair is tools-off
 - `check-update`/`check-projections --json`; visible sidecar surfaces shell-cat Claim
+- Full maturity sweep: WA live-attempt, Weave/OSWorld full dry, richer skills, `make sweep`
 - Long-run script hardened (1800s bench, admit fallback); release-check remains the packaging gate
 
 ## 0.1.0a2 — 2026-08-07
