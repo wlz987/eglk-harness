@@ -22,8 +22,10 @@ eglk-harness doctor   # includes eval WA/LH vendor hints
 ## Optional PyPI publish (manual; not part of CI)
 
 1. Bump `pyproject.toml` / `__version__` / CHANGELOG.
-2. `python -m build`
+2. `python -m build && twine check dist/*`
 3. `twine upload dist/*` (credentials required — do not automate without approval).
+
+Engineering maturity does **not** require upload; local `make release-check` is the gate.
 
 ## Full maturity sweep (CI-safe)
 

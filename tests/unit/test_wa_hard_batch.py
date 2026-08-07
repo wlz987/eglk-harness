@@ -41,6 +41,10 @@ def test_run_batch_writes_summary(tmp_path: Path) -> None:
     summary = wa_hard_mod.run_batch(eval_root, out_root=out, limit=5, prepare_only=False)
     assert summary["count"] == 5
     assert Path(summary["summary_path"]).is_file()
-    assert (out / "wa-hard-001-admin-lookup" / ".goal.md").is_file()
+    first_id = summary["tasks"][0]["task_id"]
+    assert (out / first_id / ".goal.md").is_file()
     assert "never Gate" in summary["note"]
     assert summary["tasks"][0]["scores"]["suite"] == "wa_hard"
+    # Phase-0 Hard ids preferred in synced pack
+    pack_ids = {t.task_id for t in wa_hard_mod.load_pack_index(eval_root)}
+    assert "681" in pack_ids and "522" in pack_ids

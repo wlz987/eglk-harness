@@ -35,6 +35,7 @@ assert eglk_harness.__version__"
 
 eval-full-dry:
 	bash ../experiment/eval/scripts/run_wa_hard_live_attempt.sh
+	bash ../experiment/eval/scripts/run_wa_hard_eval_dry.sh
 	bash ../experiment/eval/scripts/run_weave_lh_full.sh
 	bash ../experiment/eval/scripts/run_osworld_full.sh
 	bash ../experiment/eval/scripts/run_tb21_full.sh

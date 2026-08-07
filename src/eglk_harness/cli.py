@@ -771,7 +771,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--mcp-add-dir",
         action="append",
         default=None,
-        help="Extra readable dir for Maker/Checker MCP (repeatable)",
+        help="Extra readable dir for role MCP sessions (repeatable; filtered by allowlist)",
     )
     run_p.add_argument(
         "--max-ticks",

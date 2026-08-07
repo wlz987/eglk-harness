@@ -177,6 +177,176 @@ def vendor_status(eval_root: Path | None = None) -> dict[str, Any]:
     }
 
 
+def build_pack_from_subset(
+    subset_json: Path,
+    *,
+    task_ids: list[str] | None = None,
+    limit: int | None = 6,
+) -> dict[str, Any]:
+    """Build eglk ``pack.json`` object from official subset-export JSON list."""
+    raw = json.loads(Path(subset_json).read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError(f"subset export must be a JSON list: {subset_json}")
+    by_id: dict[str, dict[str, Any]] = {}
+    for t in raw:
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("task_id") or "")
+        if tid:
+            by_id[tid] = t
+    chosen: list[str] = []
+    if task_ids:
+        chosen = [str(x) for x in task_ids if str(x) in by_id]
+    if not chosen:
+        # Prefer Phase-0 smoke ids when present, then diversify by site.
+        for prefer in ("681", "522"):
+            if prefer in by_id:
+                chosen.append(prefer)
+        have: set[str] = set()
+        for tid in chosen:
+            have.update(str(s) for s in (by_id[tid].get("sites") or []))
+        for tid, t in by_id.items():
+            if tid in chosen:
+                continue
+            sites = {str(s) for s in (t.get("sites") or [])}
+            if sites - have or len(chosen) < 3:
+                chosen.append(tid)
+                have |= sites
+            if limit is not None and len(chosen) >= int(limit):
+                break
+    if limit is not None:
+        chosen = chosen[: max(0, int(limit))]
+    tasks_out: list[dict[str, Any]] = []
+    for tid in chosen:
+        t = by_id[tid]
+        tasks_out.append(
+            {
+                "id": tid,
+                "intent": str(t.get("intent") or ""),
+                "sites": [str(s) for s in (t.get("sites") or [])],
+                "notes": (
+                    f"intent_template_id={t.get('intent_template_id')}; official Hard"
+                ),
+            }
+        )
+    return {
+        "pack": "wa_verified_hard",
+        "source": "webarena-verified-hard subset-export",
+        "note": "Official Hard task ids. Offline/external scores never feed Gate.",
+        "tasks": tasks_out,
+    }
+
+
+def write_pack(eval_root: Path, pack: dict[str, Any]) -> Path:
+    path = Path(eval_root) / "wa_hard" / "pack.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(pack, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def export_hard_subset_via_docker(
+    out_json: Path,
+    *,
+    image: str = "ghcr.io/servicenow/webarena-verified:latest",
+    timeout_s: float = 180.0,
+) -> dict[str, Any]:
+    """Run official ``subset-export`` into ``out_json`` (parent dir mounted)."""
+    import shutil
+    import subprocess
+
+    out_json = Path(out_json)
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    if shutil.which("docker") is None:
+        return {"ok": False, "status": "docker_missing"}
+    mount = str(out_json.parent.resolve())
+    name = out_json.name
+    try:
+        proc = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{mount}:/data",
+                image,
+                "subset-export",
+                "--name",
+                "webarena-verified-hard",
+                "--output",
+                f"/data/{name}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=float(timeout_s),
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "status": "export_error", "error": str(exc)}
+    ok = proc.returncode == 0 and out_json.is_file()
+    return {
+        "ok": ok,
+        "status": "subset_exported" if ok else "subset_export_failed",
+        "returncode": proc.returncode,
+        "path": str(out_json) if ok else None,
+        "snippet": ((proc.stdout or "") + (proc.stderr or ""))[-500:],
+        "note": "scores never Gate",
+    }
+
+
+def dry_run_eval_tasks(
+    *,
+    task_ids: list[str],
+    output_dir: Path,
+    image: str = "ghcr.io/servicenow/webarena-verified:latest",
+    timeout_s: float = 180.0,
+) -> dict[str, Any]:
+    """Official ``eval-tasks --dry-run`` for given Hard ids (no scoring)."""
+    import shutil
+    import subprocess
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if shutil.which("docker") is None:
+        return {"ok": False, "status": "docker_missing", "note": "scores never Gate"}
+    ids = ",".join(str(x) for x in task_ids if str(x).strip())
+    if not ids:
+        return {"ok": False, "status": "no_task_ids", "note": "scores never Gate"}
+    mount = str(output_dir.resolve())
+    try:
+        proc = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{mount}:/out",
+                image,
+                "eval-tasks",
+                "--output-dir",
+                "/out",
+                "--task-ids",
+                ids,
+                "--dry-run",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=float(timeout_s),
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "status": "dry_run_error", "error": str(exc), "note": "scores never Gate"}
+    text = (proc.stdout or "") + (proc.stderr or "")
+    ok = proc.returncode == 0 and ("Would evaluate" in text or "DRY RUN" in text)
+    return {
+        "ok": ok,
+        "status": "eval_tasks_dry_ok" if ok else "eval_tasks_dry_failed",
+        "returncode": proc.returncode,
+        "task_ids": ids.split(","),
+        "snippet": text[-600:],
+        "note": "dry-run only — not Hard scores; scores never Gate",
+    }
+
+
 def probe_official_cli(*, timeout_s: float = 120.0) -> dict[str, Any]:
     """Best-effort ``docker run … webarena-verified --help`` probe (no task eval)."""
     import shutil

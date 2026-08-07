@@ -2,7 +2,8 @@
 
 ## 0.1.0b1 — 2026-08-07
 
-- Role tool profiles (policy 2+3): session roles may hold tools/MCP; `EGLK_MCP_ALLOW_<ROLE>` allowlists; format-repair stays tools-off; SWARM still cannot write claims/evidence/decisions
+- Role tool profiles (policy 2+3); skills updated for allowlisted tools
+- WA-Hard pack synced to official Hard ids (681/522…); `sync_wa_hard_pack.sh` + `eval-tasks --dry-run`
 - WA-Hard `probe_official_cli` (Docker `--help`) when `WA_HARD_LIVE=1`
 - Full maturity empirical track: `weave_lh` / `tb21` / OSWorld / eval vendor doctor
 - Doctor reports eval WA/LH/tb21 hints; `status --json` / `doctor --json`

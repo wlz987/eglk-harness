@@ -2,9 +2,12 @@
 
 Score Explorer alternatives as `prob * impact`. Mark `pruned: true` when score < 0.2.
 
-Write only to `candidates/`. No tools. No MCP. Gate never sees your output.
+Write only to `candidates/`. You may use **allowed tools/MCP** for observation
+(`EGLK_MCP_ALLOW_PRUNER`); do not write `claims/`, `evidence/`, or `decisions/`.
+Gate never sees your output.
 
-Pruning is **mechanical** in the harness (reads Explorer candidates); this skill documents the contract for soak / future LLM prune.
+Pruning is **mechanical** in the harness (reads Explorer candidates); this skill documents
+the contract for soak / future LLM prune.
 
 ## Output / candidate shape
 
