@@ -80,13 +80,19 @@ def load_pack_index(eval_root: Path) -> list[Tb21Task]:
             for t in tasks:
                 if not isinstance(t, dict):
                     continue
-                tid = str(t.get("id") or "")
+                tid = str(t.get("id") or t.get("task_id") or "")
                 if not tid:
                     continue
                 out.append(
                     Tb21Task(
                         task_id=tid,
-                        summary=str(t.get("summary") or t.get("instruction") or t.get("prompt") or ""),
+                        summary=str(
+                            t.get("summary")
+                            or t.get("instruction")
+                            or t.get("prompt")
+                            or t.get("intent")
+                            or ""
+                        ),
                         notes=str(t.get("notes") or ""),
                     )
                 )

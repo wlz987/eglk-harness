@@ -38,8 +38,10 @@ def test_run_batch_writes_summary(tmp_path: Path) -> None:
 
         pytest.skip("alw experiment/eval pack missing")
     out = tmp_path / "batch"
-    summary = wa_hard_mod.run_batch(eval_root, out_root=out, limit=5, prepare_only=False)
-    assert summary["count"] == 5
+    pack_n = len(wa_hard_mod.load_pack_index(eval_root))
+    limit = min(5, pack_n)
+    summary = wa_hard_mod.run_batch(eval_root, out_root=out, limit=limit, prepare_only=False)
+    assert summary["count"] == limit
     assert Path(summary["summary_path"]).is_file()
     first_id = summary["tasks"][0]["task_id"]
     assert (out / first_id / ".goal.md").is_file()

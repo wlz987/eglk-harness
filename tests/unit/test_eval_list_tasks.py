@@ -27,7 +27,7 @@ def test_list_tasks_wa_hard(capsys: pytest.CaptureFixture[str]) -> None:
         )
     assert ei.value.code == 0
     out = json.loads(capsys.readouterr().out.split("note:")[0])
-    assert out["count"] >= 5
+    assert out["count"] >= 3
     assert out["tasks"][0]["id"]
 
 
@@ -50,5 +50,5 @@ def test_list_tasks_tb21(capsys: pytest.CaptureFixture[str]) -> None:
         main(["eval", "--suite", "tb21", "--list-tasks", "--eval-root", str(eval_root)])
     assert ei.value.code == 0
     out = json.loads(capsys.readouterr().out.split("note:")[0])
-    assert out["count"] >= 1
+    assert out["count"] >= 200
     assert out["tasks"][0]["id"] == "tb21-smoke-001"

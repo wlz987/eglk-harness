@@ -8,17 +8,27 @@ mkdir -p "$OUT"
 echo "== eval_compare out=$OUT eval_root=$EVAL_ROOT =="
 
 echo "-- wa_hard batch (prepare + placeholder scores) --"
-eglk-harness eval --suite wa_hard --batch --limit 5 \
+WA_LIMIT="$(python3 - <<PY
+import json
+from pathlib import Path
+p = Path("$EVAL_ROOT") / "wa_hard" / "pack.json"
+n = len((json.loads(p.read_text()).get("tasks") or []) if p.is_file() else [])
+print(min(5, n) if n else 0)
+PY
+)"
+if [[ "${WA_LIMIT:-0}" -gt 0 ]]; then
+eglk-harness eval --suite wa_hard --batch --limit "$WA_LIMIT" \
   --eval-root "$EVAL_ROOT" \
   --workdir "$OUT/wa_hard" \
   --prepare-only
-# Re-run without prepare-only flag for scores-only path: use prepare_only=false via second call
-eglk-harness eval --suite wa_hard --batch --limit 5 \
+eglk-harness eval --suite wa_hard --batch --limit "$WA_LIMIT" \
   --eval-root "$EVAL_ROOT" \
   --workdir "$OUT/wa_hard_scored" \
   --external-score "$EVAL_ROOT/wa_hard/fixtures/external_score.example.json" \
   >/dev/null
-# Note: batch with external file applies same fixture path when is_file — ok for smoke
+else
+  echo "skip wa_hard batch (no pack)"
+fi
 
 echo "-- wa_hard HAR-offline fixture --"
 TASK_ID="$(python3 - <<PY
@@ -67,13 +77,15 @@ echo "-- osworld_aux prepare --"
 OS_TASK="$(python3 - <<PY
 import json
 from pathlib import Path
-p = Path("$EVAL_ROOT") / "osworld_aux" / "pack.example.json"
-if not p.is_file():
-    print("")
-else:
-    data = json.loads(p.read_text())
-    tasks = data.get("tasks") or []
-    print(tasks[0]["id"] if tasks else "")
+root = Path("$EVAL_ROOT") / "osworld_aux"
+for name in ("pack.json", "pack.example.json"):
+    p = root / name
+    if not p.is_file():
+        continue
+    tasks = json.loads(p.read_text()).get("tasks") or []
+    if tasks:
+        print(tasks[0].get("id") or "")
+        break
 PY
 )"
 if [[ -n "$OS_TASK" ]]; then

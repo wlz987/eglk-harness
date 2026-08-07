@@ -16,6 +16,7 @@ def test_resolve_mcp_prefers_cli(tmp_path, monkeypatch):
 
 def test_resolve_mcp_plugin_fallback(tmp_path, monkeypatch):
     monkeypatch.delenv("EGLK_MCP_CONFIG", raising=False)
+    monkeypatch.delenv("EGLK_MCP_DISABLE", raising=False)
     monkeypatch.setenv("EGLK_PLUGINS_ROOT", str(tmp_path))
     from eglk_harness.domain.plugins import state
 

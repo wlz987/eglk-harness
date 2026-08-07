@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity lh-benchmark-practice dist-check
+.PHONY: test projections soak weave maturity maturity-100 implementation-100 kernel-shell-100 release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity lh-benchmark-practice dist-check verify-100 aggregate-empirical sync-weave-pack
 test:
 	pytest -q
 projections:
@@ -13,6 +13,10 @@ pulse:
 	bash scripts/maturity_pulse.sh
 eval-doctor:
 	bash ../experiment/eval/scripts/doctor_eval_env.sh
+aggregate-empirical:
+	bash ../experiment/eval/scripts/aggregate_empirical_status.sh
+sync-weave-pack:
+	bash ../experiment/eval/scripts/sync_weave_lh_pack.sh
 eval-smokes:
 	bash ../experiment/eval/scripts/run_weave_lh_smoke.sh
 	bash ../experiment/eval/scripts/run_osworld_smoke.sh
@@ -52,3 +56,19 @@ sweep:
 
 lh-benchmark-practice:
 	bash ../experiment/eval/scripts/run_lh_benchmark_practice.sh
+
+verify-100:
+	bash ../experiment/eval/scripts/verify_maturity_100.sh
+
+implementation-100:
+	bash ../experiment/eval/scripts/verify_implementation_100.sh
+
+kernel-shell-100:
+	bash ../experiment/eval/scripts/verify_kernel_shell_100.sh
+
+benchmark-matrix:
+	nohup bash ../experiment/eval/scripts/run_benchmark_matrix_18000.sh \
+	  > ../experiment/runs/benchmark_matrix_18000/nohup.out 2>&1 &
+
+maturity-100:
+	bash ../experiment/eval/scripts/run_maturity_100.sh

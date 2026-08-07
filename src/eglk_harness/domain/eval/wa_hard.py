@@ -244,6 +244,54 @@ def write_pack(eval_root: Path, pack: dict[str, Any]) -> Path:
     return path
 
 
+def build_pack_from_vendor_assets(
+    eval_root: Path,
+    *,
+    limit: int | None = None,
+    task_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build pack from vendor ``webarna-verfied-hard.json`` (no Docker)."""
+    root = vendor_root(eval_root)
+    if root is None:
+        raise FileNotFoundError("webarena-verified vendor not found")
+    path = root / "assets" / "dataset" / "webarna-verfied-hard.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"missing hard dataset: {path}")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError(f"hard dataset must be a list: {path}")
+    by_id: dict[str, dict[str, Any]] = {}
+    for t in raw:
+        if isinstance(t, dict) and t.get("task_id") is not None:
+            by_id[str(t["task_id"])] = t
+    chosen: list[str] = []
+    if task_ids:
+        chosen = [str(x) for x in task_ids if str(x) in by_id]
+    if not chosen:
+        chosen = sorted(by_id.keys(), key=lambda x: int(x) if x.isdigit() else x)
+    if limit is not None:
+        chosen = chosen[: max(0, int(limit))]
+    tasks_out: list[dict[str, Any]] = []
+    for tid in chosen:
+        t = by_id[tid]
+        tasks_out.append(
+            {
+                "id": tid,
+                "intent": str(t.get("intent") or ""),
+                "sites": [str(s) for s in (t.get("sites") or [])],
+                "notes": (
+                    f"intent_template_id={t.get('intent_template_id')}; vendor hard assets"
+                ),
+            }
+        )
+    return {
+        "pack": "wa_verified_hard",
+        "source": str(path),
+        "note": "Official Hard task ids from vendor assets. Never Gate.",
+        "tasks": tasks_out,
+    }
+
+
 def export_hard_subset_via_docker(
     out_json: Path,
     *,
@@ -489,6 +537,104 @@ def probe_official_cli(*, timeout_s: float = 120.0) -> dict[str, Any]:
         "image": image,
         "snippet": text[:400],
         "note": "probe only — not Hard scores; scores never Gate",
+    }
+
+
+def package_agent_run_from_workdir(
+    workdir: Path,
+    task_id: str,
+    agent_runs_root: Path,
+) -> dict[str, Any]:
+    """Copy ``workdir/agent_runs/<task_id>/`` into official eval tree if present."""
+    src = Path(workdir) / "agent_runs" / str(task_id)
+    dst = Path(agent_runs_root) / str(task_id)
+    missing: list[str] = []
+    for name in ("agent_response.json", "network.har"):
+        if not (src / name).is_file():
+            missing.append(name)
+    if missing:
+        return {
+            "ok": False,
+            "status": "incomplete_agent_run",
+            "task_id": str(task_id),
+            "missing": missing,
+            "source": str(src),
+            "note": "scores never Gate",
+        }
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in ("agent_response.json", "network.har"):
+        (dst / name).write_bytes((src / name).read_bytes())
+    return {
+        "ok": True,
+        "status": "packaged",
+        "task_id": str(task_id),
+        "dest": str(dst),
+        "note": "official agent_run tree — Manifest only; never Gate",
+    }
+
+
+def trim_network_logs_in_tree(
+    agent_runs_root: Path,
+    *,
+    image: str = "ghcr.io/servicenow/webarena-verified:latest",
+    timeout_s: float = 180.0,
+) -> dict[str, Any]:
+    """Trim ``network.har`` in each task dir via official CLI (scores never Gate)."""
+    import shutil
+    import subprocess
+
+    root = Path(agent_runs_root)
+    if not root.is_dir():
+        return {"ok": False, "status": "missing_dir", "trimmed": [], "note": "scores never Gate"}
+    if shutil.which("docker") is None:
+        return {"ok": False, "status": "docker_missing", "trimmed": [], "note": "scores never Gate"}
+    trimmed: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        har = child / "network.har"
+        if not har.is_file():
+            continue
+        tmp = child / "network_trimmed.har"
+        try:
+            proc = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{child.resolve()}:/data",
+                    image,
+                    "trim-network-logs",
+                    "--input",
+                    "/data/network.har",
+                    "--output",
+                    "/data/network_trimmed.har",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=float(timeout_s),
+                check=False,
+            )
+            ok = proc.returncode == 0 and tmp.is_file()
+            if ok:
+                tmp.replace(har)
+            trimmed.append(
+                {
+                    "task_id": child.name,
+                    "ok": ok,
+                    "returncode": proc.returncode,
+                    "bytes": har.stat().st_size if har.is_file() else 0,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            trimmed.append({"task_id": child.name, "ok": False, "error": str(exc)})
+    ok_all = bool(trimmed) and all(r.get("ok") for r in trimmed)
+    return {
+        "ok": ok_all,
+        "status": "trimmed" if trimmed else "no_har_files",
+        "trimmed": trimmed,
+        "note": "trim-network-logs — Manifest only; never Gate",
     }
 
 

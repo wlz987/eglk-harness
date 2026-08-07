@@ -211,6 +211,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     from eglk_harness.domain.eval import wa_hard as wa_hard_mod
     from eglk_harness.domain.eval import osworld as osworld_mod
     from eglk_harness.domain.eval import tb21 as tb21_mod
+    from eglk_harness.domain.eval.eval_env_probes import collect_eval_env_status, doctor_checks_from_status
 
     eval_root = default_eval_root()
     if eval_root is None:
@@ -225,8 +226,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         wa_st = wa_hard_mod.vendor_status(eval_root)
         os_hint = osworld_mod.path_hint(eval_root)
         tb_st = tb21_mod.vendor_status(eval_root)
-        lh_weave = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness"
-        lh_os = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness"
+        env_st = collect_eval_env_status(eval_root)
         report.checks.append(
             DoctorCheck(
                 name="eval_root",
@@ -241,7 +241,8 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                 detail=(
                     f"docker={wa_st.get('docker_ready')} "
                     f"vendor={wa_st.get('vendor_path') or 'none'} "
-                    f"can_live_hard={wa_st.get('can_run_live_hard')}"
+                    f"can_live_hard={wa_st.get('can_run_live_hard')} "
+                    f"pack_tasks={env_st.get('wa_hard_pack_count')}"
                 ),
             )
         )
@@ -250,9 +251,10 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                 name="eval_lh_vendor",
                 ok=True,
                 detail=(
-                    f"weave={'yes' if lh_weave.is_dir() else 'no'} "
-                    f"osworld_lh={'yes' if lh_os.is_dir() else 'no'} "
-                    f"osworld_hint={os_hint or 'none'}"
+                    f"weave={'yes' if env_st.get('lh_weave') else 'no'} "
+                    f"osworld_lh={'yes' if env_st.get('lh_osworld') else 'no'} "
+                    f"osworld_hint={os_hint or 'none'} "
+                    f"weave_pack={env_st.get('weave_lh_pack_count')}"
                 ),
             )
         )
@@ -267,5 +269,15 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                 ),
             )
         )
+        for name, ok, detail in doctor_checks_from_status(env_st):
+            # Probes are informational; warn-only unless critical path broken
+            warn_only = name in ("eval_playwright", "eval_wa_sites")
+            report.checks.append(
+                DoctorCheck(
+                    name=name,
+                    ok=ok if not warn_only else True,
+                    detail=detail + (" [warn]" if warn_only and not ok else ""),
+                )
+            )
 
     return report
