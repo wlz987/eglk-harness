@@ -25,13 +25,14 @@ Multi-criterion leaf. Do **not** assume a pre-split tree — the harness may spl
 - [ ] Create `Makefile` with targets `test-a`, `test-b`, `test-bridge`, and `test` (runs all three); `make test` must exit 0 with pytest
 - [ ] Create `SHA256SUMS` listing sha256 hex digests (GNU `sha256sum` format) for `svc_a/core.py`, `svc_b/core.py`, and `bridge/compose.py` — digests must match a fresh `sha256sum` of those files
 - [ ] Create `bridge/report.md` that quotes both return values, mentions `make test`, and embeds the three digests from `SHA256SUMS`
-- [ ] Create and **run** `perf/bench.py`: it must perform a real wall-clock CPU-bound workload of **at least 1200 seconds**, then write `perf/bench_result.json` shaped as `{"elapsed_s": <number >= 1200, "note": "cpu-bound"}` (do not fake the timer; Checker may reject if elapsed_s looks fabricated relative to wall clock)
+- [ ] Create and **run** `perf/bench.py`: it must perform a real wall-clock CPU-bound workload of **at least 1200 seconds**, then write `perf/bench_result.json` shaped as `{"elapsed_s": <number >= 1200, "note": "cpu-bound"}` (do not fake the timer). **As soon as** `elapsed_s >= 1200` is on disk, stop the bench and **immediately** emit a schema-valid Claim (do not keep exploring or rewriting packages).
 - [ ] Create `INTEGRITY.md` listing which criteria remain open after **each** Maker step (append-only log)
 
 ## Constraints
 
 - Do not modify `.goal.md` or `.eglk-harness/`
-- Prefer finishing packages before starting the long bench; leave inspectable evidence for Checker
+- Finish packages **before** starting the long bench; leave inspectable evidence for Checker
+- After the bench completes, prioritize Claim/Evidence JSON over further edits
 - Keep Claim/Evidence schema-valid; do not invent passing tests without files on disk
 EOF
 
@@ -54,18 +55,19 @@ if p.is_file():
         p.write_text(t)
 PY
 
-# Host per-tick await + Maker episode must cover the ≥1200s bench criterion.
-export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-2400}"
-export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-2100}"
+# Host per-tick await + Maker episode must cover packaging + ≥1200s bench + Claim.
+export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-4000}"
+export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
 echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO"
 # Kill leftover benches from prior timed-out attempts
 pkill -f "perf/bench" 2>/dev/null || true
+sleep 1
 START=$(date +%s)
 set +e
 PYTHONUNBUFFERED=1 stdbuf -oL -eL eglk-harness run --workdir . --agent codex --swarm 1 --compile off \
-  --max-ticks "$MAX_TICKS" --maker-timeout "$MAKER_TO" --checker-timeout 600 \
+  --max-ticks "$MAX_TICKS" --maker-timeout "$MAKER_TO" --checker-timeout 900 \
   2>&1 | tee run.log
 RC=${PIPESTATUS[0]}
 set -e
