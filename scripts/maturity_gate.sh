@@ -24,4 +24,11 @@ if [[ -x "$EVAL_ROOT/scripts/doctor_eval_env.sh" ]]; then
 else
   echo "skip doctor_eval_env"
 fi
+echo "== eval full-dry (soft) =="
+if [[ -x "$EVAL_ROOT/scripts/run_weave_lh_full.sh" ]]; then
+  bash "$EVAL_ROOT/scripts/run_weave_lh_full.sh" || true
+  bash "$EVAL_ROOT/scripts/run_osworld_full.sh" || true
+else
+  echo "skip full-dry"
+fi
 echo "maturity-gate: OK"
