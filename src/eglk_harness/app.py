@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,16 @@ _LIVE_TIMEOUT_S = 600.0
 _DEFAULT_MAX_TICKS_SOFT = 32
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 @dataclass
 class RunRequest:
     workdir: Path
@@ -54,7 +65,13 @@ class RunRequest:
 
 
 def _request_timeout(agent: str) -> float:
-    return _MOCK_TIMEOUT_S if agent in {"mock", "fake"} else _LIVE_TIMEOUT_S
+    """Per-tick host await bound. Override with ``EGLK_TICK_TIMEOUT`` (seconds).
+
+    Soft wall only — abort authority remains ``cognitive_tokens`` + ``repairs_max``.
+    """
+    if agent in {"mock", "fake"}:
+        return _env_float("EGLK_TICK_TIMEOUT", _MOCK_TIMEOUT_S)
+    return _env_float("EGLK_TICK_TIMEOUT", _LIVE_TIMEOUT_S)
 
 
 def resolve_start_tick(workdir: Path, goal_id_str: str, explicit: int | None) -> int:

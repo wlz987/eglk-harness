@@ -146,10 +146,11 @@ def vendor_root(eval_root: Path | None = None) -> Path | None:
     if eval_root is not None:
         roots.append(Path(eval_root) / "vendor")
         roots.append(Path(eval_root) / "wa_hard" / "vendor")
-    here = Path(__file__).resolve()
-    # .../domain/eval/wa_hard.py → alw
-    if len(here.parents) > 5:
-        roots.append(here.parents[5] / "experiment" / "eval" / "vendor")
+    else:
+        here = Path(__file__).resolve()
+        # .../domain/eval/wa_hard.py → alw (only when eval_root omitted)
+        if len(here.parents) > 5:
+            roots.append(here.parents[5] / "experiment" / "eval" / "vendor")
     for root in roots:
         for cand in (
             root / "webarena-verified",

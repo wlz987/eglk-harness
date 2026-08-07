@@ -9,17 +9,9 @@ WALL_MIN="${EGLK_LONG_WALL_MIN:-45}"
 mkdir -p "$RUN"
 cd "$RUN"
 eglk-harness init --workdir . >/dev/null || true
-python3 - <<'PY'
-from pathlib import Path
-p = Path(".eglk-harness/config.toml")
-if p.is_file():
-    t = p.read_text()
-    if "cognitive_tokens_max = 500000" not in t:
-        p.write_text(t.replace("# cognitive_tokens_max = 64000", "cognitive_tokens_max = 500000"))
-PY
 
-# Multi-criterion leaf — intentionally interlocking so early admit is hard;
-# Governor may split after repair streaks. Never pre-split the tree.
+# Multi-criterion leaf — no pre-split. Includes a verifiable long bench so the
+# ≥30min acceptance path is reachable when Codex one-shots the coding criteria.
 cat > .goal.md <<'EOF'
 # Natural split long run
 
@@ -33,37 +25,48 @@ Multi-criterion leaf. Do **not** assume a pre-split tree — the harness may spl
 - [ ] Create `Makefile` with targets `test-a`, `test-b`, `test-bridge`, and `test` (runs all three); `make test` must exit 0 with pytest
 - [ ] Create `SHA256SUMS` listing sha256 hex digests (GNU `sha256sum` format) for `svc_a/core.py`, `svc_b/core.py`, and `bridge/compose.py` — digests must match a fresh `sha256sum` of those files
 - [ ] Create `bridge/report.md` that quotes both return values, mentions `make test`, and embeds the three digests from `SHA256SUMS`
+- [ ] Create and **run** `perf/bench.py`: it must perform a real wall-clock CPU-bound workload of **at least 1200 seconds**, then write `perf/bench_result.json` shaped as `{"elapsed_s": <number >= 1200, "note": "cpu-bound"}` (do not fake the timer; Checker may reject if elapsed_s looks fabricated relative to wall clock)
 - [ ] Create `INTEGRITY.md` listing which criteria remain open after **each** Maker step (append-only log)
 
 ## Constraints
 
 - Do not modify `.goal.md` or `.eglk-harness/`
-- Prefer finishing one package before expanding; leave inspectable evidence for Checker
+- Prefer finishing packages before starting the long bench; leave inspectable evidence for Checker
 - Keep Claim/Evidence schema-valid; do not invent passing tests without files on disk
 EOF
 
 rm -rf .eglk-harness/loop .local svc_a svc_b bridge tests Makefile SHA256SUMS INTEGRITY.md \
-  alpha beta gamma 2>/dev/null || true
+  perf alpha beta gamma .pytest_cache 2>/dev/null || true
 eglk-harness init --workdir . >/dev/null
-# re-apply token budget after init
 python3 - <<'PY'
 from pathlib import Path
+import re
 p = Path(".eglk-harness/config.toml")
 if p.is_file():
     t = p.read_text()
     if "cognitive_tokens_max = 500000" not in t:
-        if "cognitive_tokens_max" in t:
-            import re
+        if re.search(r"cognitive_tokens_max\s*=", t):
             t = re.sub(r"cognitive_tokens_max\s*=\s*\d+", "cognitive_tokens_max = 500000", t)
+        elif "[limits]" in t:
+            t = t.replace("[limits]", "[limits]\ncognitive_tokens_max = 500000")
         else:
             t += "\n[limits]\ncognitive_tokens_max = 500000\n"
         p.write_text(t)
 PY
 
-echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN"
+# Host per-tick await + Maker episode must cover the ≥1200s bench criterion.
+export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-2400}"
+export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-2100}"
+MAKER_TO="${EGLK_TIMEOUT_MAKER}"
+
+echo "long_natural_split: workdir=$RUN max_ticks=$MAX_TICKS wall_min~$WALL_MIN tick_timeout=$EGLK_TICK_TIMEOUT maker_timeout=$MAKER_TO"
+# Kill leftover benches from prior timed-out attempts
+pkill -f "perf/bench" 2>/dev/null || true
 START=$(date +%s)
 set +e
-PYTHONUNBUFFERED=1 stdbuf -oL -eL eglk-harness run --workdir . --agent codex --swarm 1 --compile off --max-ticks "$MAX_TICKS" 2>&1 | tee run.log
+PYTHONUNBUFFERED=1 stdbuf -oL -eL eglk-harness run --workdir . --agent codex --swarm 1 --compile off \
+  --max-ticks "$MAX_TICKS" --maker-timeout "$MAKER_TO" --checker-timeout 600 \
+  2>&1 | tee run.log
 RC=${PIPESTATUS[0]}
 set -e
 END=$(date +%s)
@@ -83,9 +86,7 @@ if loop.is_dir():
         data = json.loads(tree.read_text())
         root = data.get("subgoals_tree") or data
         kids = root.get("children") or []
-        if kids:
-            split = True
-        if root.get("status") == "split":
+        if kids or root.get("status") == "split":
             split = True
 passed = ok and (split or elapsed >= 30 * 60)
 Path("ACCEPTANCE.md").write_text(
