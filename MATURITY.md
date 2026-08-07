@@ -4,7 +4,7 @@ Updated: 2026-08-07. Scores/scorers never feed Gate.
 
 | 轴 | 目标 | 自评 | 证据 |
 |----|------|------|------|
-| 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；190+ tests |
+| 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；191 tests |
 | LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/`doctor --json`/eval/release-check |
 | 评测可复现 | ≥70% | ~75% | HAR-offline；weave_lh/osworld smoke；WA batch；COMPARE 记分卡；LH vendor 已拉 |
 | Live 长程 | 自然 split 或 ≥30min | 重跑中 | parse(Claim-via-cat)+repair tools-off+script freeze；bench 已再启 |
