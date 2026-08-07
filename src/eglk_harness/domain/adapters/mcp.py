@@ -1,22 +1,30 @@
-"""MCP config load + Claude/Codex translation (opt-in; Maker/Checker only)."""
+"""MCP config load + Claude/Codex translation (opt-in; role allowlists)."""
 
 from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from eglk_harness.domain.adapters.base import TOOL_ROLES
+from eglk_harness.domain.adapters.tool_policy import (
+    assert_tools_for_role,
+    resolve_role_tool_profile,
+)
 
-
-def assert_tools_for_role(role: str, *, tools_allowed: bool) -> None:
-    """Hard fail if a non-tool role is assembled with tools/MCP."""
-    if tools_allowed and role not in TOOL_ROLES:
-        raise AssertionError(
-            f"refusing to attach tools/MCP to role={role!r}; "
-            f"allowed={sorted(TOOL_ROLES)}"
-        )
+# Re-export for callers that imported from mcp historically
+__all__ = [
+    "assert_tools_for_role",
+    "load_mcp_config",
+    "resolve_mcp_config",
+    "resolve_add_dirs",
+    "mcp_servers",
+    "filter_mcp_config_for_role",
+    "claude_mcp_argv",
+    "codex_mcp_overrides",
+    "codex_mcp_argv",
+]
 
 
 def load_mcp_config(path: Path | str | None) -> dict[str, Any] | None:
@@ -85,20 +93,55 @@ def mcp_servers(data: Mapping[str, Any] | None) -> dict[str, Any]:
     return dict(servers) if isinstance(servers, dict) else {}
 
 
+def filter_mcp_config_for_role(
+    mcp_config: Path | None,
+    *,
+    role: str,
+    env: Mapping[str, str] | None = None,
+) -> Path | None:
+    """Return original path, a filtered temp JSON, or None per role allowlist."""
+    if mcp_config is None:
+        return None
+    profile = resolve_role_tool_profile(role, env=env)
+    if not profile.tools_allowed:
+        return None
+    allow = profile.mcp_server_allowlist
+    if allow is None:
+        return Path(mcp_config)
+    data = load_mcp_config(mcp_config)
+    if data is None:
+        return None
+    servers = mcp_servers(data)
+    if not allow:
+        # Empty allowlist → no MCP servers (native tools may still be on).
+        filtered = {"mcpServers": {}}
+    else:
+        filtered = {
+            "mcpServers": {k: v for k, v in servers.items() if k in allow},
+        }
+    fd, name = tempfile.mkstemp(prefix=f"eglk-mcp-{role.lower()}-", suffix=".json")
+    os.close(fd)
+    path = Path(name)
+    path.write_text(json.dumps(filtered, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def claude_mcp_argv(
     *,
     mcp_config: Path | None,
     add_dirs: list[str],
     tools_allowed: bool,
     role: str,
+    env: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """Claude Code CLI flags for Maker/Checker only."""
-    assert_tools_for_role(role, tools_allowed=tools_allowed)
+    """Claude Code CLI flags for roles whose profile allows tools."""
+    assert_tools_for_role(role, tools_allowed=tools_allowed, env=env)
     if not tools_allowed:
         return []
+    filtered = filter_mcp_config_for_role(mcp_config, role=role, env=env)
     argv: list[str] = []
-    if mcp_config is not None:
-        argv.extend(["--mcp-config", str(mcp_config)])
+    if filtered is not None:
+        argv.extend(["--mcp-config", str(filtered)])
     for d in add_dirs:
         argv.extend(["--add-dir", d])
     return argv
@@ -157,12 +200,14 @@ def codex_mcp_argv(
     add_dirs: list[str],
     tools_allowed: bool,
     role: str,
+    env: Mapping[str, str] | None = None,
 ) -> list[str]:
-    assert_tools_for_role(role, tools_allowed=tools_allowed)
+    assert_tools_for_role(role, tools_allowed=tools_allowed, env=env)
     if not tools_allowed:
         return []
+    filtered = filter_mcp_config_for_role(mcp_config, role=role, env=env)
     argv: list[str] = []
-    for override in codex_mcp_overrides(mcp_config):
+    for override in codex_mcp_overrides(filtered):
         argv.extend(["-c", override])
     for d in add_dirs:
         argv.extend(["--add-dir", d])

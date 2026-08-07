@@ -1,7 +1,8 @@
 """Optional LLM episodes for bypass roles (Governor/SWARM/Refiner/compile).
 
-Tools/MCP are always forbidden. On parse failure → one format-repair try → None
-(callers apply mechanical fallback).
+Tools/MCP follow per-role profiles (default: allowed; tighten via
+``EGLK_MCP_ALLOW_<ROLE>``). Format-repair stays tools-off. Callers still apply
+mechanical fallback on parse failure. SWARM must not write claims/evidence/decisions.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
+from eglk_harness.domain.adapters.mcp import filter_mcp_config_for_role
+from eglk_harness.domain.adapters.tool_policy import resolve_role_tool_profile
 from eglk_harness.domain.runtime.json_extract import extract_json
 from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
@@ -48,6 +51,24 @@ def _parse_bypass_result(result: Any) -> dict[str, Any] | None:
     return doc if isinstance(doc, dict) else None
 
 
+def _episode_tool_kwargs(
+    adapter: AgentAdapter,
+    *,
+    role: str,
+    tools_allowed: bool,
+) -> dict[str, Any]:
+    if not tools_allowed:
+        return {"tools_allowed": False, "mcp_config": None, "add_dirs": ()}
+    mcp_path = getattr(adapter, "mcp_config", None)
+    add_dirs = tuple(getattr(adapter, "add_dirs", None) or ())
+    filtered = filter_mcp_config_for_role(mcp_path, role=role)
+    return {
+        "tools_allowed": True,
+        "mcp_config": filtered,
+        "add_dirs": add_dirs,
+    }
+
+
 async def run_bypass_json(
     adapter: AgentAdapter | None,
     *,
@@ -62,30 +83,40 @@ async def run_bypass_json(
     tee_path: str | None = None,
     repair: bool = True,
 ) -> dict[str, Any] | None:
-    """Run a no-tools Adapter episode; return parsed JSON object or None.
+    """Run an Adapter episode for a bypass role; return parsed JSON or None.
 
     ``force=True`` ignores ``EGLK_BYPASS_LLM`` auto-skip (STEP0 compile / soak).
-    On unparseable output, optionally retries once with a format-repair prompt.
+    On unparseable output, optionally retries once with a format-repair prompt
+    (tools always off on repair).
     """
     if adapter is None:
         return None
     if not force and not bypass_llm_enabled(adapter):
         return None
 
+    profile = resolve_role_tool_profile(role)
+    tool_kw = _episode_tool_kwargs(adapter, role=role, tools_allowed=profile.tools_allowed)
+
     prompt = render_prompt(role, leaf_block=leaf_block, extra=extra)
     from eglk_harness.domain.runtime.prompt_i18n import constraint_block
 
     prompt = f"{prompt}\n\n{constraint_block()}"
+    prompt = (
+        f"{prompt}\n\n"
+        "TOOL POLICY: You may use allowed tools for observation. "
+        "Do not write claims/, evidence/, or decisions/; "
+        "do not treat tool output as Gate admit authority."
+    )
     req = EpisodeRequest(
         role=role,
         prompt=prompt,
         workdir=workdir,
-        tools_allowed=False,
         expect="text",
         model=resolve_model(role),
         timeout_s=timeout_s,
         meta={"tick": tick, "subgoal_id": subgoal_id, "bypass": True},
         tee_path=tee_path,
+        **tool_kw,
     )
     result = await adapter.run_episode(req)
     doc = _parse_bypass_result(result)
@@ -97,7 +128,8 @@ async def run_bypass_json(
     err = getattr(result, "error", None) or "unparseable_bypass_json"
     repair_extra = (
         f"{extra}\n\nFORMAT REPAIR: previous output failed ({err}). "
-        "Return a single JSON object only — no markdown fences, no prose."
+        "Return a single JSON object only — no markdown fences, no prose. "
+        "Do not re-run tools."
     )
     if getattr(result, "text", None):
         repair_extra += f"\nPrevious (truncated):\n```\n{(result.text or '')[:1500]}\n```\n"

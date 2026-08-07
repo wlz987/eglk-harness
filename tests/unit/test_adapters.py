@@ -24,15 +24,18 @@ from eglk_harness.domain.memory.skills import load_skill, render_prompt
 
 
 def test_tool_roles_pin() -> None:
-    assert TOOL_ROLES == frozenset({"maker", "checker"})
+    from eglk_harness.domain.adapters.base import SESSION_ROLES
+
+    assert TOOL_ROLES == SESSION_ROLES
+    assert "governor" in TOOL_ROLES
+    assert "maker" in TOOL_ROLES
 
 
-def test_assert_tools_rejects_governor() -> None:
-    with pytest.raises(AssertionError):
-        assert_tools_for_role("governor", tools_allowed=True)
+def test_assert_tools_allows_governor() -> None:
+    assert_tools_for_role("governor", tools_allowed=True)
 
 
-def test_episode_request_rejects_mcp_on_swarm_role() -> None:
+def test_episode_request_rejects_mcp_when_tools_off() -> None:
     with pytest.raises(AssertionError):
         EpisodeRequest(
             role="explorer",

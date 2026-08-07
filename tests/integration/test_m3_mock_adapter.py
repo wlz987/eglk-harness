@@ -21,10 +21,20 @@ async def test_mock_adapter_tick_admit(tmp_path: Path) -> None:
     assert tree and tree.all_work_admitted()
 
 
-def test_episode_request_rejects_tools_on_governor() -> None:
+def test_episode_request_allows_governor_tools() -> None:
+    req = EpisodeRequest(
+        role="governor",
+        prompt="x",
+        workdir=Path("."),
+        tools_allowed=True,
+    )
+    assert req.tools_allowed is True
+
+
+def test_episode_request_rejects_tools_on_gate() -> None:
     with pytest.raises(AssertionError):
         EpisodeRequest(
-            role="governor",
+            role="gate",
             prompt="x",
             workdir=Path("."),
             tools_allowed=True,

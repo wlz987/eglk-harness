@@ -177,6 +177,36 @@ def vendor_status(eval_root: Path | None = None) -> dict[str, Any]:
     }
 
 
+def probe_official_cli(*, timeout_s: float = 120.0) -> dict[str, Any]:
+    """Best-effort ``docker run … webarena-verified --help`` probe (no task eval)."""
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        return {"ok": False, "status": "docker_missing", "note": "scores never Gate"}
+    image = "ghcr.io/servicenow/webarena-verified:latest"
+    try:
+        proc = subprocess.run(
+            ["docker", "run", "--rm", image, "--help"],
+            capture_output=True,
+            text=True,
+            timeout=float(timeout_s),
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 — probe must not raise
+        return {"ok": False, "status": "probe_error", "error": str(exc), "note": "scores never Gate"}
+    text = (proc.stdout or "") + (proc.stderr or "")
+    ok = proc.returncode == 0 and ("eval-tasks" in text or "webarena-verified" in text.lower())
+    return {
+        "ok": ok,
+        "status": "cli_help_ok" if ok else "cli_help_failed",
+        "returncode": proc.returncode,
+        "image": image,
+        "snippet": text[:400],
+        "note": "probe only — not Hard scores; scores never Gate",
+    }
+
+
 def score_via_vendor(
     *,
     task_id: str,

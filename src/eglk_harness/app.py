@@ -138,14 +138,18 @@ def _assemble_actors(
     mcp_path = resolve_mcp_config(request.mcp_config, agent=request.agent)
     add_dirs = resolve_add_dirs(request.mcp_add_dirs)
 
-    for role, allowed in (
-        ("maker", True),
-        ("checker", True),
-        ("governor", False),
-        ("explorer", False),
-        ("refiner", False),
+    # All session roles may hold tools by default; profiles/allowlists tighten.
+    for role in (
+        "maker",
+        "checker",
+        "governor",
+        "explorer",
+        "verifier",
+        "pruner",
+        "refiner",
+        "compile",
     ):
-        assert_tools_for_role(role, tools_allowed=allowed)
+        assert_tools_for_role(role, tools_allowed=True)
 
     adapter = create_adapter(
         request.agent,

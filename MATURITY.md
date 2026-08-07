@@ -4,35 +4,31 @@ Updated: 2026-08-07. Workspace: four sibling git repos (`design`/`docs`/`eglk-ha
 
 | 轴 | 目标 | 自评 | 证据 |
 |----|------|------|------|
-| 控制核 | ≥90% | ~92% | Gate/树/Σ/WorldRef/SWARM；projections pin；191 tests |
-| LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO/`status --json`/`doctor --json`/eval/release-check |
-| 评测可复现 | ≥70% | ~80% | HAR-offline；weave/osworld/**tb21** smoke；WA batch；`LH_PARITY.md`；LH vendor 已拉 |
-| Live 长程 | 自然 split 或 ≥30min | **passed** | `ACCEPTANCE` ok + elapsed_s=3966（≥30min）；root admit；未触发 split |
-| **相对自身设计总成熟** | ≥90% | **~91%** | 长跑达档；主尺 WA-Hard Docker 真分仍外置 |
-| **相对 LH 产品完成度** | 不对齐目标 | 外壳 ~91% / 长程与全量评测仍落后 | LH 路线含 HITL+Manager，**不作为 eglk 追平目标** |
+| 控制核 | ≥90% | ~93% | Gate/树/Σ/WorldRef/SWARM；**角色工具 profile 2+3**；projections pin |
+| LH 产品外壳 | ≥90% | ~91% | init/doctor/run/plugin/dashboard RO / JSON CLI / eval / release-check |
+| 评测可复现 | ≥70% | ~82% | HAR-offline；三角 smoke；WA vendor + **official CLI probe**；`LH_PARITY` |
+| Live 长程 | 自然 split 或 ≥30min | **passed** | `ACCEPTANCE` elapsed_s=3966；root admit |
+| **相对自身设计总成熟** | ≥90% | **~92%** | 长跑达档；工具策略已改；Hard 真分仍外置 |
+| **相对 LH 产品完成度** | 不对齐目标 | 外壳 ~91% | HITL/Manager **不追平** |
 
-## 下一步可完善（按杠杆）
+## 已完成（勿重复）
 
-1. **P0** `long_natural_split` ACCEPTANCE ✅（elapsed≈66min；split=False 可接受）
-2. **P1** WA-Hard：vendor_ready + NOTES + external-score demo ✅；官方 Docker 真跑仍外置
-3. **P1** PyPI 正式发布（按 RELEASE.md，人工）
-4. **P2** Weave/OSWorld/**TB2.1** 层 C 全量（env-gated；层 A/B 已绿）
-5. **P2** skill 厚度 ✅；Claim final-message 提示已加
-6. **P3** 网站/GIF/论文站（非控制核；LH 社区面优势）
+- `long_natural_split` ACCEPTANCE ✅
+- LH 三角层 A/B + `make lh-parity` ✅
+- 工具策略 **2+3**：会话角色默认可持工具；`EGLK_MCP_ALLOW_<ROLE>` / `EGLK_TOOLS_OFF_ROLES`；旁路零写主环；format-repair tools-off ✅
+- WA official CLI Docker `--help` probe（`WA_HARD_LIVE=1`）✅
 
-## 仍开放
+## 仍开放（高杠杆）
 
-- Weave 全量 114 / OSWorld 全量 / TB 官方 runner：环境剧本已备，不强制本机跑满
-- WA-Hard 官方 Docker CLI 真分：vendor_ready；外置执行 + `--external-score`
-- PyPI 正式发布：人工步骤见 RELEASE.md
+1. WA-Hard **真题 eval-tasks** limit≤3（probe ≠ 真分）
+2. PyPI 正式发布（人工 `RELEASE.md`）
+3. Weave-114 / OSWorld-108 / TB 层 C 全量（env-gated）
 
 ## 一键
 
 ```bash
 make release-check
-make eval-doctor
-make eval-smokes
-make lh-parity             # LH 三角 + WA 层 A/B
-make pulse                 # version / doctor / long ACCEPTANCE (read-only)
-make sweep                 # release-check + eval full dry (no long live)
+make lh-parity
+make pulse
+WA_HARD_LIVE=1 make eval-full-dry   # includes official CLI probe when live
 ```
