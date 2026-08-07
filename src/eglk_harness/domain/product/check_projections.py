@@ -48,6 +48,14 @@ class ProjectionReport:
     def ok(self) -> bool:
         return all(c.ok for c in self.checks)
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "checks": [{"name": c.name, "ok": c.ok, "detail": c.detail} for c in self.checks],
+            "read_only": True,
+            "hitl": False,
+        }
+
 
 def check_projections() -> ProjectionReport:
     """Assert domain.kernel.projections (+ consumers) match the pinned table."""

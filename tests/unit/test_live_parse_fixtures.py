@@ -100,3 +100,11 @@ def test_claim_emitted_via_shell_cat_in_codex_jsonl() -> None:
     res = episode_from_text(req, raw, backend="codex")
     assert res.ok and res.parsed is not None
     assert res.parsed["claim_id"] == "c-root-0"
+
+
+def test_visible_output_surfaces_shell_cat_claim() -> None:
+    from eglk_harness.domain.adapters.agent_logs import visible_output
+
+    text = visible_output(_load("claim_via_shell_cat.txt"))
+    assert "claim_id" in text
+    assert "c-root-0" in text

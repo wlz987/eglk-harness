@@ -21,6 +21,17 @@ class UpdateCheckResult:
     update_available: bool
     detail: str
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "package": self.package,
+            "current": self.current,
+            "latest": self.latest,
+            "update_available": self.update_available,
+            "detail": self.detail,
+            "auto_upgrade": False,
+            "read_only": True,
+        }
+
 
 def check_update(*, timeout_s: float = 10.0) -> UpdateCheckResult:
     """Compare installed version to PyPI latest. Network failure → soft warn."""

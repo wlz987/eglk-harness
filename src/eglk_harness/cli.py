@@ -330,8 +330,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_check_projections(_args: argparse.Namespace) -> int:
+def _cmd_check_projections(args: argparse.Namespace) -> int:
     report = check_projections()
+    if getattr(args, "json", False):
+        print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        return 0 if report.ok else 1
     for c in report.checks:
         mark = "ok  " if c.ok else "FAIL"
         print(f"{mark}  {c.name}: {c.detail}")
@@ -383,9 +386,12 @@ def _cmd_soak_bypass(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
-def _cmd_check_update(_args: argparse.Namespace) -> int:
+def _cmd_check_update(args: argparse.Namespace) -> int:
     result = check_update()
-    print(f"{result.package}: {result.detail}")
+    if getattr(args, "json", False):
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+    else:
+        print(f"{result.package}: {result.detail}")
     return 0
 
 
@@ -762,6 +768,7 @@ def build_parser() -> argparse.ArgumentParser:
     dash.set_defaults(func=_cmd_dashboard)
 
     cu = sub.add_parser("check-update", help="Check PyPI for a newer eglk-harness (no auto-upgrade)")
+    cu.add_argument("--json", action="store_true", help="Machine-readable JSON (never auto-upgrades)")
     cu.set_defaults(func=_cmd_check_update)
 
     ev = sub.add_parser(
@@ -808,6 +815,7 @@ def build_parser() -> argparse.ArgumentParser:
         "check-projections",
         help="CI pin: assert thresholds match design/kernel/projections.md",
     )
+    cp.add_argument("--json", action="store_true", help="Machine-readable JSON")
     cp.set_defaults(func=_cmd_check_projections)
 
     soak = sub.add_parser(

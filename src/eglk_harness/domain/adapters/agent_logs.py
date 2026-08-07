@@ -52,33 +52,52 @@ def detect_format(raw: str) -> str:
 
 
 def visible_output(raw: str) -> str:
-    """Best-effort readable text from Adapter stdout (NDJSON or plain)."""
+    """Best-effort readable text from Adapter stdout (NDJSON or plain).
+
+    When assistant prose omits Claim/Evidence but a shell ``cat`` carried it,
+    append those tool stdout bodies so operators/sidecars can still see them.
+    """
     if not raw or not raw.strip():
         return ""
     log_format = detect_format(raw)
+    primary = ""
     if log_format == CODEX_EXEC_JSON:
         texts = _codex_assistant_texts(raw)
         if texts:
-            return "\n".join(texts).strip()
+            primary = "\n".join(texts).strip()
     elif log_format == CLAUDE_STREAM_JSON:
         result_text, assistant_texts = _claude_texts(raw)
         if result_text.strip():
-            return result_text.strip()
-        if assistant_texts:
-            return "\n\n".join(assistant_texts).strip()
+            primary = result_text.strip()
+        elif assistant_texts:
+            primary = "\n\n".join(assistant_texts).strip()
     elif log_format == CHAT_JSONL:
         texts = _chat_assistant_texts(raw)
         if texts:
-            return texts[-1].strip()
-    # Legacy fallback: scan all known event shapes
-    chunks: list[str] = []
-    for record in _json_records(raw):
-        text = _from_codex_event(record) or _from_claude_event(record)
-        if text:
-            chunks.append(text)
-    if chunks:
-        return "\n".join(chunks)
-    return raw.strip()
+            primary = texts[-1].strip()
+    if not primary:
+        # Legacy fallback: scan all known event shapes
+        chunks: list[str] = []
+        for record in _json_records(raw):
+            text = _from_codex_event(record) or _from_claude_event(record)
+            if text:
+                chunks.append(text)
+        if chunks:
+            primary = "\n".join(chunks).strip()
+        else:
+            primary = raw.strip()
+
+    try:
+        from eglk_harness.domain.runtime.json_extract import command_output_bodies
+
+        tools = command_output_bodies(raw)
+    except Exception:  # noqa: BLE001 — visible sidecar must never crash
+        tools = []
+    if tools and ("claim_id" not in primary and "evidence_id" not in primary):
+        extra = "\n\n".join(tools)
+        primary = f"{primary}\n\n--- tool stdout (claim/evidence) ---\n{extra}".strip()
+    return primary
+
 
 
 def iter_steps(raw: str) -> list[dict[str, Any]]:

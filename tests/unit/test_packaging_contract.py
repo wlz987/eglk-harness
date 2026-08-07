@@ -123,3 +123,9 @@ def test_eval_suite_choices_match_constant():
 def test_status_json_flag_present():
     ns = build_parser().parse_args(["status", "--json", "--workdir", "."])
     assert ns.json is True
+
+
+def test_check_update_and_projections_json_flags():
+    parser = build_parser()
+    assert parser.parse_args(["check-update", "--json"]).json is True
+    assert parser.parse_args(["check-projections", "--json"]).json is True
