@@ -1,3 +1,5 @@
+# eglk-harness/ — installable control-kernel implementation.
+
 # ── Secrets ──
 .env
 .env.*
@@ -15,6 +17,7 @@ dist/
 .eggs/
 .venv/
 venv/
+ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -22,8 +25,13 @@ venv/
 .coverage.*
 htmlcov/
 .tox/
+.nox/
+.hypothesis/
 .cache/
 uv.lock
+.pdm-python
+.pdm-build/
+MANIFEST
 
 # ── Local harness artifacts if running from this checkout ──
 .eglk-harness/loop/
@@ -31,13 +39,17 @@ uv.lock
 .local/runs/
 .goal_format.md
 .goal.md
+.eglk-soak-bypass/
+.eglk-eval-workdir/
 
 # ── Editor / OS ──
 .DS_Store
+Thumbs.db
+*.swp
+*~
 .idea/
 .vscode/
 .cursor/
 *.log
 .tmp
 *.tmp
-.eglk-soak-bypass/
