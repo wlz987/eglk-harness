@@ -1,6 +1,6 @@
 # Maturity self-assessment · eglk-harness 0.1.0b1
 
-Updated: 2026-08-07. Scores/scorers never feed Gate.
+Updated: 2026-08-07. Workspace: four sibling git repos (`design`/`docs`/`eglk-harness`/`experiment`). Scores/scorers never feed Gate.
 
 | 轴 | 目标 | 自评 | 证据 |
 |----|------|------|------|

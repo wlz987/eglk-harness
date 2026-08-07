@@ -1,5 +1,7 @@
 # eglk-harness
 
+> 独立实现仓。并列工作区：`design/`（SSOT）· `docs/` · `experiment/`（评测）。
+
 独立可安装包：**Evidence-Gated Loop Kernel** harness（机械 Gate · 零 HITL · Maker≠Checker）。
 
 设计真相源通常在并列设计仓 [`../design/`](../design/)。包布局：`protocol/` ⊥ `domain/` ⊥ `actors/`，仅 `app.py` 组合根。
