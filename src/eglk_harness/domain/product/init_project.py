@@ -30,10 +30,12 @@ swarm = "auto"                   # auto | off | on
 # explorer = 120
 # verifier = 120
 # refiner = 120
+# Host per-tick await: EGLK_TICK_TIMEOUT (live default 600; long Maker may need 4000+)
 
 [limits]
 # Defaults: design/kernel/projections.md
 # cognitive_tokens_max = 64000
+# Codex live often needs a higher run override (e.g. 500000 or 8000000)
 # repairs_max = 8
 # max_ticks_soft = 0
 
