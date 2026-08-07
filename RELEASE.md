@@ -7,6 +7,7 @@ Version: **0.1.0b1** (empirical eval wiring beta).
 ```bash
 cd eglk-harness
 make release-check
+make dist-check   # python -m build + twine check (no upload)
 ```
 
 Runs: pytest · projections · soak-bypass mock · maturity_gate (weave + eval_compare) · packaging metadata.

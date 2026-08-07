@@ -489,6 +489,31 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             return 2
         limit = int(args.limit) if getattr(args, "limit", None) is not None else None
         external = Path(args.external_score).resolve() if getattr(args, "external_score", None) else None
+        agent_runs = (
+            Path(args.score_agent_runs).resolve() if getattr(args, "score_agent_runs", None) else None
+        )
+        if agent_runs is not None and not args.prepare_only:
+            # Prefer official agent-run ingest over placeholder when scoring a batch.
+            summary = wa_hard_mod.run_batch(
+                eval_root,
+                out_root=out,
+                limit=limit,
+                prepare_only=False,
+                external_score_dir=None,
+            )
+            ingested = wa_hard_mod.ingest_agent_runs(agent_runs)
+            by_id = {r["task_id"]: r for r in ingested.get("tasks") or []}
+            for entry in summary.get("tasks") or []:
+                row = by_id.get(str(entry.get("task_id")))
+                if row:
+                    entry["scores"] = row.get("scores")
+                    entry["detail"] = row.get("detail")
+                    entry["ok"] = bool(row.get("ok"))
+            summary["agent_runs"] = ingested
+            summary["note"] = "official agent-run scores — Manifest-only; never Gate"
+            print(json.dumps(summary, indent=2, ensure_ascii=False))
+            print("note: offline scores are Manifest-only — never Gate inputs")
+            return 0 if ingested.get("ok") else 1
         summary = wa_hard_mod.run_batch(
             eval_root,
             out_root=out,
@@ -507,6 +532,14 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     if args.suite == "wa_hard":
         tasks = {t.task_id: t for t in wa_hard_mod.load_pack_index(eval_root)}
         task = tasks.get(args.task_id)
+        if task is None and getattr(args, "score_agent_runs", None):
+            # Official demo / external agent-run ids need not be in Hard pack.
+            task = wa_hard_mod.WaHardTask(
+                task_id=str(args.task_id),
+                intent=f"External/official agent-run score for {args.task_id}",
+                sites=[],
+                notes="score-agent-runs only — Manifest; never Gate",
+            )
         if task is None:
             print(f"error: unknown wa_hard task_id={args.task_id}", flush=True)
             return 2
@@ -537,6 +570,26 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     init_project(out)
     print(f"prepared eval workdir {out} suite={args.suite} task={args.task_id}")
     if args.prepare_only:
+        if args.suite == "wa_hard" and getattr(args, "score_agent_runs", None):
+            runs = Path(args.score_agent_runs)
+            cand = runs / str(args.task_id) / "eval_result.json"
+            if not cand.is_file() and (runs / "eval_result.json").is_file():
+                cand = runs / "eval_result.json"
+            if not cand.is_file():
+                print(f"error: missing eval_result.json under {runs} for task {args.task_id}", flush=True)
+                return 2
+            scores = wa_hard_mod.score_from_eval_result(cand)
+            ok = bool(float(scores.get("success") or 0) >= 1.0)
+            return _emit_eval_scores(
+                workdir=out,
+                suite=args.suite,
+                task_id=args.task_id,
+                agent=args.agent,
+                swarm=args.swarm,
+                scores=scores,
+                ok=ok,
+                detail="official_scored",
+            )
         if args.suite == "wa_hard" and getattr(args, "score_har", None):
             scores = wa_hard_mod.score_har_offline(Path(args.score_har))
             ok = bool(float(scores.get("success") or 0) >= 1.0)
@@ -603,7 +656,20 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         )
     )
     if args.suite == "wa_hard":
-        if getattr(args, "score_har", None):
+        if getattr(args, "score_agent_runs", None):
+            runs = Path(args.score_agent_runs)
+            cand = runs / str(args.task_id) / "eval_result.json"
+            if not cand.is_file() and (runs / "eval_result.json").is_file():
+                cand = runs / "eval_result.json"
+            if cand.is_file():
+                scores = wa_hard_mod.score_from_eval_result(cand)
+                ok = bool(float(scores.get("success") or 0) >= 1.0)
+                detail = "official_scored"
+            else:
+                scores = wa_hard_mod.score_placeholder(task_id=args.task_id, workdir=out)
+                ok = False
+                detail = "missing_eval_result"
+        elif getattr(args, "score_har", None):
             scores = wa_hard_mod.score_har_offline(Path(args.score_har))
             ok = bool(float(scores.get("success") or 0) >= 1.0)
             detail = "har_offline_scored"
@@ -841,6 +907,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--score-har",
         default=None,
         help="Path to eglk_wa_trace JSON (HAR-offline stand-in); Manifest-only — never Gate",
+    )
+    ev.add_argument(
+        "--score-agent-runs",
+        default=None,
+        help=(
+            "WA-Hard: directory of <task_id>/eval_result.json from official eval-tasks "
+            "(Manifest-only — never Gate)"
+        ),
     )
     ev.set_defaults(func=_cmd_eval)
 

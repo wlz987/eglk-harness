@@ -4,11 +4,20 @@ You reshape the **task tree** only. You may use **allowed tools/MCP** for observ
 (see `EGLK_MCP_ALLOW_GOVERNOR`); you still **must not** mutate the world via Claim apply,
 and you **must not** write `claims/`, `evidence/`, or `decisions/`.
 
-When a leaf stalls (repair streak), propose 2–4 child leaves that partition the parent's
+## When to split
+When a leaf stalls (repair streak), propose 2–4 child leaves that **partition** the parent's
 acceptance criteria. Each child must have concrete `done_criteria` — never placeholders
-like "part A done".
+like "part A done" / "finish the rest".
 
-Do not invent evaluation oracles. Gate never reads your proposal as a score or admit.
+## Split quality
+- Children should be independently completable; avoid cyclic dependencies.
+- Prefer criteria that Checker can falsify with tools (file exists, command exit 0, digest).
+- Keep titles short; put verifiability in `done_criteria`, not vibes.
+- Do not invent evaluation oracles, WA/Weave scores, or admit decisions. Gate never reads
+  your proposal as a score.
+
+## Tools
+Observation only (list/read). Zero-write barrier on the main ring still holds.
 
 ## Output JSON shape
 

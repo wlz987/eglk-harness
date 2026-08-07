@@ -293,6 +293,155 @@ def export_hard_subset_via_docker(
     }
 
 
+def score_from_eval_result(eval_result_json: Path) -> dict[str, Any]:
+    """Ingest official ``eval_result.json`` into Manifest-safe scores (never Gate)."""
+    path = Path(eval_result_json)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"eval_result must be a JSON object: {path}")
+    score = float(data.get("score") or 0.0)
+    status = str(data.get("status") or "")
+    task_id = str(data.get("task_id") if data.get("task_id") is not None else path.parent.name)
+    out: dict[str, Any] = {
+        "suite": "wa_hard",
+        "task_id": task_id,
+        "success": score,
+        "partial": score if 0.0 < score < 1.0 else (1.0 if score >= 1.0 else 0.0),
+        "wa_status": status,
+        "judge": "webarena_verified_eval_result",
+        "source": str(path),
+        "status": "official_scored",
+        "note": "official eval_result.json — Manifest only; never Gate",
+    }
+    if data.get("sites") is not None:
+        out["sites"] = data.get("sites")
+    if data.get("webarena_verified_version") is not None:
+        out["webarena_verified_version"] = data.get("webarena_verified_version")
+    out.pop("admit", None)
+    out.pop("gate", None)
+    return out
+
+
+def ingest_agent_runs(
+    output_dir: Path,
+    *,
+    task_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Scan ``<output_dir>/<task_id>/eval_result.json`` into Manifest-safe score rows."""
+    root = Path(output_dir)
+    wanted = {str(x) for x in task_ids} if task_ids else None
+    rows: list[dict[str, Any]] = []
+    if not root.is_dir():
+        return {
+            "ok": False,
+            "status": "missing_output_dir",
+            "count": 0,
+            "tasks": [],
+            "note": "scores never Gate",
+        }
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        tid = child.name
+        if wanted is not None and tid not in wanted:
+            continue
+        result = child / "eval_result.json"
+        if not result.is_file():
+            rows.append(
+                {
+                    "task_id": tid,
+                    "ok": False,
+                    "detail": "missing_eval_result",
+                    "scores": score_placeholder(task_id=tid, workdir=child),
+                }
+            )
+            continue
+        scores = score_from_eval_result(result)
+        ok = float(scores.get("success") or 0) >= 1.0
+        rows.append({"task_id": tid, "ok": ok, "detail": "official_scored", "scores": scores})
+    success_n = sum(1 for r in rows if r.get("ok"))
+    return {
+        "ok": bool(rows) and all(r.get("detail") == "official_scored" for r in rows),
+        "status": "ingested",
+        "count": len(rows),
+        "success_count": success_n,
+        "tasks": rows,
+        "note": "official agent-run scores — Manifest only; never Gate",
+    }
+
+
+def run_eval_tasks(
+    *,
+    output_dir: Path,
+    task_ids: list[str] | None = None,
+    dry_run: bool = False,
+    image: str = "ghcr.io/servicenow/webarena-verified:latest",
+    timeout_s: float = 600.0,
+) -> dict[str, Any]:
+    """Official ``eval-tasks`` over an agent-run tree (scores never Gate)."""
+    import shutil
+    import subprocess
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if shutil.which("docker") is None:
+        return {"ok": False, "status": "docker_missing", "note": "scores never Gate"}
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{str(output_dir.resolve())}:/out",
+        image,
+        "eval-tasks",
+        "--output-dir",
+        "/out",
+    ]
+    ids = ",".join(str(x) for x in (task_ids or []) if str(x).strip())
+    if ids:
+        cmd.extend(["--task-ids", ids])
+    if dry_run:
+        cmd.append("--dry-run")
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=float(timeout_s),
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "status": "eval_tasks_error",
+            "error": str(exc),
+            "dry_run": dry_run,
+            "note": "scores never Gate",
+        }
+    text = (proc.stdout or "") + (proc.stderr or "")
+    if dry_run:
+        ok = proc.returncode == 0 and ("Would evaluate" in text or "DRY RUN" in text)
+        return {
+            "ok": ok,
+            "status": "eval_tasks_dry_ok" if ok else "eval_tasks_dry_failed",
+            "returncode": proc.returncode,
+            "task_ids": ids.split(",") if ids else [],
+            "snippet": text[-600:],
+            "note": "dry-run only — not Hard scores; scores never Gate",
+        }
+    ingested = ingest_agent_runs(output_dir, task_ids=task_ids)
+    ok = proc.returncode == 0 and bool(ingested.get("count"))
+    return {
+        "ok": ok,
+        "status": "eval_tasks_scored" if ok else "eval_tasks_failed",
+        "returncode": proc.returncode,
+        "task_ids": ids.split(",") if ids else [t["task_id"] for t in ingested.get("tasks") or []],
+        "ingest": ingested,
+        "snippet": text[-800:],
+        "note": "official eval-tasks — Manifest only; never Gate",
+    }
+
+
 def dry_run_eval_tasks(
     *,
     task_ids: list[str],
@@ -301,50 +450,16 @@ def dry_run_eval_tasks(
     timeout_s: float = 180.0,
 ) -> dict[str, Any]:
     """Official ``eval-tasks --dry-run`` for given Hard ids (no scoring)."""
-    import shutil
-    import subprocess
-
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if shutil.which("docker") is None:
-        return {"ok": False, "status": "docker_missing", "note": "scores never Gate"}
-    ids = ",".join(str(x) for x in task_ids if str(x).strip())
+    ids = [str(x) for x in task_ids if str(x).strip()]
     if not ids:
         return {"ok": False, "status": "no_task_ids", "note": "scores never Gate"}
-    mount = str(output_dir.resolve())
-    try:
-        proc = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{mount}:/out",
-                image,
-                "eval-tasks",
-                "--output-dir",
-                "/out",
-                "--task-ids",
-                ids,
-                "--dry-run",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=float(timeout_s),
-            check=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "status": "dry_run_error", "error": str(exc), "note": "scores never Gate"}
-    text = (proc.stdout or "") + (proc.stderr or "")
-    ok = proc.returncode == 0 and ("Would evaluate" in text or "DRY RUN" in text)
-    return {
-        "ok": ok,
-        "status": "eval_tasks_dry_ok" if ok else "eval_tasks_dry_failed",
-        "returncode": proc.returncode,
-        "task_ids": ids.split(","),
-        "snippet": text[-600:],
-        "note": "dry-run only — not Hard scores; scores never Gate",
-    }
+    return run_eval_tasks(
+        output_dir=output_dir,
+        task_ids=ids,
+        dry_run=True,
+        image=image,
+        timeout_s=timeout_s,
+    )
 
 
 def probe_official_cli(*, timeout_s: float = 120.0) -> dict[str, Any]:

@@ -6,8 +6,12 @@ Write only to `candidates/`. You may use **allowed tools/MCP** for observation
 (`EGLK_MCP_ALLOW_PRUNER`); do not write `claims/`, `evidence/`, or `decisions/`.
 Gate never sees your output.
 
-Pruning is **mechanical** in the harness (reads Explorer candidates); this skill documents
-the contract for soak / future LLM prune.
+## Contract
+- Preserve `text` / `prob` / `impact` from Explorer; add `score` and `pruned`.
+- Do not invent new high-score alternatives just to pass pruning.
+- Pruning is **mechanical** in the harness (reads Explorer candidates); this skill documents
+  the contract for soak / LLM-assisted prune.
+- Never treat pruned lists as Gate inputs or Oracle scores.
 
 ## Output / candidate shape
 

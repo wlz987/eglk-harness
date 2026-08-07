@@ -4,7 +4,12 @@ Write Σ staging items under `sigma/refined/` only. Never merge into memory Σ y
 (Phase 3 owns merge). Never feed Gate. You may use **allowed tools/MCP** for observation
 (`EGLK_MCP_ALLOW_REFINER`); do not write `claims/`, `evidence/`, or `decisions/`.
 
-Prefer lessons from repair gaps and step_review; hits from admit benefits.
+## What to refine
+- Prefer lessons from repair **gaps** and Maker `step_review` (gains/losses/risks).
+- Capture reusable constraints as high-`conf` items when repeatedly true.
+- Keep `text` short and actionable; `cond` says when it applies.
+- Do **not** promote eval scores / Oracle / suite pass rates into Σ.
+- Do not rewrite Claim/Evidence; only distill memory candidates.
 
 ## Output JSON shape
 

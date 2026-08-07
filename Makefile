@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity
+.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity dist-check
 test:
 	pytest -q
 projections:
@@ -20,6 +20,13 @@ eval-smokes:
 	WA_HARD_LIMIT=3 bash ../experiment/eval/scripts/run_wa_hard_batch.sh
 lh-parity:
 	bash ../experiment/eval/scripts/run_lh_parity_matrix.sh
+dist-check:
+	@echo "== dist-check (no upload) =="
+	python -m pip install -q build twine
+	rm -rf dist build *.egg-info
+	python -m build
+	python -m twine check dist/*
+	@echo "dist-check: OK (twine check only — upload remains manual)"
 release-check:
 	@echo "== release-check =="
 	pytest -q
@@ -36,6 +43,7 @@ assert eglk_harness.__version__"
 eval-full-dry:
 	bash ../experiment/eval/scripts/run_wa_hard_live_attempt.sh
 	bash ../experiment/eval/scripts/run_wa_hard_eval_dry.sh
+	bash ../experiment/eval/scripts/run_wa_hard_official_score_demo.sh
 	bash ../experiment/eval/scripts/run_weave_lh_full.sh
 	bash ../experiment/eval/scripts/run_osworld_full.sh
 	bash ../experiment/eval/scripts/run_tb21_full.sh
