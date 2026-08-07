@@ -93,6 +93,10 @@ if [[ -x "$EVAL_ROOT/scripts/doctor_eval_env.sh" ]]; then
   bash "$EVAL_ROOT/scripts/doctor_eval_env.sh" || true
 fi
 
+echo "-- list-tasks smoke --"
+eglk-harness eval --suite weave_lh --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
+eglk-harness eval --suite wa_hard --list-tasks --eval-root "$EVAL_ROOT" >/dev/null
+
 python3 - <<PY
 import json
 from pathlib import Path
