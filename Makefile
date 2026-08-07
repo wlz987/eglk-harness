@@ -1,4 +1,4 @@
-.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity dist-check
+.PHONY: test projections soak weave maturity release-check eval-doctor eval-smokes pulse eval-full-dry sweep lh-parity lh-benchmark-practice dist-check
 test:
 	pytest -q
 projections:
@@ -49,3 +49,6 @@ eval-full-dry:
 	bash ../experiment/eval/scripts/run_tb21_full.sh
 sweep:
 	bash scripts/full_maturity_sweep.sh
+
+lh-benchmark-practice:
+	bash ../experiment/eval/scripts/run_lh_benchmark_practice.sh
