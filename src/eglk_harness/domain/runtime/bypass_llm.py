@@ -161,6 +161,28 @@ def coerce_governor_proposal(
     }
 
 
+def _safe_unit_float(val: Any, default: float = 0.5) -> float:
+    """Best-effort [0,1]-ish float from LLM drift (numbers or qualitative strings)."""
+    if isinstance(val, bool):
+        return default
+    if isinstance(val, (int, float)):
+        return max(0.0, min(1.0, float(val)))
+    if isinstance(val, str):
+        s = val.strip().lower()
+        try:
+            return max(0.0, min(1.0, float(s)))
+        except ValueError:
+            pass
+        # Qualitative buckets seen in live Explorer output
+        if any(k in s for k in ("highest", "high", "strong", "critical")):
+            return 0.85
+        if any(k in s for k in ("medium", "moderate", "mid")):
+            return 0.55
+        if any(k in s for k in ("low", "minor", "weak", "decoy")):
+            return 0.2
+    return default
+
+
 def coerce_explorer(raw: Mapping[str, Any] | None, *, tick: int, leaf: str, fallback: list) -> dict[str, Any]:
     if not raw:
         return {"role": "explorer", "tick": tick, "leaf_id": leaf, "alternatives": fallback, "source": "mechanical"}
@@ -171,12 +193,15 @@ def coerce_explorer(raw: Mapping[str, Any] | None, *, tick: int, leaf: str, fall
     for i, a in enumerate(alts, start=1):
         if not isinstance(a, dict):
             continue
+        text = a.get("text") or a.get("name") or a.get("title") or a.get("description") or ""
+        if a.get("description") and a.get("name") and not a.get("text"):
+            text = f"{a.get('name')}: {a.get('description')}"
         clean.append(
             {
                 "id": str(a.get("id") or f"alt-{i}"),
-                "text": str(a.get("text") or ""),
-                "prob": float(a.get("prob", 0.5)),
-                "impact": float(a.get("impact", 0.5)),
+                "text": str(text).strip() or f"alternative-{i}",
+                "prob": _safe_unit_float(a.get("prob"), 0.5),
+                "impact": _safe_unit_float(a.get("impact"), 0.5),
             }
         )
     if not clean:
