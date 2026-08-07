@@ -11,13 +11,3 @@ def get_args(payload: Mapping[str, Any] | None) -> dict[str, Any]:
         return {}
     raw = payload.get("args")
     return dict(raw) if isinstance(raw, Mapping) else {}
-
-
-def get_tool_args(payload: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return ``tool_args`` from payload (alias used by some workers)."""
-    if not payload:
-        return {}
-    raw = payload.get("tool_args")
-    if isinstance(raw, Mapping):
-        return dict(raw)
-    return get_args(payload)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.memory import sigma

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 
 from eglk_harness.app import _request_timeout
 

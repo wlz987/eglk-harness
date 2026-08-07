@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_swarm
@@ -47,14 +47,3 @@ def compress_tick_signals(
         },
         "model_downgrade": downgrade,
     }
-
-
-def should_enable_refiner(
-    *,
-    decision: str,
-    active_len: int,
-    focus_score: float,
-) -> bool:
-    from eglk_harness.domain.kernel.swarm import decide_refiner
-
-    return decide_refiner(decision=decision, active_len=active_len, focus_score=focus_score)

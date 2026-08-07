@@ -406,6 +406,36 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _emit_eval_scores(
+    *,
+    workdir: Path,
+    suite: str,
+    task_id: str,
+    agent: str,
+    swarm: str | None,
+    scores: dict,
+    ok: bool,
+    detail: str,
+) -> int:
+    """Write Manifest with offline scores (never Gate inputs); print JSON + note."""
+    scores.setdefault("task_id", task_id)
+    scores.setdefault("workdir", str(workdir))
+    run_id = new_run_id("eval")
+    manifest = build_manifest(
+        run_id=run_id,
+        workdir=workdir,
+        goal_id=f"eval-{suite}-{task_id}",
+        agent=str(agent),
+        model=resolve_model("maker"),
+        swarm=swarm,
+        extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+    )
+    path = write_manifest(workdir, manifest)
+    print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
+    print("note: offline scores are Manifest-only — never Gate inputs")
+    return 0 if ok else 1
+
+
 def _cmd_eval(args: argparse.Namespace) -> int:
     eval_root = Path(args.eval_root).resolve() if args.eval_root else default_eval_root()
     if eval_root is None or not eval_root.is_dir():
@@ -509,88 +539,59 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     if args.prepare_only:
         if args.suite == "wa_hard" and getattr(args, "score_har", None):
             scores = wa_hard_mod.score_har_offline(Path(args.score_har))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = bool(float(scores.get("success") or 0) >= 1.0)
-            detail = "har_offline_scored"
-            run_id = new_run_id("eval")
-            manifest = build_manifest(
-                run_id=run_id,
+            return _emit_eval_scores(
                 workdir=out,
-                goal_id=f"eval-{args.suite}-{args.task_id}",
-                agent=str(args.agent),
-                model=resolve_model("maker"),
+                suite=args.suite,
+                task_id=args.task_id,
+                agent=args.agent,
                 swarm=args.swarm,
-                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+                scores=scores,
+                ok=ok,
+                detail="har_offline_scored",
             )
-            path = write_manifest(out, manifest)
-            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
-            print("note: offline scores are Manifest-only — never Gate inputs")
-            return 0 if ok else 1
         if args.suite == "weave_lh" and getattr(args, "external_score", None):
             scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
                 "status"
             ) == "external_scored"
-            detail = "weave_lh_external"
-            run_id = new_run_id("eval")
-            manifest = build_manifest(
-                run_id=run_id,
+            return _emit_eval_scores(
                 workdir=out,
-                goal_id=f"eval-{args.suite}-{args.task_id}",
-                agent=str(args.agent),
-                model=resolve_model("maker"),
+                suite=args.suite,
+                task_id=args.task_id,
+                agent=args.agent,
                 swarm=args.swarm,
-                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+                scores=scores,
+                ok=ok,
+                detail="weave_lh_external",
             )
-            path = write_manifest(out, manifest)
-            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
-            print("note: offline scores are Manifest-only — never Gate inputs")
-            return 0 if ok else 1
         if args.suite == "osworld_aux" and getattr(args, "external_score", None):
             scores = osworld_mod.score_external(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
-            ok = True
-            detail = "osworld_external"
-            run_id = new_run_id("eval")
-            manifest = build_manifest(
-                run_id=run_id,
+            return _emit_eval_scores(
                 workdir=out,
-                goal_id=f"eval-{args.suite}-{args.task_id}",
-                agent=str(args.agent),
-                model=resolve_model("maker"),
+                suite=args.suite,
+                task_id=args.task_id,
+                agent=args.agent,
                 swarm=args.swarm,
-                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+                scores=scores,
+                ok=True,
+                detail="osworld_external",
             )
-            path = write_manifest(out, manifest)
-            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
-            print("note: offline scores are Manifest-only — never Gate inputs")
-            return 0
         if args.suite == "tb21" and getattr(args, "external_score", None):
             scores = tb21_mod.score_from_judge_result(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
                 "status"
             ) == "external_scored"
-            detail = "tb21_external"
-            run_id = new_run_id("eval")
-            manifest = build_manifest(
-                run_id=run_id,
+            return _emit_eval_scores(
                 workdir=out,
-                goal_id=f"eval-{args.suite}-{args.task_id}",
-                agent=str(args.agent),
-                model=resolve_model("maker"),
+                suite=args.suite,
+                task_id=args.task_id,
+                agent=args.agent,
                 swarm=args.swarm,
-                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+                scores=scores,
+                ok=ok,
+                detail="tb21_external",
             )
-            path = write_manifest(out, manifest)
-            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
-            print("note: offline scores are Manifest-only — never Gate inputs")
-            return 0 if ok else 1
         return 0
     rc = app_run(
         RunRequest(
@@ -604,14 +605,10 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     if args.suite == "wa_hard":
         if getattr(args, "score_har", None):
             scores = wa_hard_mod.score_har_offline(Path(args.score_har))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = bool(float(scores.get("success") or 0) >= 1.0)
             detail = "har_offline_scored"
         elif getattr(args, "external_score", None):
             scores = wa_hard_mod.score_external(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = True
             detail = "external_scored"
         else:
@@ -621,8 +618,6 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     elif args.suite == "osworld_aux":
         if getattr(args, "external_score", None):
             scores = osworld_mod.score_external(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = True
             detail = "external_scored"
         else:
@@ -635,8 +630,6 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     elif args.suite == "weave_lh":
         if getattr(args, "external_score", None):
             scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = True
             detail = "external_scored"
         else:
@@ -648,8 +641,6 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     elif args.suite == "tb21":
         if getattr(args, "external_score", None):
             scores = tb21_mod.score_from_judge_result(Path(args.external_score))
-            scores.setdefault("task_id", args.task_id)
-            scores.setdefault("workdir", str(out))
             ok = True
             detail = "external_scored"
         else:
@@ -663,22 +654,17 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             suite=args.suite, task_id=args.task_id, workdir=out, eval_root=eval_root
         )
         scores, ok, detail = scored.scores, scored.ok, scored.detail
-    # silence unused when prepare path took early return
-    _ = rc
-    run_id = new_run_id("eval")
-    manifest = build_manifest(
-        run_id=run_id,
+    eval_rc = _emit_eval_scores(
         workdir=out,
-        goal_id=f"eval-{args.suite}-{args.task_id}",
-        agent=str(args.agent),
-        model=resolve_model("maker"),
+        suite=args.suite,
+        task_id=args.task_id,
+        agent=args.agent,
         swarm=args.swarm,
-        extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+        scores=scores,
+        ok=ok,
+        detail=detail,
     )
-    path = write_manifest(out, manifest)
-    print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
-    print("note: offline scores are Manifest-only — never Gate inputs")
-    return rc if rc else (0 if ok else 1)
+    return rc if rc else eval_rc
 
 
 def build_parser() -> argparse.ArgumentParser:

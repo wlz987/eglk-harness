@@ -87,13 +87,6 @@ def load_pack_index(eval_root: Path) -> list[WeaveLhTask]:
     return out
 
 
-def list_tasks(eval_root: Path, *, limit: int | None = None) -> list[WeaveLhTask]:
-    tasks = load_pack_index(eval_root)
-    if limit is not None:
-        tasks = tasks[: max(0, int(limit))]
-    return tasks
-
-
 def materialize_goal(task: WeaveLhTask, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     text = (

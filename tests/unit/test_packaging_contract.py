@@ -9,7 +9,6 @@ from eglk_harness.domain.eval import EVAL_SUITES
 from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
 from eglk_harness.domain.product.runtime_bootstrap import (
     apply_config_toml,
-    apply_dotenv,
     bootstrap_workdir,
     want_dashboard,
 )

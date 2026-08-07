@@ -6,7 +6,6 @@ from pathlib import Path
 
 from eglk_harness.domain.product.init_project import init_project
 from eglk_harness.domain.memory import skill_lib
-from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.memory.sigma_merge import suggest_sibling_merges, text_similarity
 from eglk_harness.domain.kernel.tree import TaskTree
 

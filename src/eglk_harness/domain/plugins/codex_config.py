@@ -3,13 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
-
-
-def codex_config_path() -> Path:
-    home = os.environ.get("CODEX_HOME") or Path.home() / ".codex"
-    return Path(home).expanduser() / "config.toml"
 
 
 def mcp_server_block(name: str, command: str, args: list[str]) -> str:

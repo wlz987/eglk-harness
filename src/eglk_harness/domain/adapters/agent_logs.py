@@ -147,37 +147,6 @@ def runtime_signal_labels(raw: str) -> list[str]:
     return out
 
 
-def tool_output_view(raw: str) -> str:
-    """Tool/command output plus non-JSON lines, for crash detection."""
-    log_format = detect_format(raw)
-    parts: list[str] = []
-    for line in str(raw or "").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if not stripped.startswith("{"):
-            parts.append(line)
-            continue
-        try:
-            record = json.loads(stripped)
-        except json.JSONDecodeError:
-            parts.append(line)
-            continue
-        if not isinstance(record, dict):
-            continue
-        if log_format == CODEX_EXEC_JSON:
-            parts.extend(_codex_tool_output(record))
-        elif log_format == CLAUDE_STREAM_JSON:
-            parts.extend(_claude_tool_output(record))
-    return "\n".join(part for part in parts if part)
-
-
-def write_visible_sidecar(tee_path: str | None, raw: str) -> str | None:
-    """Write ``*.visible.txt`` next to a tee trajectory; return path or None."""
-    paths = write_trajectory_sidecars(tee_path, raw)
-    return paths.get("visible")
-
-
 def write_trajectory_sidecars(tee_path: str | None, raw: str) -> dict[str, str]:
     """Write visible.txt and steps.json beside a tee file; return written paths."""
     if not tee_path:
@@ -224,33 +193,6 @@ def _codex_assistant_texts(raw: str) -> list[str]:
         if isinstance(text, str) and text.strip():
             texts.append(text)
     return texts
-
-
-def _codex_tool_output(record: dict[str, Any]) -> list[str]:
-    record_type = record.get("type")
-    if record_type == "turn.failed":
-        error = record.get("error")
-        message = error.get("message") if isinstance(error, dict) else None
-        return [f"{TURN_FAILED_SIGNAL}: {message or 'codex turn failed'}"]
-    if record_type == "error":
-        message = record.get("message")
-        return [str(message)] if message else []
-    if record_type not in {"item.completed", "item.updated"}:
-        return []
-    item = record.get("item")
-    if not isinstance(item, dict):
-        return []
-    item_type = item.get("type")
-    if item_type == "command_execution":
-        output = item.get("aggregated_output")
-        return [str(output)] if output else []
-    if item_type == "mcp_tool_call":
-        text, _ = _content_blocks_to_text(_codex_mcp_content(item))
-        return [text] if text else []
-    if item_type == "error":
-        message = item.get("message")
-        return [str(message)] if message else []
-    return []
 
 
 def _codex_trajectory(raw: str) -> list[dict[str, Any]]:
@@ -416,21 +358,6 @@ def _claude_texts(raw: str) -> tuple[str, list[str]]:
                 if isinstance(text, str) and text.strip():
                     texts.append(text)
     return result_text, texts
-
-
-def _claude_tool_output(record: dict[str, Any]) -> list[str]:
-    if record.get("type") != "user":
-        return []
-    message = record.get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("content"), list):
-        return []
-    parts: list[str] = []
-    for block in message["content"]:
-        if isinstance(block, dict) and block.get("type") == "tool_result":
-            text, _ = _content_blocks_to_text(block.get("content"))
-            if text:
-                parts.append(text)
-    return parts
 
 
 def _claude_trajectory(raw: str) -> list[dict[str, Any]]:

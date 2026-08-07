@@ -70,10 +70,3 @@ def resolve_compile(
     run = cfg.get("run") if isinstance(cfg.get("run"), dict) else {}
     val = run.get("compile")
     return str(val).strip() if val else None
-
-
-def resolve_mcp_from_config(workdir: Path) -> Path | None:
-    cfg = load_config_toml(workdir)
-    mcp = cfg.get("mcp") if isinstance(cfg.get("mcp"), dict) else {}
-    raw = mcp.get("config")
-    return Path(str(raw)) if raw else None
