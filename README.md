@@ -24,6 +24,7 @@ eglk-harness init
 # edit .goal.md — add verifiable done criteria
 eglk-harness run --agent mock --compile auto
 eglk-harness status          # read-only; no approval UI
+eglk-harness status --json   # machine-readable (still RO / zero HITL)
 eglk-harness dashboard       # read-only HTTP; never an approval gate
 ```
 
@@ -42,7 +43,7 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `init` | Scaffold `.eglk-harness/` + `.goal.md` |
 | `doctor` | PATH / schemas / skills / MCP / `host_tick_timeout` / eval vendor hints；`--install-codex-gui` 显式装插件 |
 | `run` | STEP 0 compile → four-phase tick |
-| `status` | Read-only tree / decision count / tick·focus·unc (signal) / quota / leaf |
+| `status` | Read-only tree / decision count / tick·focus·unc (signal) / quota / leaf；`--json` |
 | `dashboard` | Read-only HTTP browse（无 approve/inject） |
 | `check-update` | PyPI version hint（不自动升级） |
 | `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |

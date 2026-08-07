@@ -30,6 +30,7 @@ from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.product.observe.dashboard import serve_dashboard
 from eglk_harness.domain.product.status import collect_status
 from eglk_harness.domain.product.update_check import check_update
+from eglk_harness.domain.eval import EVAL_SUITES
 from eglk_harness.domain.eval import wa_hard as wa_hard_mod
 from eglk_harness.domain.eval import osworld as osworld_mod
 from eglk_harness.domain.eval import weave_lh as weave_lh_mod
@@ -302,7 +303,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_status(args: argparse.Namespace) -> int:
     report = collect_status(Path(args.workdir).resolve(), run_id=args.run)
-    print(report.render())
+    if getattr(args, "json", False):
+        print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+    else:
+        print(report.render())
     return 0
 
 
@@ -719,6 +723,11 @@ def build_parser() -> argparse.ArgumentParser:
     st_p = sub.add_parser("status", help="Read-only status of harness dirs / runs")
     st_p.add_argument("--workdir", default=".", help="Project root (default: cwd)")
     st_p.add_argument("--run", default=None, help="Select loop/<run_id> (default: newest)")
+    st_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Machine-readable JSON (still read-only; never an approval surface)",
+    )
     st_p.set_defaults(func=_cmd_status)
 
     dash = sub.add_parser("dashboard", help="Read-only HTTP dashboard (never an approval gate)")
@@ -737,7 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument(
         "--suite",
         required=True,
-        choices=("weave_thin", "weave_lh", "wa_hard", "osworld_aux", "scenarios"),
+        choices=sorted(EVAL_SUITES),
     )
     ev.add_argument("--task-id", default=None, help="Single task id (required unless --batch)")
     ev.add_argument("--eval-root", default=None, help="Path to experiment/eval (default: auto)")

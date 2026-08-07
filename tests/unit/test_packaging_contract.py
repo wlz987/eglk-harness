@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from eglk_harness.cli import build_parser
+from eglk_harness.domain.eval import EVAL_SUITES
 from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
 from eglk_harness.domain.product.runtime_bootstrap import (
     apply_config_toml,
@@ -97,3 +98,28 @@ def test_swarm_from_config(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("EGLK_SWARM", raising=False)
     apply_config_toml(tmp_path)
     assert resolve_swarm(None, tmp_path) == "0"
+
+
+def test_eval_suite_choices_match_constant():
+    parser = build_parser()
+    ns = parser.parse_args(["eval", "--suite", "weave_lh", "--list-tasks"])
+    assert ns.suite in EVAL_SUITES
+    found = None
+
+    def walk(pr):
+        nonlocal found
+        for action in pr._actions:
+            if getattr(action, "dest", None) == "suite":
+                found = set(action.choices or {})
+            choices = getattr(action, "choices", None)
+            if isinstance(choices, dict):
+                for sub in choices.values():
+                    walk(sub)
+
+    walk(parser)
+    assert found == set(EVAL_SUITES), found
+
+
+def test_status_json_flag_present():
+    ns = build_parser().parse_args(["status", "--json", "--workdir", "."])
+    assert ns.json is True

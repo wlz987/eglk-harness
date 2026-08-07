@@ -105,6 +105,30 @@ class StatusReport:
             lines.append(f"note:        {note}")
         return "\n".join(lines)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Machine-readable snapshot — still read-only; never an approval surface."""
+        return {
+            "workdir": str(self.workdir),
+            "harness_present": self.harness_present,
+            "goal_present": self.goal_present,
+            "goal_format_present": self.goal_format_present,
+            "runs": list(self.runs),
+            "selected_run": self.selected_run,
+            "tree": list(self.tree_summary),
+            "latest_decision": self.latest_decision,
+            "decision_count": self.decision_count,
+            "tick": self.tick,
+            "focus_score": self.focus_score,
+            "uncertainty": self.uncertainty,
+            "quota": dict(self.quota),
+            "leaf_contract": self.leaf_contract,
+            "last_tick": self.last_tick,
+            "sigma_active_count": self.sigma_active_count,
+            "notes": list(self.notes),
+            "read_only": True,
+            "hitl": False,
+        }
+
 
 def _latest_json(dir_path: Path) -> dict[str, Any] | None:
     if not dir_path.is_dir():
@@ -170,6 +194,22 @@ def _pick_run(loop_root: Path, prefer: str | None) -> str | None:
 def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
     """Assemble a read-only snapshot. Never mutates harness state."""
     workdir = workdir.resolve()
+    # Prefer config/env effective max so status matches run bootstrap before state.json exists.
+    try:
+        from eglk_harness.domain.product.config_resolve import load_config_toml
+
+        cfg = load_config_toml(workdir)
+        limits = cfg.get("limits") if isinstance(cfg.get("limits"), dict) else {}
+        cog_max = P.effective_cognitive_tokens_max()
+        if limits.get("cognitive_tokens_max") is not None:
+            cog_max = int(limits["cognitive_tokens_max"])
+        repairs_max = P.effective_repairs_max()
+        if limits.get("repairs_max") is not None:
+            repairs_max = int(limits["repairs_max"])
+    except (TypeError, ValueError, OSError):
+        cog_max = P.effective_cognitive_tokens_max()
+        repairs_max = P.effective_repairs_max()
+
     report = StatusReport(
         workdir=workdir,
         harness_present=paths.harness_root(workdir).is_dir(),
@@ -177,8 +217,8 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
         goal_format_present=(workdir / ".goal_format.md").is_file(),
         quota={
             "cognitive_tokens": 0,
-            "cognitive_tokens_max": P.COGNITIVE_TOKENS_MAX,
-            "repairs_max": P.REPAIRS_MAX,
+            "cognitive_tokens_max": cog_max,
+            "repairs_max": repairs_max,
         },
     )
     loop_root = paths.loop_root(workdir)

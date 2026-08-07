@@ -67,3 +67,21 @@ def test_status_surfaces_tick_and_decisions(tmp_path: Path) -> None:
     assert report.tick == 2
     assert "τ_focus/τ_unc signal only" in text
     assert "n=1" in text
+    payload = report.to_dict()
+    assert payload["read_only"] is True
+    assert payload["hitl"] is False
+    assert payload["decision_count"] == 1
+    assert payload["tick"] == 2
+
+
+def test_status_reads_limits_from_config(tmp_path: Path) -> None:
+    init_project(tmp_path)
+    cfg = tmp_path / ".eglk-harness" / "config.toml"
+    text = cfg.read_text(encoding="utf-8")
+    if "cognitive_tokens_max" in text:
+        text = text.replace("# cognitive_tokens_max = 64000", "cognitive_tokens_max = 123456")
+    else:
+        text += "\n[limits]\ncognitive_tokens_max = 123456\n"
+    cfg.write_text(text, encoding="utf-8")
+    report = collect_status(tmp_path)
+    assert report.quota["cognitive_tokens_max"] == 123456
