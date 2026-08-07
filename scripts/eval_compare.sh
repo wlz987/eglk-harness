@@ -20,6 +20,32 @@ eglk-harness eval --suite wa_hard --batch --limit 5 \
   >/dev/null
 # Note: batch with external file applies same fixture path when is_file — ok for smoke
 
+echo "-- wa_hard HAR-offline fixture --"
+TASK_ID="$(python3 - <<PY
+import json
+from pathlib import Path
+p = Path("$EVAL_ROOT") / "wa_hard" / "pack.json"
+tasks = (json.loads(p.read_text()).get("tasks") or []) if p.is_file() else []
+print(tasks[0]["id"] if tasks else "")
+PY
+)"
+HAR="$EVAL_ROOT/wa_hard/fixtures/traces/pass_trace.json"
+if [[ -n "$TASK_ID" && -f "$HAR" ]]; then
+  eglk-harness eval --suite wa_hard --task-id "$TASK_ID" \
+    --eval-root "$EVAL_ROOT" \
+    --workdir "$OUT/wa_hard_har" \
+    --score-har "$HAR" \
+    --agent mock --prepare-only
+else
+  echo "skip har-offline (missing pack task or fixture)"
+fi
+
+if [[ -x "$EVAL_ROOT/scripts/run_wa_hard_batch.sh" ]]; then
+  echo "-- run_wa_hard_batch (prepare + vendor status) --"
+  WA_HARD_OUT="$OUT/wa_hard_batch" WA_HARD_LIMIT=3 \
+    bash "$EVAL_ROOT/scripts/run_wa_hard_batch.sh"
+fi
+
 echo "-- weave_thin toy-hello prepare+mock --"
 if [[ -x "$EVAL_ROOT/scripts/ci_weave_thin.sh" ]]; then
   bash "$EVAL_ROOT/scripts/ci_weave_thin.sh"

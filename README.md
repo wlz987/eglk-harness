@@ -11,7 +11,10 @@
 ```bash
 pip install -e ".[dev]"
 eglk-harness doctor
+# when published: uv tool install eglk-harness
 ```
+
+Release checklist: [`RELEASE.md`](./RELEASE.md) · `make release-check` · version **0.1.0a2**.
 
 ## Quick start
 
@@ -61,10 +64,14 @@ pytest
 eglk-harness check-projections
 eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
 make maturity                                  # pytest + projections + soak + weave CI
+make release-check                             # maturity + CLI/version contract
 # Live soak (manual gate):
 # EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
 # Eval smoke (from design repo):
 # bash experiment/eval/scripts/ci_weave_thin.sh
+# bash experiment/eval/scripts/run_wa_hard_batch.sh
+# Natural long run (Codex; split or ≥30min):
+# bash scripts/run_long_natural_split.sh
 # New live run scaffold:
 # bash ../experiment/runs/scripts/new_live_run.sh my_run
 ```

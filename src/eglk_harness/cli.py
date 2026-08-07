@@ -425,6 +425,26 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     init_project(out)
     print(f"prepared eval workdir {out} suite={args.suite} task={args.task_id}")
     if args.prepare_only:
+        if args.suite == "wa_hard" and getattr(args, "score_har", None):
+            scores = wa_hard_mod.score_har_offline(Path(args.score_har))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = bool(float(scores.get("success") or 0) >= 1.0)
+            detail = "har_offline_scored"
+            run_id = new_run_id("eval")
+            manifest = build_manifest(
+                run_id=run_id,
+                workdir=out,
+                goal_id=f"eval-{args.suite}-{args.task_id}",
+                agent=str(args.agent),
+                model=resolve_model("maker"),
+                swarm=args.swarm,
+                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+            )
+            path = write_manifest(out, manifest)
+            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
+            print("note: offline scores are Manifest-only — never Gate inputs")
+            return 0 if ok else 1
         return 0
     rc = app_run(
         RunRequest(
@@ -436,7 +456,13 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         )
     )
     if args.suite == "wa_hard":
-        if getattr(args, "external_score", None):
+        if getattr(args, "score_har", None):
+            scores = wa_hard_mod.score_har_offline(Path(args.score_har))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = bool(float(scores.get("success") or 0) >= 1.0)
+            detail = "har_offline_scored"
+        elif getattr(args, "external_score", None):
             scores = wa_hard_mod.score_external(Path(args.external_score))
             scores.setdefault("task_id", args.task_id)
             scores.setdefault("workdir", str(out))
@@ -623,6 +649,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--external-score",
         default=None,
         help="Path to external judge JSON (wa_hard); or directory of <task_id>.json for --batch",
+    )
+    ev.add_argument(
+        "--score-har",
+        default=None,
+        help="Path to eglk_wa_trace JSON (HAR-offline stand-in); Manifest-only — never Gate",
     )
     ev.set_defaults(func=_cmd_eval)
 

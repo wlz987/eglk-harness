@@ -92,6 +92,116 @@ def score_external(result_json: Path) -> dict[str, Any]:
     return out
 
 
+def score_har_offline(trace_path: Path) -> dict[str, Any]:
+    """Deterministic offline score from an eglk WA trace JSON (HAR-like stand-in).
+
+    Never feeds Gate. Expected file shape::
+
+        {
+          "format": "eglk_wa_trace/0.1",
+          "task_id": "...",
+          "expected": {"success": true, "answer": "..."},
+          "observed": {"success": true, "answer": "..."}
+        }
+
+    Official WebArena HAR files should be converted or scored via vendor; this
+    path keeps CI green without Docker.
+    """
+    path = Path(trace_path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"trace must be a JSON object: {path}")
+    # Allow wrapping as external score file
+    if data.get("format") != "eglk_wa_trace/0.1" and "expected" not in data:
+        return score_external(path)
+
+    expected = data.get("expected") if isinstance(data.get("expected"), dict) else {}
+    observed = data.get("observed") if isinstance(data.get("observed"), dict) else {}
+    exp_ok = bool(expected.get("success"))
+    obs_ok = bool(observed.get("success"))
+    exp_ans = str(expected.get("answer") or "").strip()
+    obs_ans = str(observed.get("answer") or "").strip()
+    answer_match = (not exp_ans) or (exp_ans == obs_ans)
+    success = 1.0 if (exp_ok == obs_ok and obs_ok and answer_match) else 0.0
+    out: dict[str, Any] = {
+        "suite": "wa_hard",
+        "task_id": str(data.get("task_id") or ""),
+        "judge": "eglk_har_offline",
+        "source": str(path),
+        "status": "har_offline_scored",
+        "success": success,
+        "expected_success": exp_ok,
+        "observed_success": obs_ok,
+        "answer_match": answer_match,
+        "note": "Manifest-only — never Gate input",
+    }
+    out.pop("admit", None)
+    out.pop("gate", None)
+    return out
+
+
+def vendor_root(eval_root: Path | None = None) -> Path | None:
+    """Return webarena-verified / LH-linked vendor path if present."""
+    roots: list[Path] = []
+    if eval_root is not None:
+        roots.append(Path(eval_root) / "vendor")
+        roots.append(Path(eval_root) / "wa_hard" / "vendor")
+    here = Path(__file__).resolve()
+    # .../domain/eval/wa_hard.py → alw
+    if len(here.parents) > 5:
+        roots.append(here.parents[5] / "experiment" / "eval" / "vendor")
+    for root in roots:
+        for cand in (
+            root / "webarena-verified",
+            root / "WebArena-Verified",
+            root / "LongHorizon-Harness" / "eval",
+        ):
+            if cand.is_dir():
+                return cand
+    return None
+
+
+def vendor_status(eval_root: Path | None = None) -> dict[str, Any]:
+    """Structured skip/ready report for Docker + vendor (never raises)."""
+    import shutil
+
+    root = vendor_root(eval_root)
+    docker = shutil.which("docker") is not None
+    return {
+        "vendor_path": str(root) if root else None,
+        "vendor_ready": root is not None,
+        "docker_ready": docker,
+        "can_run_live_hard": bool(root) and docker,
+        "note": "scores never feed Gate; skip live Hard when not can_run_live_hard",
+    }
+
+
+def score_via_vendor(
+    *,
+    task_id: str,
+    workdir: Path,
+    eval_root: Path | None = None,
+) -> dict[str, Any]:
+    """Best-effort vendor hook. Returns skip scores when environment is incomplete."""
+    st = vendor_status(eval_root)
+    if not st["can_run_live_hard"]:
+        out = score_placeholder(task_id=task_id, workdir=workdir)
+        out["status"] = "vendor_skipped"
+        out["vendor"] = st
+        out["judge"] = "vendor_unavailable"
+        return out
+    # Vendor present: still do not invent a full Docker driver here — record ready.
+    out = score_placeholder(task_id=task_id, workdir=workdir)
+    out["status"] = "vendor_ready_not_executed"
+    out["vendor"] = st
+    out["judge"] = "webarena_verified_vendor"
+    out["note"] = (
+        "Vendor tree detected; invoke official webarena-verified CLI externally "
+        "then pass --external-score. Never feed Gate."
+    )
+    return out
+
+
 def run_batch(
     eval_root: Path,
     *,
