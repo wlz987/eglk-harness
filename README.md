@@ -41,7 +41,7 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | Command | Role |
 |---------|------|
 | `init` | Scaffold `.eglk-harness/` + `.goal.md` |
-| `doctor` | PATH / schemas / skills / MCP / `host_tick_timeout` / eval vendor hints；`--install-codex-gui` 显式装插件 |
+| `doctor` | PATH / schemas / skills / MCP / `host_tick_timeout` / eval vendor hints；`--json`；`--install-codex-gui` 显式装插件 |
 | `run` | STEP 0 compile → four-phase tick |
 | `status` | Read-only tree / decision count / tick·focus·unc (signal) / quota / leaf；`--json` |
 | `dashboard` | Read-only HTTP browse（无 approve/inject） |
