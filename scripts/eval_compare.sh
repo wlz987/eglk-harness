@@ -56,6 +56,13 @@ else
     --agent mock --prepare-only
 fi
 
+echo "-- weave_lh fixture --"
+if [[ -x "$EVAL_ROOT/scripts/run_weave_lh_smoke.sh" ]]; then
+  WEAVE_LH_OUT="$OUT/weave_lh" bash "$EVAL_ROOT/scripts/run_weave_lh_smoke.sh"
+else
+  echo "skip weave_lh smoke script"
+fi
+
 echo "-- osworld_aux prepare --"
 OS_TASK="$(python3 - <<PY
 import json
@@ -74,8 +81,16 @@ if [[ -n "$OS_TASK" ]]; then
     --eval-root "$EVAL_ROOT" \
     --workdir "$OUT/osworld" \
     --prepare-only
+  if [[ -x "$EVAL_ROOT/scripts/run_osworld_smoke.sh" ]]; then
+    OSWORLD_OUT="$OUT/osworld_smoke" bash "$EVAL_ROOT/scripts/run_osworld_smoke.sh" || true
+  fi
 else
   echo "skip osworld (no pack.example tasks)"
+fi
+
+if [[ -x "$EVAL_ROOT/scripts/doctor_eval_env.sh" ]]; then
+  echo "-- doctor_eval_env --"
+  bash "$EVAL_ROOT/scripts/doctor_eval_env.sh" || true
 fi
 
 python3 - <<PY
@@ -92,6 +107,7 @@ if ws.is_file():
     s = json.loads(ws.read_text())
     rows.append({"suite": "wa_hard_scored", "count": s.get("count"), "summary": str(ws)})
 rows.append({"suite": "weave_thin", "status": "ran"})
+rows.append({"suite": "weave_lh", "status": "fixture_or_skipped"})
 rows.append({"suite": "osworld_aux", "status": "prepared_or_skipped"})
 cmp_path = out / "compare_summary.json"
 cmp_path.write_text(json.dumps({"note": "scores never Gate", "rows": rows}, indent=2) + "\n")

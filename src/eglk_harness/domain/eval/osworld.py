@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,10 @@ class OsWorldTask:
 
 
 def load_pack_index(eval_root: Path) -> list[OsWorldTask]:
-    path = eval_root / "osworld_aux" / "pack.example.json"
+    root = Path(eval_root) / "osworld_aux"
+    path = root / "pack.json"
+    if not path.is_file():
+        path = root / "pack.example.json"
     if not path.is_file():
         return []
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -59,40 +63,81 @@ def materialize_goal(task: OsWorldTask, out_dir: Path) -> Path:
     return goal
 
 
-def score_placeholder(*, task_id: str, workdir: Path) -> dict[str, Any]:
+def path_hint(eval_root: Path | None = None) -> Path | None:
+    """Return vendor OSWorld harness path if present under eval_root or alw."""
+    cands: list[Path] = []
+    if eval_root is not None:
+        er = Path(eval_root)
+        cands.extend(
+            [
+                er / "vendor" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness",
+                er / "vendor" / "OSWorldv2-harness",
+            ]
+        )
+    else:
+        here = Path(__file__).resolve()
+        if len(here.parents) > 5:
+            alw = here.parents[5]
+            cands.extend(
+                [
+                    alw
+                    / "experiment"
+                    / "eval"
+                    / "vendor"
+                    / "LongHorizon-Harness"
+                    / "eval"
+                    / "OSWorldv2-harness",
+                    alw / "experiment" / "eval" / "vendor" / "OSWorldv2-harness",
+                    alw / "reference" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness",
+                ]
+            )
+    for cand in cands:
+        if cand.is_dir() and any(cand.iterdir()):
+            return cand
+    return None
+
+
+def vendor_status(eval_root: Path | None = None) -> dict[str, Any]:
+    root = path_hint(eval_root)
+    n = sum(1 for _ in root.rglob("*") if _.is_file()) if root else 0
+    return {
+        "vendor_path": str(root) if root else None,
+        "vendor_ready": root is not None and n >= 5,
+        "docker_ready": shutil.which("docker") is not None,
+        "file_count": n,
+        "note": "scores never feed Gate; skip live OSWorld when not vendor_ready",
+    }
+
+
+def score_external(result_json: Path) -> dict[str, Any]:
+    data = json.loads(Path(result_json).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"external score must be a JSON object: {result_json}")
+    scores = data.get("scores") if isinstance(data.get("scores"), dict) else data
+    out = {str(k): v for k, v in scores.items()}
+    out.setdefault("judge", "external_osworld")
+    out.setdefault("source", str(result_json))
+    out["status"] = "external_scored"
+    out["suite"] = "osworld_aux"
+    out.pop("admit", None)
+    out.pop("gate", None)
+    return out
+
+
+def score_placeholder(
+    *,
+    task_id: str,
+    workdir: Path,
+    eval_root: Path | None = None,
+) -> dict[str, Any]:
+    st = vendor_status(eval_root)
     return {
         "suite": "osworld_aux",
         "task_id": task_id,
         "judge": "external_osworld",
         "workdir": str(workdir),
-        "status": "recorded_only",
+        "status": "vendor_skipped" if not st["vendor_ready"] else "recorded_only",
+        "vendor": st,
         "note": "Wire OSWorldv2-harness from vendor/; never feed Gate",
-        "vendor_hint": str(path_hint(workdir) or ""),
+        "vendor_hint": st.get("vendor_path") or "",
     }
-
-
-def path_hint(eval_root: Path | None = None) -> Path | None:
-    """Return vendor OSWorld harness path if present under eval_root or alw."""
-    roots: list[Path] = []
-    if eval_root is not None:
-        roots.append(Path(eval_root))
-        roots.append(Path(eval_root).parent)  # experiment/
-        roots.append(Path(eval_root).parents[1] if len(Path(eval_root).parents) > 1 else Path(eval_root))
-    here = Path(__file__).resolve()
-    # .../alw/eglk-harness/src/eglk_harness/domain/eval/osworld.py → alw
-    if len(here.parents) > 5:
-        roots.append(here.parents[5])
-    seen: set[Path] = set()
-    for root in roots:
-        root = root.resolve()
-        if root in seen:
-            continue
-        seen.add(root)
-        for cand in (
-            root / "experiment" / "eval" / "vendor" / "OSWorldv2-harness",
-            root / "eval" / "vendor" / "OSWorldv2-harness",
-            root / "vendor" / "OSWorldv2-harness",
-        ):
-            if cand.is_dir():
-                return cand
-    return None

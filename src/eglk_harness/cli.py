@@ -32,6 +32,7 @@ from eglk_harness.domain.product.status import collect_status
 from eglk_harness.domain.product.update_check import check_update
 from eglk_harness.domain.eval import wa_hard as wa_hard_mod
 from eglk_harness.domain.eval import osworld as osworld_mod
+from eglk_harness.domain.eval import weave_lh as weave_lh_mod
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -420,6 +421,13 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             print(f"error: unknown osworld_aux task_id={args.task_id}", flush=True)
             return 2
         osworld_mod.materialize_goal(task, out)
+    elif args.suite == "weave_lh":
+        tasks = {t.task_id: t for t in weave_lh_mod.load_pack_index(eval_root)}
+        task = tasks.get(args.task_id)
+        if task is None:
+            print(f"error: unknown weave_lh task_id={args.task_id}", flush=True)
+            return 2
+        weave_lh_mod.materialize_goal(task, out)
     else:
         prepare_task_workdir(eval_root, suite=args.suite, task_id=args.task_id, out_dir=out)
     init_project(out)
@@ -445,6 +453,48 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
             print("note: offline scores are Manifest-only — never Gate inputs")
             return 0 if ok else 1
+        if args.suite == "weave_lh" and getattr(args, "external_score", None):
+            scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
+                "status"
+            ) == "external_scored"
+            detail = "weave_lh_external"
+            run_id = new_run_id("eval")
+            manifest = build_manifest(
+                run_id=run_id,
+                workdir=out,
+                goal_id=f"eval-{args.suite}-{args.task_id}",
+                agent=str(args.agent),
+                model=resolve_model("maker"),
+                swarm=args.swarm,
+                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+            )
+            path = write_manifest(out, manifest)
+            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
+            print("note: offline scores are Manifest-only — never Gate inputs")
+            return 0 if ok else 1
+        if args.suite == "osworld_aux" and getattr(args, "external_score", None):
+            scores = osworld_mod.score_external(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = True
+            detail = "osworld_external"
+            run_id = new_run_id("eval")
+            manifest = build_manifest(
+                run_id=run_id,
+                workdir=out,
+                goal_id=f"eval-{args.suite}-{args.task_id}",
+                agent=str(args.agent),
+                model=resolve_model("maker"),
+                swarm=args.swarm,
+                extra={"scores": scores, "eval_ok": ok, "eval_detail": detail},
+            )
+            path = write_manifest(out, manifest)
+            print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
+            print("note: offline scores are Manifest-only — never Gate inputs")
+            return 0
         return 0
     rc = app_run(
         RunRequest(
@@ -473,17 +523,39 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             ok = True
             detail = "recorded_only"
     elif args.suite == "osworld_aux":
-        scores = osworld_mod.score_placeholder(task_id=args.task_id, workdir=out)
+        if getattr(args, "external_score", None):
+            scores = osworld_mod.score_external(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = True
+            detail = "external_scored"
+        else:
+            scores = osworld_mod.score_placeholder(task_id=args.task_id, workdir=out, eval_root=eval_root)
+            ok = True
+            detail = "recorded_only"
         hint = osworld_mod.path_hint(eval_root)
         if hint is not None:
             scores["vendor_hint"] = str(hint)
-        ok = True
-        detail = "recorded_only"
+    elif args.suite == "weave_lh":
+        if getattr(args, "external_score", None):
+            scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
+            scores.setdefault("task_id", args.task_id)
+            scores.setdefault("workdir", str(out))
+            ok = True
+            detail = "external_scored"
+        else:
+            scores = weave_lh_mod.score_placeholder(
+                task_id=args.task_id, workdir=out, eval_root=eval_root
+            )
+            ok = True
+            detail = scores.get("status") or "recorded_only"
     else:
         scored = score_offline(
             suite=args.suite, task_id=args.task_id, workdir=out, eval_root=eval_root
         )
         scores, ok, detail = scored.scores, scored.ok, scored.detail
+    # silence unused when prepare path took early return
+    _ = rc
     run_id = new_run_id("eval")
     manifest = build_manifest(
         run_id=run_id,
@@ -630,7 +702,11 @@ def build_parser() -> argparse.ArgumentParser:
         "eval",
         help="Auxiliary eval suite runner (offline scores never feed Gate)",
     )
-    ev.add_argument("--suite", required=True, choices=("weave_thin", "wa_hard", "osworld_aux", "scenarios"))
+    ev.add_argument(
+        "--suite",
+        required=True,
+        choices=("weave_thin", "weave_lh", "wa_hard", "osworld_aux", "scenarios"),
+    )
     ev.add_argument("--task-id", default=None, help="Single task id (required unless --batch)")
     ev.add_argument("--eval-root", default=None, help="Path to experiment/eval (default: auto)")
     ev.add_argument("--workdir", default="./.eglk-eval-workdir", help="Materialized task workdir")

@@ -14,7 +14,7 @@ eglk-harness doctor
 # when published: uv tool install eglk-harness
 ```
 
-Release checklist: [`RELEASE.md`](./RELEASE.md) · `make release-check` · version **0.1.0a2**.
+Release checklist: [`RELEASE.md`](./RELEASE.md) · `make release-check` · version **0.1.0b1**.
 
 ## Quick start
 

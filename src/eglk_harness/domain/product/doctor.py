@@ -176,4 +176,53 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         ok = False
     report.checks.append(DoctorCheck(name="plugins", ok=ok, detail=detail))
 
+    # Eval vendor hints (Manifest-only scorers; never Gate)
+    from eglk_harness.domain.eval.eval_runner import default_eval_root
+    from eglk_harness.domain.eval import wa_hard as wa_hard_mod
+    from eglk_harness.domain.eval import osworld as osworld_mod
+
+    eval_root = default_eval_root()
+    if eval_root is None:
+        report.checks.append(
+            DoctorCheck(
+                name="eval_root",
+                ok=True,
+                detail="alw/experiment/eval not found beside checkout [warn]",
+            )
+        )
+    else:
+        wa_st = wa_hard_mod.vendor_status(eval_root)
+        os_hint = osworld_mod.path_hint(eval_root)
+        lh_weave = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness"
+        lh_os = eval_root / "vendor" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness"
+        report.checks.append(
+            DoctorCheck(
+                name="eval_root",
+                ok=True,
+                detail=str(eval_root),
+            )
+        )
+        report.checks.append(
+            DoctorCheck(
+                name="eval_wa_vendor",
+                ok=True,
+                detail=(
+                    f"docker={wa_st.get('docker_ready')} "
+                    f"vendor={wa_st.get('vendor_path') or 'none'} "
+                    f"can_live_hard={wa_st.get('can_run_live_hard')}"
+                ),
+            )
+        )
+        report.checks.append(
+            DoctorCheck(
+                name="eval_lh_vendor",
+                ok=True,
+                detail=(
+                    f"weave={'yes' if lh_weave.is_dir() else 'no'} "
+                    f"osworld_lh={'yes' if lh_os.is_dir() else 'no'} "
+                    f"osworld_hint={os_hint or 'none'}"
+                ),
+            )
+        )
+
     return report
