@@ -127,6 +127,26 @@ def probe_wa_sites(config_path: Path | None = None) -> dict[str, Any]:
     }
 
 
+def _parse_ram_size_gb(raw: str) -> float:
+    text = str(raw or "").strip().upper()
+    if not text:
+        return 0.0
+    if text.endswith("G"):
+        try:
+            return float(text[:-1])
+        except ValueError:
+            return 0.0
+    if text.endswith("M"):
+        try:
+            return float(text[:-1]) / 1024.0
+        except ValueError:
+            return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
+
+
 def collect_eval_env_status(eval_root: Path) -> dict[str, Any]:
     """Full eval environment status (used by doctor_eval_env.sh and doctor CLI)."""
     eval_root = Path(eval_root)
@@ -168,6 +188,14 @@ def collect_eval_env_status(eval_root: Path) -> dict[str, Any]:
     weave_files = _count_files(weave) if weave.is_dir() else 0
     osw_files = _count_files(osw) if osw.is_dir() else 0
     hf_token = bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"))
+    osworld_ram = os.environ.get("OSWORLD_RAM_SIZE", "16G")
+    osworld_ram_gb = _parse_ram_size_gb(osworld_ram)
+    strict_png = os.environ.get("WEAVEBENCH_STRICT_PNG_PROVENANCE", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     return {
         "eval_root": str(eval_root),
@@ -199,6 +227,10 @@ def collect_eval_env_status(eval_root: Path) -> dict[str, Any]:
         "can_weave_full": kvm and docker and weave.is_dir() and weave_files >= 5 and tunnel and docker_dns,
         "can_osworld_smoke": osw.is_dir() and osw_files >= 5,
         "can_osworld_full": osw.is_dir() and hf_token and kvm and docker,
+        "osworld_ram_size": osworld_ram,
+        "osworld_ram_gb": osworld_ram_gb,
+        "osworld_ram_ok_16g": osworld_ram_gb >= 16.0,
+        "weavebench_strict_png_provenance": strict_png,
         "note": "scores never feed Gate; missing deps → skip not fail",
     }
 
@@ -254,6 +286,13 @@ def doctor_checks_from_status(status: dict[str, Any]) -> list[tuple[str, bool, s
             "eval_weave_pack",
             int(status.get("weave_lh_pack_count") or 0) >= 100,
             f"weave_lh pack tasks={status.get('weave_lh_pack_count')} vendor_md={status.get('lh_weave_task_md')}",
+        )
+    )
+    rows.append(
+        (
+            "eval_vm_ram_16g",
+            bool(status.get("osworld_ram_ok_16g")),
+            f"OSWORLD_RAM_SIZE={status.get('osworld_ram_size')} ({status.get('osworld_ram_gb')}G)",
         )
     )
     rows.append(
