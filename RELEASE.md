@@ -4,18 +4,27 @@ Version: **0.1.0b1** (empirical eval wiring beta).
 
 ## Local release-check
 
+在同级目录 [`eglk-harness_test`](../eglk-harness_test) 中运行：
+
+```bash
+cd ../eglk-harness_test
+pip install -e ../eglk-harness -e .
+make release-check
+```
+
+在实现包中仅做分发检查：
+
 ```bash
 cd eglk-harness
-make release-check
 make dist-check   # python -m build + twine check (no upload)
 ```
 
-Runs: pytest · projections · soak-bypass mock · maturity_gate · packaging metadata.
+`release-check` 包含：pytest · projections · soak-bypass mock · maturity_gate · CLI 契约。
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
 eglk-harness doctor   # includes eval vendor hints when EGLK_EVAL_ROOT/vendor present
 # when published: uv tool install eglk-harness
 ```
@@ -31,13 +40,4 @@ eglk-harness doctor   # includes eval vendor hints when EGLK_EVAL_ROOT/vendor pr
 Live Weave/OSWorld/WA/TB matrix runs require operator-provided vendor trees under
 `$EGLK_EVAL_ROOT/vendor/` (not bundled). Scores from eval **never feed Gate**.
 
-```bash
-# Optional: point at an external eval asset tree
-export EGLK_EVAL_ROOT=/path/to/eval-assets
-
-# Long natural split (live Codex; ≥30min or tree split)
-bash scripts/run_long_natural_split.sh
-
-# Live long maturity lane (vLLM :28000)
-bash scripts/run_live_long_maturity.sh
-```
+手动成熟度脚本见 `eglk-harness_test/scripts/`（如 `run_long_natural_split.sh`）。

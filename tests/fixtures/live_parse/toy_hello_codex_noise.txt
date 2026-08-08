@@ -1,4 +1,0 @@
-{"type":"thread.started","thread_id":"thr_abc"}
-{"type":"item.completed","item":{"type":"agent_message","text":"Working on hello.txt"}}
-{"type":"item.completed","item":{"type":"agent_message","text":"{\n  \"thread_id\": \"thr_abc\",\n  \"type\": \"response\",\n  \"summary\": \"wrote hello\"\n}"}}
-{"type":"response.completed"}

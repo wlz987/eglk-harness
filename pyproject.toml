@@ -17,7 +17,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 eval = [
   "playwright>=1.40",
   "mcp>=1.0",
@@ -36,9 +35,3 @@ eglk_harness = [
   "domain/memory/skills/*.md",
   "bundled_eval/**/*",
 ]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src", "tests"]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"

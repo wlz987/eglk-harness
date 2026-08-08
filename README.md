@@ -8,12 +8,13 @@
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
 eglk-harness doctor
 # when published: uv tool install eglk-harness
 ```
 
-Release checklist: [`RELEASE.md`](./RELEASE.md) · `make release-check` · version **0.1.0b1**.
+Release checklist: [`RELEASE.md`](./RELEASE.md) · version **0.1.0b1**.  
+测试与 `release-check` 见同级目录 **`eglk-harness_test/`**。
 
 ## Quick start
 
@@ -57,20 +58,11 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
 示例任务索引见 `src/eglk_harness/bundled_eval/`；可用 `EGLK_EVAL_ROOT` 覆盖。
 
-## Develop
+## 验证
+
+单元测试与成熟度门禁在 **`eglk-harness_test/`**（本包不含 `tests/`）：
 
 ```bash
-pytest
-eglk-harness check-projections
-eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
-make maturity                                  # pytest + projections + soak + eval_compare
-make release-check                             # maturity + CLI/version contract
-# Live soak (manual gate):
-# EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
-# Natural long run (Codex; split or ≥30min):
-# bash scripts/run_long_natural_split.sh
-# List eval tasks:
-# eglk-harness eval --suite wa_hard --list-tasks
+cd ../eglk-harness_test && pip install -e ../eglk-harness -e . && pytest -q
 ```
 
-Maturity sheet: [`MATURITY.md`](./MATURITY.md).
