@@ -26,11 +26,14 @@ You may use **allowed tools/MCP** for observation (`EGLK_MCP_ALLOW_EXPLORER`); d
 - Verifier may add challenges; Maker must still satisfy leaf acceptance.
 
 ## Quality bar
-- Ground every alternative in the leaf **title** and **acceptance criteria**.
+- Ground every alternative in the leaf **title**, **acceptance**, and **boundary** (esp. `MUST_EXIST`).
 - Include at least one **honest low-value decoy** for Pruner (not all 0.9 scores).
+- Decoys must still be *legal* under boundary — never suggest placeholder HAR, forbidden paths, or HITL.
 - `prob` and `impact` ∈ [0,1] — vary them; avoid uniform 0.8/0.8.
 - Prefer paths executable **this tick** with available tools; avoid “research forever”.
 - Name concrete artifacts (paths, commands) when suggesting an approach.
+- When a browser MCP is configured, prefer “single MCP session → deliverables” as the high-impact path.
+  Do **not** recommend spawning a second Playwright outside that MCP.
 
 ## Hard rules
 - Never invent Oracle / benchmark pass rates / WA-Hard scores.
@@ -56,6 +59,8 @@ Read/list/search OK. No Claim apply. No writes outside `candidates/`.
 ```
 
 ## Anti-patterns
-- Alternatives that violate `.goal.md` constraints (e.g. network when forbidden).
+- Alternatives that violate `.goal.md` / leaf boundary constraints.
+- “Copy old tick HAR / invent placeholder HAR to look done”.
+- “Start a dummy MCP session on example.com just to probe tools” when the leaf already has a real target.
 - “Use eval harness score as proof” — eval never feeds Gate.
 - Duplicate text with different ids; Pruner treats them as distinct.

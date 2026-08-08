@@ -260,30 +260,39 @@ def compile_goal(
 
 
 def load_goal_constraints(workdir: Path) -> list[str]:
-    """Read constraint bullets from ``.goal_format.md`` or ``.goal.md`` for leaf boundary."""
+    """Merge constraint bullets from ``.goal.md`` and ``.goal_format.md`` for leaf boundary.
+
+    Eval drivers often append mechanical directives (``MUST_EXIST`` / ``FORBIDDEN_*``)
+    to ``.goal.md`` after STEP0 compile. Compile frames may also list softer
+    Constraints. Both sources must reach Gate/Checker — never drop ``.goal.md``
+    just because ``.goal_format.md`` already has a Constraints section.
+    """
     workdir = workdir.resolve()
-    gf = workdir / GOAL_FORMAT_NAME
-    if gf.is_file():
-        cons = _section_bullets(
-            gf.read_text(encoding="utf-8"),
-            "constraints",
-            "constraint",
-            "边界",
-            "约束",
-        )
-        if cons:
-            return cons
+    headers_goal = (
+        "constraints",
+        "constraint",
+        "边界",
+        "约束",
+        "boundary",
+        "delivery",
+        "deliverables",
+    )
+    headers_format = ("constraints", "constraint", "边界", "约束")
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    def _extend(lines: list[str]) -> None:
+        for line in lines:
+            key = line.strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(key)
+
     goal = workdir / ".goal.md"
     if goal.is_file():
-        return _section_bullets(
-            goal.read_text(encoding="utf-8"),
-            "constraints",
-            "constraint",
-            "边界",
-            "约束",
-            "boundary",
-            "delivery",
-            "deliverables",
-            "live environment",
-        )
-    return []
+        _extend(_section_bullets(goal.read_text(encoding="utf-8"), *headers_goal))
+    gf = workdir / GOAL_FORMAT_NAME
+    if gf.is_file():
+        _extend(_section_bullets(gf.read_text(encoding="utf-8"), *headers_format))
+    return merged

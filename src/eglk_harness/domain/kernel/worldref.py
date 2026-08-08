@@ -167,16 +167,67 @@ def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
     return written
 
 
+def _ack_or_write(
+    workdir: Path,
+    rel: str,
+    content: Any,
+    written: list[str],
+) -> None:
+    """Write text content when present; otherwise acknowledge an existing file."""
+    rel = str(rel).strip().lstrip("/").replace("\\", "/")
+    if not rel or ".." in Path(rel).parts:
+        return
+    if content is not None and not isinstance(content, (Mapping, list, tuple, dict)):
+        written.extend(apply_files(workdir, {rel: str(content)}))
+        return
+    if (workdir / rel).is_file():
+        written.append(rel)
+
+
 def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> list[str]:
-    """Apply supported Claim payload kinds. Returns list of written or acknowledged paths."""
+    """Apply supported Claim payload kinds. Returns list of written or acknowledged paths.
+
+    Accepted ``payload.files`` shapes:
+    - ``{rel_path: content_str}`` — write text files
+    - ``[{path, content?}, ...]`` — write when content present; else ack existing path
+    - ``{key: {path, content?, description?}, ...}`` — nested refs (MCP deliverables);
+      never stringify a description-only dict into a root-level stub file
+    - nested screenshot lists under a key are path-ack only
+    """
     if not payload:
         return []
     files = payload.get("files")
+    workdir = workdir.resolve()
+    written: list[str] = []
     if isinstance(files, Mapping):
-        return apply_files(workdir, {str(k): str(v) for k, v in files.items()})
+        for key, val in files.items():
+            if isinstance(val, str):
+                written.extend(apply_files(workdir, {str(key): val}))
+                continue
+            if isinstance(val, Mapping):
+                rel = str(val.get("path") or val.get("file") or key).strip().lstrip("/")
+                content = val.get("content")
+                if content is None:
+                    content = val.get("text")
+                # Description-only nested objects must not become stub files at key path
+                if content is None and "description" in val and "path" in val:
+                    _ack_or_write(workdir, rel, None, written)
+                else:
+                    _ack_or_write(workdir, rel, content, written)
+                continue
+            if isinstance(val, list):
+                for item in val:
+                    if not isinstance(item, Mapping):
+                        continue
+                    rel = str(item.get("path") or item.get("file") or "").strip().lstrip("/")
+                    if not rel:
+                        continue
+                    content = item.get("content")
+                    if content is None:
+                        content = item.get("text")
+                    _ack_or_write(workdir, rel, content, written)
+        return written
     if isinstance(files, list):
-        written: list[str] = []
-        workdir = workdir.resolve()
         for item in files:
             if not isinstance(item, Mapping):
                 continue
@@ -186,9 +237,6 @@ def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> lis
             content = item.get("content")
             if content is None:
                 content = item.get("text")
-            if content is not None:
-                written.extend(apply_files(workdir, {rel: str(content)}))
-            elif (workdir / rel).is_file():
-                written.append(rel)
+            _ack_or_write(workdir, rel, content, written)
         return written
     return []
