@@ -79,20 +79,53 @@ def snapshot_workdir(
     return WorldRef(snapshot=snapshot_dir, revision=revision, meta=meta_out)
 
 
-_RESTORE_SKIP_DIRS = frozenset({".eglk-harness", ".git", ".venv", "agent_runs"})
+_RESTORE_CORE_SKIP = frozenset({".eglk-harness", ".git", ".venv"})
+_DEFAULT_PRESERVE_TOP = ("artifacts", "deliverables", "evidence_pack", "agent_runs", "out")
+
+
+def _preserve_top_dirs(workdir: Path) -> frozenset[str]:
+    """Top-level dirs kept across repair restore (delivery / MCP captures).
+
+    Sources (suite-agnostic):
+    - always: ``.eglk-harness`` / ``.git`` / ``.venv``
+    - env ``EGLK_RESTORE_PRESERVE_DIRS`` (comma-separated top names)
+    - first path segment of every ``MUST_EXIST`` constraint in the goal
+    """
+    import os
+
+    names: set[str] = set(_RESTORE_CORE_SKIP)
+    raw = (os.environ.get("EGLK_RESTORE_PRESERVE_DIRS") or ",".join(_DEFAULT_PRESERVE_TOP)).strip()
+    for part in raw.split(","):
+        top = part.strip().strip("/").split("/")[0]
+        if top and top not in {".", ".."}:
+            names.add(top)
+    try:
+        from eglk_harness.domain.kernel.compile_goal import load_goal_constraints
+        from eglk_harness.domain.runtime.boundary_verify import parse_boundary_rules
+
+        rules = parse_boundary_rules(load_goal_constraints(workdir))
+        for rel, _note in rules.must_exist:
+            top = str(rel).strip().strip("/").split("/")[0]
+            if top and top not in {".", ".."} and not top.startswith("."):
+                names.add(top)
+    except Exception:  # noqa: BLE001 — restore must not fail closed on parse
+        pass
+    return frozenset(names)
 
 
 def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
     """Restore workdir from snapshot; returns a new WorldRef with revision+1.
 
-    ``agent_runs/`` is preserved across repair rollback so MCP/browser deliverables
-    are not destroyed when Gate retries a leaf.
+    Delivery top-level dirs (from goal ``MUST_EXIST`` / ``EGLK_RESTORE_PRESERVE_DIRS``)
+    are preserved across repair rollback so tool/MCP deliverables are not destroyed
+    when Gate retries a leaf.
     """
     workdir = workdir.resolve()
-    # Remove tracked content except harness/git/agent_runs — rebuild from snapshot
+    skip = _preserve_top_dirs(workdir)
+    # Remove tracked content except preserve set — rebuild from snapshot
     if workdir.exists():
         for child in list(workdir.iterdir()):
-            if child.name in _RESTORE_SKIP_DIRS:
+            if child.name in skip:
                 continue
             if child.is_dir():
                 shutil.rmtree(child)
@@ -104,7 +137,7 @@ def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
     for child in world_ref.snapshot.iterdir():
         if child.name == ".worldref.json":
             continue
-        if child.name == "agent_runs" and (workdir / "agent_runs").exists():
+        if child.name in skip and (workdir / child.name).exists():
             continue
         dest = workdir / child.name
         if child.is_dir():

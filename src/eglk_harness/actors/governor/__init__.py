@@ -80,7 +80,7 @@ class GovernorActor(RequestResponseActor):
             extra=(
                 'JSON shape: {"split_node":"...","children":[{"id","title","done_criteria":[]}]}. '
                 "Children must partition parent acceptance / goal deliverables — "
-                "never invent wa_start_session/session_id/isinstance micro-leaves."
+                "never invent tool-session / session_id / isinstance micro-leaves."
             ),
             tick=tick,
             subgoal_id=leaf_id,

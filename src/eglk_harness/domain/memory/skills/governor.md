@@ -26,7 +26,7 @@ not invent tool-wiring chores.
 ## Authority boundary
 - **You propose structure** (child leaves). Gate admits leaves; you do not.
 - **Zero HITL**: never ask a human; never emit `ask` / `blocked` for operator approval.
-- **Gate truth-blind**: never cite Weave/OSWorld/TB/WA scores, Oracle, or scenario.check.
+- **Gate truth-blind**: never cite eval suite scores, Oracle, or scenario.check.
 
 ## When to split
 - Parent leaf has `repair_streak >= 2` (or orchestrator signals stall).
@@ -82,6 +82,6 @@ Observation only (list/read/search). Zero-write on main ring (`claims/`, `eviden
 - Splitting a single blocking `time.sleep` bench into poll/restart (one blocking call is often required).
 - Criteria that encode wall-clock longer than tick timeout without orchestrator long-run mode.
 - Inventing eval tasks or external benchmark ids as done_criteria.
-- **Tool-API micro-leaves**: `wa_start_session` / `session_id` / `isinstance(...)` / `len(response)` /
-  “assert JSON has field X” as the *entire* leaf — these derail the goal into harness plumbing.
-- Replacing human Summary/Done criteria with browser-tool smoke tests.
+- **Tool-API micro-leaves**: criteria whose whole job is “call tool X / assert session_id /
+  isinstance / len(response)” — these derail the goal into harness plumbing.
+- Replacing human Summary/Done criteria with smoke tests of the tool surface.

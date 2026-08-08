@@ -36,7 +36,7 @@ You may use **allowed tools/MCP** for observation (`EGLK_MCP_ALLOW_EXPLORER`); d
   Do **not** recommend spawning a second Playwright outside that MCP.
 
 ## Hard rules
-- Never invent Oracle / benchmark pass rates / WA-Hard scores.
+- Never invent Oracle / eval suite scores.
 - Never propose HITL, ask human, or Manager-style `done` shortcuts.
 - Do not write Claims or Evidence; exploration ≠ completion.
 

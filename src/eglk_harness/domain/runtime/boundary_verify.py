@@ -87,21 +87,29 @@ def _is_placeholder_har(path: Path) -> bool:
 
 
 def _forbidden_hits(workdir: Path, prefixes: Sequence[str]) -> list[str]:
+    """Flag existing paths that match a forbidden prefix (generic, not suite-specific)."""
     hits: list[str] = []
     for prefix in prefixes:
-        p = prefix.strip()
+        p = prefix.strip().rstrip("/")
         if not p:
             continue
         base = workdir / p
         if base.exists():
             hits.append(f"forbidden path exists: {p}")
-        # Also scan agent_runs for matching prefixes
-        agent_runs = workdir / "agent_runs"
-        if agent_runs.is_dir():
-            for child in agent_runs.iterdir():
-                rel = f"agent_runs/{child.name}"
-                if rel.startswith(p) or child.name.startswith(p.replace("agent_runs/", "")):
-                    hits.append(f"forbidden path exists: {rel}")
+            continue
+        parent_rel = str(Path(p).parent).replace("\\", "/")
+        name_pref = Path(p).name
+        parent = workdir if parent_rel in {".", ""} else workdir / parent_rel
+        if not parent.is_dir():
+            continue
+        for child in parent.iterdir():
+            rel = (
+                child.name
+                if parent_rel in {".", ""}
+                else f"{parent_rel}/{child.name}".replace("\\", "/")
+            )
+            if rel.startswith(p) or (name_pref and child.name.startswith(name_pref)):
+                hits.append(f"forbidden path exists: {rel}")
     return hits
 
 
