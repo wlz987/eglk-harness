@@ -79,13 +79,20 @@ def snapshot_workdir(
     return WorldRef(snapshot=snapshot_dir, revision=revision, meta=meta_out)
 
 
+_RESTORE_SKIP_DIRS = frozenset({".eglk-harness", ".git", ".venv", "agent_runs"})
+
+
 def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
-    """Restore workdir from snapshot; returns a new WorldRef with revision+1."""
+    """Restore workdir from snapshot; returns a new WorldRef with revision+1.
+
+    ``agent_runs/`` is preserved across repair rollback so MCP/browser deliverables
+    are not destroyed when Gate retries a leaf.
+    """
     workdir = workdir.resolve()
-    # Remove tracked content except harness/git — rebuild from snapshot
+    # Remove tracked content except harness/git/agent_runs — rebuild from snapshot
     if workdir.exists():
         for child in list(workdir.iterdir()):
-            if child.name in {".eglk-harness", ".git", ".venv"}:
+            if child.name in _RESTORE_SKIP_DIRS:
                 continue
             if child.is_dir():
                 shutil.rmtree(child)
@@ -96,6 +103,8 @@ def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
 
     for child in world_ref.snapshot.iterdir():
         if child.name == ".worldref.json":
+            continue
+        if child.name == "agent_runs" and (workdir / "agent_runs").exists():
             continue
         dest = workdir / child.name
         if child.is_dir():
@@ -159,10 +168,27 @@ def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
 
 
 def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> list[str]:
-    """Apply supported Claim payload kinds. Returns list of written relative paths."""
+    """Apply supported Claim payload kinds. Returns list of written or acknowledged paths."""
     if not payload:
         return []
     files = payload.get("files")
     if isinstance(files, Mapping):
         return apply_files(workdir, {str(k): str(v) for k, v in files.items()})
+    if isinstance(files, list):
+        written: list[str] = []
+        workdir = workdir.resolve()
+        for item in files:
+            if not isinstance(item, Mapping):
+                continue
+            rel = str(item.get("path") or item.get("file") or "").strip().lstrip("/")
+            if not rel:
+                continue
+            content = item.get("content")
+            if content is None:
+                content = item.get("text")
+            if content is not None:
+                written.extend(apply_files(workdir, {rel: str(content)}))
+            elif (workdir / rel).is_file():
+                written.append(rel)
+        return written
     return []

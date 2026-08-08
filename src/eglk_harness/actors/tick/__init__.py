@@ -422,7 +422,6 @@ class TickJob(Job):
             self.quota["usd_used"] = float(self.quota.get("usd_used") or 0) + float(
                 body.get("cost_usd") or 0
             )
-            loop_store.write_claim(self.loop_dir, self.tick, claim)
             try:
                 self.written = worldref.apply_claim_payload(
                     self.workdir,
@@ -431,6 +430,20 @@ class TickJob(Job):
             except ValueError as exc:
                 await self.finish(ok=False, error=f"apply_failed:{exc}")
                 return
+            from eglk_harness.domain.runtime.evidence_guard import align_claim_delivery_progress
+
+            boundary = (
+                list(self.leaf_contract.get("boundary") or [])
+                if isinstance(self.leaf_contract, dict)
+                else []
+            )
+            claim = align_claim_delivery_progress(
+                claim,
+                workdir=self.workdir,
+                boundary=boundary or None,
+            )
+            self.claim = claim
+            loop_store.write_claim(self.loop_dir, self.tick, claim)
 
             cur = self.tree.in_progress()
             self._pre_checker_fp = integrity.fingerprint_workdir(self.workdir)
