@@ -41,7 +41,7 @@ You are the **Checker** for one leaf of an eglk task tree.
   put those in `artifacts` instead. Non-empty gaps/challenges force Gate `repair`.
 
 ## Long-run / multi-file leaves
-- Prefer verifying commands that already exist (`make test`, `sha256sum -c`, file reads).
+- Prefer verifying commands that already exist (`make verify`, `sha256sum -c`, file reads).
 - If Maker ran a blocking bench, confirm `perf/bench_result.json` (or equivalent) on disk —
   do not re-run the sleep yourself.
 - Quote concrete paths and exit codes in `artifacts`.

@@ -49,8 +49,8 @@ Read-only shell/MCP. No writes to `claims/`, `evidence/`, `decisions/`.
   "challenges": [
     {
       "id": "ch-makefile",
-      "title": "Makefile must invoke pytest",
-      "text": "make test must run pytest and exit 0 — not a no-op shell true"
+      "title": "Makefile must run verification",
+      "text": "make verify must run the declared check script and exit 0 — not a no-op shell true"
     },
     {
       "id": "ch-digests",

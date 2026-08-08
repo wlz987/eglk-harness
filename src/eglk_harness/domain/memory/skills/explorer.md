@@ -50,7 +50,7 @@ Read/list/search OK. No Claim apply. No writes outside `candidates/`.
   "alternatives": [
     {"text": "monolithic package with submodules", "prob": 0.25, "impact": 0.4},
     {"text": "two packages svc_a + svc_b with bridge compose", "prob": 0.75, "impact": 0.9},
-    {"text": "skip tests and only grep files", "prob": 0.15, "impact": 0.05}
+    {"text": "grep files only without persisted verification output", "prob": 0.15, "impact": 0.05}
   ]
 }
 ```

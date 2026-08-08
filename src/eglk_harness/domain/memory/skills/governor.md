@@ -53,10 +53,10 @@ Observation only (list/read/search). Zero-write on main ring (`claims/`, `eviden
   "children": [
     {
       "id": "root.01",
-      "title": "implement svc_a package + tests",
+      "title": "implement svc_a package + verification",
       "done_criteria": [
         "svc_a/core.py exports ping() -> 'a-ok'",
-        "tests/test_a.py passes via pytest"
+        "scripts/verify_a.sh exits 0"
       ]
     },
     {

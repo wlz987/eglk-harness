@@ -43,7 +43,7 @@ Gate never sees Pruner output as a score input.
   "alternatives": [
     {"id": "alt-1", "text": "two packages + bridge", "prob": 0.75, "impact": 0.9, "score": 0.675, "pruned": false},
     {"id": "alt-2", "text": "monolith only", "prob": 0.3, "impact": 0.4, "score": 0.12, "pruned": true},
-    {"id": "alt-3", "text": "skip tests", "prob": 0.1, "impact": 0.05, "score": 0.005, "pruned": true}
+    {"id": "alt-3", "text": "grep-only without verification artifacts", "prob": 0.1, "impact": 0.05, "score": 0.005, "pruned": true}
   ]
 }
 ```

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0b1 — 2026-08-09
+
+- 实现包移除内置验证套件；角色 skill 渐进披露与 goal 边界校验
+- MCP TOML 加载、SWARM 工具 profile、manifest 预算与 format-repair 加固
+
 ## 0.1.0b1 — 2026-08-07
 
 - Official WA `eval-tasks` score path: `score_from_eval_result` / `ingest_agent_runs` /
@@ -17,8 +22,8 @@
 ## 0.1.0a2 — 2026-08-07
 
 - WA-Hard dual-track: `score_har_offline` / `--score-har` (CI fixtures) + optional vendor status skip
-- Natural multi-leaf: integration coverage without pre-split; `run_long_natural_split.sh`
-- `make release-check` packaging gate; RELEASE.md install narrative
+- Natural multi-leaf: integration coverage without pre-split; long-run natural split script
+- RELEASE.md install narrative; packaging gate moved out of implementation tree
 
 ## 0.1.0a1
 

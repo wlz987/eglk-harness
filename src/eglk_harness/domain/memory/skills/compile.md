@@ -39,7 +39,7 @@ You may use **allowed tools/MCP** for observation (`EGLK_MCP_ALLOW_COMPILE` / to
   "acceptance": [
     "store.py saves URL+title pairs",
     "cli.py list prints all bookmarks",
-    "pytest tests pass"
+    "verification suite passes"
   ],
   "constraints": [
     "Do not modify .goal.md or .eglk-harness/",

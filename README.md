@@ -13,8 +13,7 @@ eglk-harness doctor
 # when published: uv tool install eglk-harness
 ```
 
-Release checklist: [`RELEASE.md`](./RELEASE.md) · version **0.1.0b1**.  
-测试与 `release-check` 见同级目录 **`eglk-harness_test/`**。
+发布前分发检查见 [`RELEASE.md`](./RELEASE.md) · 当前版本 **0.1.0b1**。
 
 ## Quick start
 
@@ -49,7 +48,7 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |
 | `eval` | 辅尺：内置 `bundled_eval/` 或 `EGLK_EVAL_ROOT`；scorer 不进 Gate |
 | `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
-| `check-projections` | CI pin vs `domain/kernel/projections.py` 常量 |
+| `check-projections` | 常量钉扎 vs `domain/kernel/projections.py` |
 
 `run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`, `--dashboard`（只读观测，非审批闸）.
 
@@ -57,12 +56,3 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 
 Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
 示例任务索引见 `src/eglk_harness/bundled_eval/`；可用 `EGLK_EVAL_ROOT` 覆盖。
-
-## 验证
-
-单元测试与成熟度门禁在 **`eglk-harness_test/`**（本包不含 `tests/`）：
-
-```bash
-cd ../eglk-harness_test && pip install -e ../eglk-harness -e . && pytest -q
-```
-

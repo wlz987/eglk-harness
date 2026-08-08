@@ -80,7 +80,7 @@ Each alternative must be either a string, or an object with keys `text` + `statu
   },
   "step_review": {
     "gains": ["workdir now contains hello.txt with the required substring"],
-    "losses": ["did not explore multi-file packaging or tests in this leaf"],
+    "losses": ["did not explore multi-file packaging or extra verification in this leaf"],
     "benefits": ["satisfies the leaf acceptance with a minimal verifiable artifact"],
     "risks": ["content could be wrong if Checker only greps and ignores encoding"]
   },
