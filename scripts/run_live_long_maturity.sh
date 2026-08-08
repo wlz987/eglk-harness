@@ -1,34 +1,22 @@
 #!/usr/bin/env bash
-# Live long-horizon maturity lane (:18000).
-# 1) natural long run with extended wall (default ≥40min sleep bench)
-# 2) soak-bypass --live (5 roles must hit LLM)
-# 3) aggregate LIVE_MATURITY.md — never feeds Gate.
+# Live long-horizon maturity lane (:28000).
 set -euo pipefail
 HARNESS="$(cd "$(dirname "$0")/.." && pwd)"
-ALW="$(cd "$HARNESS/.." && pwd)"
-# shellcheck disable=SC1091
-if [[ -f "$ALW/experiment/eval/scripts/lib_lh_benchmark_env.sh" ]]; then
-  # shellcheck source=/dev/null
-  source "$ALW/experiment/eval/scripts/lib_lh_benchmark_env.sh"
-fi
-
-OUT="${LIVE_LONG_OUT:-$ALW/experiment/runs/live_long_maturity}"
+OUT="${LIVE_LONG_OUT:-$HARNESS/runs/live_long_maturity}"
 LOG="$OUT/logs"
 mkdir -p "$OUT" "$LOG"
 TS="$(date -Is)"
 
-export EGLK_MODEL="${EGLK_MODEL:-cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit}"
-export EGLK_BASE_URL="${EGLK_BASE_URL:-http://127.0.0.1:18000/v1}"
+export EGLK_MODEL="${EGLK_MODEL:-Qwen3.6-35B-A3B-AWQ-4bit}"
+export EGLK_BASE_URL="${EGLK_BASE_URL:-http://127.0.0.1:28000/v1}"
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-$EGLK_BASE_URL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-vllm}"
 export EGLK_WIRE_API="${EGLK_WIRE_API:-responses}"
 export EGLK_COGNITIVE_TOKENS_MAX="${EGLK_COGNITIVE_TOKENS_MAX:-8000000}"
 export EGLK_MCP_DISABLE="${EGLK_MCP_DISABLE:-1}"
-# Force long-run timeouts AFTER env source — lh_benchmark.env may carry short smoke values.
 export EGLK_TICK_TIMEOUT="${EGLK_LIVE_TICK_TIMEOUT:-${EGLK_TICK_TIMEOUT:-4000}}"
 export EGLK_TIMEOUT_MAKER="${EGLK_LIVE_TIMEOUT_MAKER:-${EGLK_TIMEOUT_MAKER:-3600}}"
 export EGLK_TIMEOUT_CHECKER="${EGLK_LIVE_TIMEOUT_CHECKER:-${EGLK_TIMEOUT_CHECKER:-900}}"
-# If sourced env still has short smoke timeouts, clamp up for live long.
 if [[ "${EGLK_TIMEOUT_MAKER}" -lt 1800 ]]; then
   export EGLK_TIMEOUT_MAKER=3600
 fi
@@ -45,13 +33,11 @@ export EGLK_LONG_WALL_MIN="${EGLK_LONG_WALL_MIN:-55}"
   echo "bench_sleep_s=$EGLK_BENCH_SLEEP_S wall_min~$EGLK_LONG_WALL_MIN"
 } | tee "$OUT/LAUNCH.md"
 
-# Preflight vLLM
 if ! curl -sS -m 5 "$EGLK_BASE_URL/models" >/dev/null; then
   echo "FATAL: cannot reach $EGLK_BASE_URL/models" | tee -a "$OUT/LAUNCH.md"
   exit 1
 fi
 
-# ── 1) Extended natural long run ──
 LONG_DIR="${LONG_RUN_DIR:-$OUT/long_natural}"
 export LONG_RUN_DIR="$LONG_DIR"
 echo "== long_natural → $LONG_DIR ==" | tee -a "$OUT/LAUNCH.md"
@@ -62,7 +48,6 @@ set -e
 cp -f "$LONG_DIR/ACCEPTANCE.md" "$OUT/LONG_ACCEPTANCE.md" 2>/dev/null || true
 echo "long_rc=$LONG_RC" | tee -a "$OUT/LAUNCH.md"
 
-# ── 2) Live soak-bypass (roles must hit LLM) ──
 SOAK_DIR="$OUT/soak"
 mkdir -p "$SOAK_DIR"
 echo "== soak-bypass --live → $SOAK_DIR ==" | tee -a "$OUT/LAUNCH.md"
@@ -73,7 +58,6 @@ SOAK_RC=$?
 set -e
 echo "soak_rc=$SOAK_RC" | tee -a "$OUT/LAUNCH.md"
 
-# ── 3) Aggregate ──
 python3 - <<PY
 import json, re, time
 from pathlib import Path
@@ -88,8 +72,7 @@ def flag(text, key):
 long_ok = flag(long_acc, "ok") == "True"
 long_passed = "passed=True" in long_acc
 elapsed = flag(long_acc, "elapsed_s")
-soak_ok = ("ok" in soak_log.lower() and "fail" not in soak_log.lower()[:200]) or $SOAK_RC == 0
-# Prefer explicit llm hit markers
+soak_ok = $SOAK_RC == 0
 if "llm" in soak_log.lower() or "source" in soak_log.lower():
     soak_ok = $SOAK_RC == 0
 

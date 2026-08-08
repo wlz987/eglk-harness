@@ -16,6 +16,7 @@ from eglk_harness.domain.plugins.codex_computer_use import (
     install_computer_use_plugin,
 )
 from eglk_harness.domain.eval.eval_runner import prepare_task_workdir, score_offline
+from tests.helpers.eval_root import eval_root_for_tests
 from eglk_harness.domain.product.observe.dashboard import assert_read_only_routes, list_routes, serve_dashboard
 from eglk_harness.domain.product.update_check import _is_newer, check_update
 from eglk_harness.domain.kernel.gate import decide
@@ -125,9 +126,7 @@ def test_install_plugin_unavailable() -> None:
 
 
 def test_eval_prepare_and_score(tmp_path: Path) -> None:
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not eval_root.is_dir():
-        pytest.skip("experiment/eval missing")
+    eval_root = eval_root_for_tests()
     wd = tmp_path / "task"
     prepare_task_workdir(eval_root, suite="weave_thin", task_id="toy-hello", out_dir=wd)
     assert (wd / ".goal.md").is_file()

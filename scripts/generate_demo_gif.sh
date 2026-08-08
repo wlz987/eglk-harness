@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Generate eglk-harness demo GIF for paper site (no live LLM).
+# Generate eglk-harness demo GIF (no live LLM).
 set -euo pipefail
 HARNESS="$(cd "$(dirname "$0")/.." && pwd)"
-ALW="$(cd "$HARNESS/.." && pwd)"
-SITE="${EGLK_SITE_DIR:-$ALW/docs/site}"
+SITE="${EGLK_SITE_DIR:-$HARNESS/docs/site}"
 ASSETS="$SITE/assets"
 mkdir -p "$ASSETS"
 FRAMES="$ASSETS/_frames"
@@ -15,14 +14,13 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 frames_dir = Path("$FRAMES")
-assets = Path("$ASSETS")
 slides = [
     ("eglk-harness", "Evidence-Gated Loop Kernel"),
     ("Maker → Claim", "Checker → Evidence"),
     ("Gate (mechanical)", "admit / repair / abort"),
     ("Σ + dynamic tree", "zero HITL"),
     ("WA-Hard primary", "scores never Gate"),
-    ("init · doctor · run", ":18000 live"),
+    ("init · doctor · run", ":28000 live"),
 ]
 W, H = 960, 540
 for i, (title, sub) in enumerate(slides):

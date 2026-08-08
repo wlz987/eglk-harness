@@ -1,6 +1,6 @@
 """Resolve CLI / config.toml / env defaults (non-secret).
 
-Priority (packaging.md): explicit CLI > config.toml > env > built-in.
+Priority (packaging contract): explicit CLI > config.toml > env > built-in.
 ``runtime_bootstrap.bootstrap_workdir`` materializes config into ``os.environ``
 before these helpers run, so env lookups already reflect config.
 """

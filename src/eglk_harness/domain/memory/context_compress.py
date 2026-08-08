@@ -1,4 +1,4 @@
-"""Phase-3 context-compress helpers (named module pin of design)."""
+"""Phase-3 context-compress helpers (Phase-3 compress helpers)."""
 
 from __future__ import annotations
 

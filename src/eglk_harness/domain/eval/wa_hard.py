@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.eval.paths import default_eval_root, vendor_dir
+
 
 @dataclass
 class WaHardTask:
@@ -141,16 +143,15 @@ def score_har_offline(trace_path: Path) -> dict[str, Any]:
 
 
 def vendor_root(eval_root: Path | None = None) -> Path | None:
-    """Return webarena-verified / LH-linked vendor path if present."""
+    """Return webarena-verified vendor path when present under the eval root."""
     roots: list[Path] = []
-    if eval_root is not None:
-        roots.append(Path(eval_root) / "vendor")
-        roots.append(Path(eval_root) / "wa_hard" / "vendor")
-    else:
-        here = Path(__file__).resolve()
-        # .../domain/eval/wa_hard.py → alw (only when eval_root omitted)
-        if len(here.parents) > 5:
-            roots.append(here.parents[5] / "experiment" / "eval" / "vendor")
+    er = Path(eval_root).resolve() if eval_root is not None else default_eval_root()
+    if er is not None:
+        roots.append(er / "vendor")
+        roots.append(er / "wa_hard" / "vendor")
+    vend = vendor_dir(er)
+    if vend is not None:
+        roots.append(vend)
     for root in roots:
         for cand in (
             root / "webarena-verified",

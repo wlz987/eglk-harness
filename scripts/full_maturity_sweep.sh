@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
-# Full maturity sweep (non-interactive). Does NOT start long_natural_split live.
-# Scores never feed Gate. Long ACCEPTANCE is monitored separately.
+# CI-safe maturity sweep (no live LLM / no external benchmark matrix).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-EVAL="$(cd "$ROOT/../experiment/eval" && pwd)"
 cd "$ROOT"
 echo "== full_maturity_sweep =="
 make release-check
-make eval-doctor || true
-make eval-smokes
-bash "$EVAL/scripts/run_wa_hard_live_attempt.sh"
-bash "$EVAL/scripts/run_weave_lh_full.sh"
-bash "$EVAL/scripts/run_osworld_full.sh"
-bash "$EVAL/scripts/run_tb21_full.sh"
-bash "$EVAL/scripts/run_lh_parity_matrix.sh"
+bash scripts/eval_compare.sh
 make pulse || true
-echo "full_maturity_sweep: OK (long_natural_split not auto-started)"
+echo "full_maturity_sweep: OK (live long runs are manual: scripts/run_long_natural_split.sh)"

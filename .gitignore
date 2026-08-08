@@ -37,6 +37,7 @@ MANIFEST
 .eglk-harness/loop/
 .eglk-harness/memory/
 .local/runs/
+runs/
 .goal_format.md
 .goal.md
 .eglk-soak-bypass/

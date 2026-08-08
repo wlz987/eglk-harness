@@ -10,43 +10,34 @@ make release-check
 make dist-check   # python -m build + twine check (no upload)
 ```
 
-Runs: pytest · projections · soak-bypass mock · maturity_gate (weave + eval_compare) · packaging metadata.
+Runs: pytest · projections · soak-bypass mock · maturity_gate · packaging metadata.
 
 ## Install
 
 ```bash
 pip install -e ".[dev]"
-eglk-harness doctor   # includes eval WA/LH vendor hints
+eglk-harness doctor   # includes eval vendor hints when EGLK_EVAL_ROOT/vendor present
 # when published: uv tool install eglk-harness
 ```
 
-## Optional PyPI publish (manual; not part of CI)
+## Optional PyPI publish (manual)
 
 1. Bump `pyproject.toml` / `__version__` / CHANGELOG.
 2. `python -m build && twine check dist/*`
-3. `twine upload dist/*` (credentials required — do not automate without approval).
+3. `twine upload dist/*` (credentials required).
 
-Engineering maturity does **not** require upload; local `make release-check` is the gate.
+## Live / full benchmark runs
 
-## Full maturity sweep (CI-safe)
-
-```bash
-make sweep   # release-check + eval-smokes + WA live-attempt + Weave/OSWorld full dry
-make pulse   # doctor --json + long ACCEPTANCE
-```
-
-Does **not** auto-start `long_natural_split` (live Codex / ≥30min).
-
-## Eval reproducibility
+Live Weave/OSWorld/WA/TB matrix runs require operator-provided vendor trees under
+`$EGLK_EVAL_ROOT/vendor/` (not bundled). Scores from eval **never feed Gate**.
 
 ```bash
-bash ../experiment/eval/scripts/fetch_lh_eval.sh
-bash ../experiment/eval/scripts/fetch_wa_verified.sh
-bash ../experiment/eval/scripts/doctor_eval_env.sh
-bash ../experiment/eval/scripts/run_weave_lh_smoke.sh
-bash ../experiment/eval/scripts/run_osworld_smoke.sh
-bash ../experiment/eval/scripts/run_wa_hard_batch.sh
-bash scripts/run_long_natural_split.sh   # live Codex; ≥30min or split
-```
+# Optional: point at an external eval asset tree
+export EGLK_EVAL_ROOT=/path/to/eval-assets
 
-Scores from eval never feed Gate. See `../experiment/eval/COMPARE_LH.md`.
+# Long natural split (live Codex; ≥30min or tree split)
+bash scripts/run_long_natural_split.sh
+
+# Live long maturity lane (vLLM :28000)
+bash scripts/run_live_long_maturity.sh
+```

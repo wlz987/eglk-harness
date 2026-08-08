@@ -207,7 +207,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     report.checks.append(DoctorCheck(name="plugins", ok=ok, detail=detail))
 
     # Eval vendor hints (Manifest-only scorers; never Gate)
-    from eglk_harness.domain.eval.eval_runner import default_eval_root
+    from eglk_harness.domain.eval.paths import default_eval_root
     from eglk_harness.domain.eval import wa_hard as wa_hard_mod
     from eglk_harness.domain.eval import osworld as osworld_mod
     from eglk_harness.domain.eval import tb21 as tb21_mod
@@ -219,7 +219,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
             DoctorCheck(
                 name="eval_root",
                 ok=True,
-                detail="alw/experiment/eval not found beside checkout [warn]",
+                detail="bundled eval packs missing [warn] — set EGLK_EVAL_ROOT",
             )
         )
     else:

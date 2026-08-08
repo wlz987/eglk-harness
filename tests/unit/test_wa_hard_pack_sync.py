@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from eglk_harness.domain.eval import wa_hard as wa
+from tests.helpers.eval_root import eval_root_for_tests
 
 
 def test_build_pack_from_subset_prefers_phase0(tmp_path: Path) -> None:
@@ -40,9 +41,7 @@ def test_write_pack(tmp_path: Path) -> None:
 
 
 def test_official_pack_has_phase0_ids() -> None:
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not (eval_root / "wa_hard" / "pack.json").is_file():
-        return
+    eval_root = eval_root_for_tests()
     ids = {t.task_id for t in wa.load_pack_index(eval_root)}
     assert "681" in ids
     assert "522" in ids

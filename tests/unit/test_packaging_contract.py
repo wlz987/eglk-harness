@@ -13,7 +13,7 @@ from eglk_harness.domain.product.runtime_bootstrap import (
     want_dashboard,
 )
 
-# packaging.md §3.1 — keep in sync
+# CLI packaging contract §3.1 — keep in sync
 _REQUIRED_COMMANDS = frozenset(
     {
         "init",

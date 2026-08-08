@@ -1,6 +1,6 @@
-"""Bootstrap workdir runtime: dotenv → config.toml → CLI (packaging.md priority).
+"""Bootstrap workdir runtime: dotenv → config.toml → CLI (packaging contract priority).
 
-Priority (design/kernel/packaging.md §3.2)::
+Priority (packaging priority contract)::
 
     explicit CLI  >  .eglk-harness/config.toml  >  .env / process env  >  built-in
 """

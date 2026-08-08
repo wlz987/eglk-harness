@@ -1,2 +1,1 @@
-# Packaged JSON Schema copies (SSOT remains design/kernel/schemas).
-# Pin: eglk.state/0.2.2
+# Packaged JSON Schema copies (shipped with eglk-harness).

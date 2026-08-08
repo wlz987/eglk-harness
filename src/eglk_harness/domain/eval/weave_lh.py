@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.eval.paths import default_eval_root, vendor_dir
+
 
 @dataclass
 class WeaveLhTask:
@@ -16,32 +18,24 @@ class WeaveLhTask:
 
 
 def discover_vendor(eval_root: Path | None = None) -> Path | None:
-    """Return WeaveBench-harness path under vendor or reference."""
+    """Return WeaveBench-harness path under eval vendor when present."""
+    er = Path(eval_root).resolve() if eval_root is not None else default_eval_root()
     roots: list[Path] = []
-    if eval_root is not None:
-        er = Path(eval_root)
+    if er is not None:
         roots.extend(
             [
                 er / "vendor" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
                 er / "vendor" / "WeaveBench-harness",
             ]
         )
-    else:
-        here = Path(__file__).resolve()
-        if len(here.parents) > 5:
-            alw = here.parents[5]
-            roots.extend(
-                [
-                    alw
-                    / "experiment"
-                    / "eval"
-                    / "vendor"
-                    / "LongHorizon-Harness"
-                    / "eval"
-                    / "WeaveBench-harness",
-                    alw / "reference" / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
-                ]
-            )
+    vend = vendor_dir(er)
+    if vend is not None:
+        roots.extend(
+            [
+                vend / "LongHorizon-Harness" / "eval" / "WeaveBench-harness",
+                vend / "WeaveBench-harness",
+            ]
+        )
     for cand in roots:
         if cand.is_dir() and any(cand.iterdir()):
             return cand

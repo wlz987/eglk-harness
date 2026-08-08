@@ -1,0 +1,32 @@
+{
+  "pack": "wa_verified_hard",
+  "source": "webarena-verified-hard subset-export",
+  "note": "Official Hard task ids. Offline/external scores never feed Gate.",
+  "tasks": [
+    {
+      "id": "681",
+      "intent": "Find a GitLab repository related to gan implementation and create a new post in the discussion forum with the URL of the repository to the most relevant forum. Use the repository path as the post title and \"<number of commits> commit(s) already!\" as the post body.",
+      "sites": [
+        "reddit",
+        "gitlab"
+      ],
+      "notes": "intent_template_id=116; official Hard"
+    },
+    {
+      "id": "522",
+      "intent": "Fork all repos from facebook.",
+      "sites": [
+        "gitlab"
+      ],
+      "notes": "intent_template_id=352; official Hard"
+    },
+    {
+      "id": "11",
+      "intent": "Get the total number of reviews that our store received so far that mention term \"disappointed\"",
+      "sites": [
+        "shopping_admin"
+      ],
+      "notes": "intent_template_id=288; official Hard"
+    }
+  ]
+}

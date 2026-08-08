@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.eval.paths import default_eval_root, vendor_dir
+
 
 @dataclass
 class OsWorldTask:
@@ -64,33 +66,24 @@ def materialize_goal(task: OsWorldTask, out_dir: Path) -> Path:
 
 
 def path_hint(eval_root: Path | None = None) -> Path | None:
-    """Return vendor OSWorld harness path if present under eval_root or alw."""
+    """Return vendor OSWorld harness path when present under the eval root."""
+    er = Path(eval_root).resolve() if eval_root is not None else default_eval_root()
     cands: list[Path] = []
-    if eval_root is not None:
-        er = Path(eval_root)
+    if er is not None:
         cands.extend(
             [
                 er / "vendor" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness",
                 er / "vendor" / "OSWorldv2-harness",
             ]
         )
-    else:
-        here = Path(__file__).resolve()
-        if len(here.parents) > 5:
-            alw = here.parents[5]
-            cands.extend(
-                [
-                    alw
-                    / "experiment"
-                    / "eval"
-                    / "vendor"
-                    / "LongHorizon-Harness"
-                    / "eval"
-                    / "OSWorldv2-harness",
-                    alw / "experiment" / "eval" / "vendor" / "OSWorldv2-harness",
-                    alw / "reference" / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness",
-                ]
-            )
+    vend = vendor_dir(er)
+    if vend is not None:
+        cands.extend(
+            [
+                vend / "LongHorizon-Harness" / "eval" / "OSWorldv2-harness",
+                vend / "OSWorldv2-harness",
+            ]
+        )
     for cand in cands:
         if cand.is_dir() and any(cand.iterdir()):
             return cand

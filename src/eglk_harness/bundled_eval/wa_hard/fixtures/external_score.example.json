@@ -1,0 +1,9 @@
+{
+  "task_id": "681",
+  "scores": {
+    "success": 0,
+    "note": "fixture only \u2014 never Gate input"
+  },
+  "judge": "external_wa_verified",
+  "notes": "demo external-score merge \u2014 Manifest only, never Gate"
+}

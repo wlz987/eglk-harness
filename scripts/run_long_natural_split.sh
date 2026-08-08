@@ -6,8 +6,8 @@
 set -euo pipefail
 
 _SRC="$(readlink -f "$0")"
-_ALW_DEFAULT="$(cd "$(dirname "$_SRC")/../.." && pwd)"
-export EGLK_ALW_ROOT="${EGLK_ALW_ROOT:-$_ALW_DEFAULT}"
+_HARNESS_DEFAULT="$(cd "$(dirname "$_SRC")/.." && pwd)"
+export EGLK_HARNESS_ROOT="${EGLK_HARNESS_ROOT:-$_HARNESS_DEFAULT}"
 
 if [[ -z "${EGLK_LONG_SCRIPT_FROZEN:-}" ]]; then
   _copy="$(mktemp /tmp/eglk-long-natural-XXXXXX.sh)"
@@ -17,8 +17,8 @@ if [[ -z "${EGLK_LONG_SCRIPT_FROZEN:-}" ]]; then
   exec bash "$_copy" "$@"
 fi
 
-ROOT="${EGLK_ALW_ROOT}"
-RUN="${LONG_RUN_DIR:-$ROOT/experiment/runs/long_natural_split}"
+HARNESS="${EGLK_HARNESS_ROOT}"
+RUN="${LONG_RUN_DIR:-$HARNESS/runs/long_natural_split}"
 MAX_TICKS="${EGLK_LONG_MAX_TICKS:-24}"
 WALL_MIN="${EGLK_LONG_WALL_MIN:-45}"
 # ≥1800s sleep so wall clock clears the 30min acceptance even with packaging overhead.
@@ -63,7 +63,6 @@ p = Path(".eglk-harness/config.toml")
 want_tokens = "cognitive_tokens_max = 8000000"
 if p.is_file():
     t = p.read_text()
-    # Must uncomment `# cognitive_tokens_max = …` — bare search matched comments but left them inert.
     if re.search(r"(?m)^#?\s*cognitive_tokens_max\s*=", t):
         t = re.sub(r"(?m)^#?\s*cognitive_tokens_max\s*=\s*\d+", want_tokens, t)
     elif "[limits]" in t:
@@ -75,7 +74,6 @@ PY
 
 export EGLK_TICK_TIMEOUT="${EGLK_TICK_TIMEOUT:-4000}"
 export EGLK_TIMEOUT_MAKER="${EGLK_TIMEOUT_MAKER:-3600}"
-# Default off for headless long runs; set EGLK_MCP_DISABLE=0 to allow computer-use.
 export EGLK_MCP_DISABLE="${EGLK_MCP_DISABLE:-1}"
 MAKER_TO="${EGLK_TIMEOUT_MAKER}"
 
@@ -95,7 +93,6 @@ pkill -f '[Pp]ython.*perf/bench' 2>/dev/null || true
 sleep 1
 START=$(date +%s)
 set +e
-# Single-line invoke — avoid bash line-continuation breakage under pipefail.
 PYTHONUNBUFFERED=1 stdbuf -oL -eL eglk-harness run --workdir . --agent codex --swarm 1 --compile off --max-ticks "$MAX_TICKS" --maker-timeout "$MAKER_TO" --checker-timeout 900 2>&1 | tee run.log
 RC=${PIPESTATUS[0]}
 set -e
@@ -109,7 +106,6 @@ from pathlib import Path
 log = Path("run.log").read_text(errors="replace") if Path("run.log").is_file() else ""
 elapsed = $ELAPSED
 ok = ("ok=True" in log) or ("stop=root_admitted" in log)
-# Also trust Gate decision files (tee/log glitches must not false-fail)
 for dec in Path(".eglk-harness/loop").glob("*/decisions/*.json"):
     try:
         d = json.loads(dec.read_text())

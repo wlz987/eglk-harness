@@ -1,0 +1,45 @@
+{
+  "suite": "weave_thin",
+  "note": "Auxiliary thin tasks for eglk offline scoring. Never Gate input.",
+  "tasks": [
+    {
+      "id": "toy-hello",
+      "title": "Weave-thin toy hello",
+      "summary": "Create hello.txt containing hello from eglk",
+      "done_criteria": [
+        "File hello.txt exists",
+        "hello.txt contains hello from eglk"
+      ],
+      "check": {
+        "path": "hello.txt",
+        "contains": "hello"
+      }
+    },
+    {
+      "id": "toy-notes",
+      "title": "Weave-thin notes file",
+      "summary": "Create notes.md with a short status line",
+      "done_criteria": [
+        "File notes.md exists",
+        "notes.md contains eglk"
+      ],
+      "check": {
+        "path": "notes.md",
+        "contains": "eglk"
+      }
+    },
+    {
+      "id": "toy-json",
+      "title": "Weave-thin result JSON",
+      "summary": "Create result.json containing ok true",
+      "done_criteria": [
+        "File result.json exists",
+        "result.json contains ok"
+      ],
+      "check": {
+        "path": "result.json",
+        "contains": "ok"
+      }
+    }
+  ]
+}

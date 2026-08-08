@@ -1,11 +1,8 @@
 # eglk-harness
 
-> 独立实现仓。并列工作区：`design/`（SSOT）· `docs/` · `experiment/`（评测）。
-
 独立可安装包：**Evidence-Gated Loop Kernel** harness（机械 Gate · 零 HITL · Maker≠Checker）。
 
-设计真相源通常在并列设计仓 [`../design/`](../design/)。包布局：`protocol/` ⊥ `domain/` ⊥ `actors/`，仅 `app.py` 组合根。
-
+包布局：`protocol/` ⊥ `domain/` ⊥ `actors/`，仅 `app.py` 组合根。  
 勿与用户 workdir 下的 **`.eglk-harness/`**（运行配置/工件）混淆。
 
 ## Install
@@ -49,16 +46,16 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `dashboard` | Read-only HTTP browse（无 approve/inject） |
 | `check-update` | PyPI version hint（不自动升级） |
 | `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |
-| `eval` | 辅尺：`experiment/eval/` 薄调度；scorer 不进 Gate |
+| `eval` | 辅尺：内置 `bundled_eval/` 或 `EGLK_EVAL_ROOT`；scorer 不进 Gate |
 | `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
-| `check-projections` | CI pin vs `design/kernel/projections.md` |
+| `check-projections` | CI pin vs `domain/kernel/projections.py` 常量 |
 
 `run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`, `--dashboard`（只读观测，非审批闸）.
 
-配置优先级（`packaging.md`）：**CLI > `.eglk-harness/config.toml` > `.env`/环境变量 > 内置默认**（`run` 启动时 bootstrap）。
+配置优先级：**CLI > `.eglk-harness/config.toml` > `.env`/环境变量 > 内置默认**（`run` 启动时 bootstrap）。
 
 Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
-评测资产 SSOT：设计仓 `experiment/eval/`（主尺 WA-Hard；Weave/OSWorld 辅）。
+示例任务索引见 `src/eglk_harness/bundled_eval/`；可用 `EGLK_EVAL_ROOT` 覆盖。
 
 ## Develop
 
@@ -66,21 +63,14 @@ Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).
 pytest
 eglk-harness check-projections
 eglk-harness soak-bypass --agent mock          # CI-safe; llm_roles=5/5
-make maturity                                  # pytest + projections + soak + weave CI
+make maturity                                  # pytest + projections + soak + eval_compare
 make release-check                             # maturity + CLI/version contract
-make eval-doctor                               # vendor/docker/kvm readiness JSON
-make eval-smokes                               # weave_lh + osworld + wa_hard batch
 # Live soak (manual gate):
 # EGLK_SOAK_LIVE=1 eglk-harness soak-bypass --agent codex --live --timeout 180
-# Eval smoke (from design repo):
-# bash experiment/eval/scripts/ci_weave_thin.sh
-# bash experiment/eval/scripts/run_wa_hard_batch.sh
 # Natural long run (Codex; split or ≥30min):
 # bash scripts/run_long_natural_split.sh
 # List eval tasks:
 # eglk-harness eval --suite wa_hard --list-tasks
-# New live run scaffold:
-# bash ../experiment/runs/scripts/new_live_run.sh my_run
 ```
 
-Maturity sheet: [`MATURITY.md`](./MATURITY.md) · LH compare: `../experiment/eval/COMPARE_LH.md`.
+Maturity sheet: [`MATURITY.md`](./MATURITY.md).

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# Keep in sync with CLI ``--suite`` choices and design/kernel/packaging.md
+# Keep in sync with CLI ``--suite`` choices and eval packaging contract.
 EVAL_SUITES: frozenset[str] = frozenset(
     {
         "weave_thin",

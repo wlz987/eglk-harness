@@ -1,0 +1,15 @@
+{
+  "format": "eglk_wa_trace/0.1",
+  "task_id": "wa-hard-002-gitlab-issue",
+  "expected": {
+    "success": true,
+    "answer": "issue-42"
+  },
+  "observed": {
+    "success": false,
+    "answer": ""
+  },
+  "sites": [
+    "gitlab"
+  ]
+}

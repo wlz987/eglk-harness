@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.eval.paths import default_eval_root
+
 
 @dataclass
 class EvalResult:
@@ -16,18 +18,6 @@ class EvalResult:
     ok: bool
     detail: str
     scores: dict[str, Any]
-
-
-def default_eval_root() -> Path | None:
-    """Prefer sibling ``alw/experiment/eval`` when running from eglk-harness checkout."""
-    here = Path(__file__).resolve()
-    # .../alw/eglk-harness/src/eglk_harness/domain/eval/eval_runner.py → alw
-    alw = here.parents[5] if len(here.parents) > 5 else None
-    if alw is not None:
-        cand = alw / "experiment" / "eval"
-        if cand.is_dir():
-            return cand
-    return None
 
 
 def prepare_task_workdir(
@@ -53,7 +43,6 @@ def prepare_task_workdir(
             raise KeyError(f"osworld_aux task_id not found: {task_id}")
         osworld_mod.materialize_goal(task, out_dir)
     elif suite == "scenarios":
-        # Point at existing experiment run as template goal
         scenarios = eval_root / "scenarios" / "index.md"
         goal.write_text(
             f"# Scenario replay\n\nReplay task_id={task_id}\n\n"

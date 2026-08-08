@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from eglk_harness.domain.eval import wa_hard as wa_hard_mod
+from tests.helpers.eval_root import eval_root_for_tests
 
 
 def test_load_pack_prefers_pack_json(tmp_path: Path) -> None:
@@ -32,11 +33,7 @@ def test_load_pack_prefers_pack_json(tmp_path: Path) -> None:
 
 
 def test_run_batch_writes_summary(tmp_path: Path) -> None:
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not (eval_root / "wa_hard" / "pack.json").is_file():
-        import pytest
-
-        pytest.skip("alw experiment/eval pack missing")
+    eval_root = eval_root_for_tests()
     out = tmp_path / "batch"
     pack_n = len(wa_hard_mod.load_pack_index(eval_root))
     limit = min(5, pack_n)

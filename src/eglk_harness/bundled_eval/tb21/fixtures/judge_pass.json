@@ -1,0 +1,8 @@
+{
+  "task_id": "tb21-smoke-001",
+  "scores": {
+    "success": 1.0,
+    "pass": 1.0
+  },
+  "note": "fixture judge — Manifest only; never Gate"
+}

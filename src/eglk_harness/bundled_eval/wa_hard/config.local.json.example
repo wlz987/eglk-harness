@@ -1,0 +1,40 @@
+{
+  "test_data_file": "assets/dataset/webarena-verified.json",
+  "environments": {
+    "__SHOPPING__": {
+      "urls": ["http://127.0.0.1:7770"],
+      "credentials": {
+        "username": "user@example.com",
+        "password": "password123"
+      }
+    },
+    "__SHOPPING_ADMIN__": {
+      "urls": ["http://127.0.0.1:7780/admin"],
+      "credentials": {
+        "username": "admin",
+        "password": "admin1234"
+      }
+    },
+    "__GITLAB__": {
+      "urls": ["http://127.0.0.1:8023"],
+      "credentials": {
+        "username": "root",
+        "password": "demopass"
+      }
+    },
+    "__REDDIT__": {
+      "urls": ["http://127.0.0.1:9999"],
+      "credentials": {
+        "username": "testuser",
+        "password": "testpass"
+      }
+    },
+    "__WIKIPEDIA__": {
+      "urls": ["http://127.0.0.1:8888"]
+    },
+    "__MAP__": {
+      "urls": ["http://127.0.0.1:3000"]
+    }
+  },
+  "note": "Ports match docker ps webarena_verified_* on this host. Copy to config.local.json and adjust."
+}

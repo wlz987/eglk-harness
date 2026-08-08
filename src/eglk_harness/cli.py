@@ -19,8 +19,8 @@ from eglk_harness.domain.plugins.codex_computer_use import (
 )
 from eglk_harness.domain.product.config_resolve import resolve_agent, resolve_compile, resolve_swarm
 from eglk_harness.domain.product.doctor import run_doctor
+from eglk_harness.domain.eval.paths import default_eval_root
 from eglk_harness.domain.eval.eval_runner import (
-    default_eval_root,
     prepare_task_workdir,
     score_offline,
 )
@@ -440,8 +440,8 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     eval_root = Path(args.eval_root).resolve() if args.eval_root else default_eval_root()
     if eval_root is None or not eval_root.is_dir():
         print(
-            "error: eval root not found; pass --eval-root "
-            "(expected alw/experiment/eval). Scorers never feed Gate.",
+            "error: eval root not found; pass --eval-root or set EGLK_EVAL_ROOT. "
+            "Scorers never feed Gate.",
             flush=True,
         )
         return 2
@@ -880,7 +880,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(EVAL_SUITES),
     )
     ev.add_argument("--task-id", default=None, help="Single task id (required unless --batch)")
-    ev.add_argument("--eval-root", default=None, help="Path to experiment/eval (default: auto)")
+    ev.add_argument("--eval-root", default=None, help="Eval pack root (default: bundled or EGLK_EVAL_ROOT)")
     ev.add_argument("--workdir", default="./.eglk-eval-workdir", help="Materialized task workdir")
     ev.add_argument("--agent", default="mock", choices=("mock", "codex", "claude_code"))
     ev.add_argument("--swarm", default="0")
@@ -920,7 +920,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     cp = sub.add_parser(
         "check-projections",
-        help="CI pin: assert thresholds match design/kernel/projections.md",
+        help="CI pin: assert thresholds match packaged projection constants",
     )
     cp.add_argument("--json", action="store_true", help="Machine-readable JSON")
     cp.set_defaults(func=_cmd_check_projections)

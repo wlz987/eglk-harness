@@ -1,4 +1,4 @@
-"""Threshold and constant projections (code-side pin of design/kernel/projections.md)."""
+"""Threshold and constant projections (SSOT: this module + check-projections EXPECTED)."""
 
 from __future__ import annotations
 

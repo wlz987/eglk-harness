@@ -4,20 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eglk_harness.domain.eval.eval_runner import default_eval_root, prepare_task_workdir, score_offline
+from eglk_harness.domain.eval.eval_runner import prepare_task_workdir, score_offline
 from eglk_harness.domain.product.init_project import init_project
+from tests.helpers.eval_root import eval_root_for_tests
 
 
 def test_weave_thin_offline_score_after_materialize(tmp_path: Path):
-    root = default_eval_root()
-    if root is None:
-        # Fallback: design-repo relative from this checkout
-        cand = Path(__file__).resolve().parents[3] / "experiment" / "eval"
-        if not cand.is_dir():
-            import pytest
-
-            pytest.skip("experiment/eval not found")
-        root = cand
+    root = eval_root_for_tests()
     out = tmp_path / "wd"
     prepare_task_workdir(root, suite="weave_thin", task_id="toy-hello", out_dir=out)
     init_project(out)

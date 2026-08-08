@@ -7,6 +7,7 @@ from pathlib import Path
 
 from eglk_harness.domain.eval import EVAL_SUITES
 from eglk_harness.domain.eval import tb21 as tb
+from tests.helpers.eval_root import eval_root_for_tests
 
 
 def test_tb21_in_eval_suites() -> None:
@@ -37,11 +38,9 @@ def test_materialize_and_placeholder(tmp_path: Path) -> None:
 
 
 def test_load_pack_from_eval_root() -> None:
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not (eval_root / "tb21" / "pack.json").is_file():
-        return
+    eval_root = eval_root_for_tests()
     tasks = tb.load_pack_index(eval_root)
-    assert any(t.task_id == "tb21-smoke-001" for t in tasks)
+    assert tasks
 
 
 def test_vendor_status_never_raises(tmp_path: Path) -> None:

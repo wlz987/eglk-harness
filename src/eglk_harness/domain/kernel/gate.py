@@ -80,7 +80,7 @@ def decide(
     quota: Mapping[str, Any] | None = None,
     repair_counts: Mapping[str, int] | None = None,
 ) -> GateDecision:
-    """Pure Gate decision per design/kernel/gate_policy.md.
+    """Pure Gate decision per gate_policy contract.
 
     ``repair_counts`` maps prior same-cause repair reasons → count *before* this tick.
     If a repair reason would fire and count already >= REPAIRS_MAX, return abort(*_exhausted).

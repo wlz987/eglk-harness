@@ -27,7 +27,7 @@ def _curl_ok(url: str, timeout_s: float = 3.0) -> bool:
         return False
 
 
-def _tunnel_18000() -> bool:
+def _vllm_bind_28000() -> bool:
     try:
         proc = subprocess.run(
             ["ss", "-ltn"],
@@ -36,7 +36,7 @@ def _tunnel_18000() -> bool:
             timeout=5,
             check=False,
         )
-        return "0.0.0.0:18000" in (proc.stdout or "")
+        return "0.0.0.0:28000" in (proc.stdout or "")
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -159,9 +159,9 @@ def collect_eval_env_status(eval_root: Path) -> dict[str, Any]:
     mcp_ok = importlib.util.find_spec("mcp") is not None
     kvm = Path("/dev/kvm").exists()
     docker = shutil.which("docker") is not None
-    tunnel = _tunnel_18000()
-    vllm = _curl_ok("http://127.0.0.1:18000/v1/models")
-    docker0 = _curl_ok("http://172.17.0.1:18000/v1/models")
+    tunnel = _vllm_bind_28000()
+    vllm = _curl_ok("http://127.0.0.1:28000/v1/models")
+    docker0 = _curl_ok("http://172.17.0.1:28000/v1/models")
     docker_dns = _docker_dns_ok()
     wa_sites = probe_wa_sites(wa_cfg if wa_cfg.is_file() else None)
 
@@ -173,9 +173,9 @@ def collect_eval_env_status(eval_root: Path) -> dict[str, Any]:
         "eval_root": str(eval_root),
         "docker": docker,
         "kvm": kvm,
-        "tunnel_0.0.0.0_18000": tunnel,
-        "vllm_127_18000": vllm,
-        "vllm_docker0_18000": docker0,
+        "vllm_bind_0.0.0.0_28000": tunnel,
+        "vllm_127_28000": vllm,
+        "vllm_docker0_28000": docker0,
         "docker_dns_ok": docker_dns,
         "playwright_import": playwright_ok,
         "mcp_import": mcp_ok,
@@ -208,16 +208,16 @@ def doctor_checks_from_status(status: dict[str, Any]) -> list[tuple[str, bool, s
     rows: list[tuple[str, bool, str]] = []
     rows.append(
         (
-            "eval_vllm_18000",
-            bool(status.get("vllm_127_18000")),
-            f"127.0.0.1:18000 ok={status.get('vllm_127_18000')} docker0={status.get('vllm_docker0_18000')}",
+            "eval_vllm_28000",
+            bool(status.get("vllm_127_28000")),
+            f"127.0.0.1:28000 ok={status.get('vllm_127_28000')} docker0={status.get('vllm_docker0_28000')}",
         )
     )
     rows.append(
         (
-            "eval_tunnel_18000",
-            bool(status.get("tunnel_0.0.0.0_18000")),
-            "0.0.0.0:18000 bind required for Weave VM",
+            "eval_vllm_bind_28000",
+            bool(status.get("vllm_bind_0.0.0.0_28000")),
+            "0.0.0.0:28000 bind required for Weave VM",
         )
     )
     rows.append(

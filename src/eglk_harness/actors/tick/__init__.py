@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from eba import is_result_err, is_result_ok, result_error, result_value
 from eba_job import Job
 
 from eglk_harness.domain.kernel import integrity
@@ -21,6 +22,15 @@ from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_refiner, decide_s
 from eglk_harness.domain.memory.tokens import add_tokens
 from eglk_harness.domain.kernel.tree import TaskTree, make_root
 from eglk_harness.protocol import topics
+
+
+def _unwrap_stage_body(body: Any) -> tuple[Any | None, str | None]:
+    """Unwrap eba ``ResultBody`` to actor ``ok_body`` / ``err_body`` payload."""
+    if is_result_ok(body):
+        return result_value(body), None
+    if is_result_err(body):
+        return None, str(result_error(body))
+    return body, None
 
 
 def _stage_err(body: Any) -> str | None:
@@ -354,6 +364,11 @@ class TickJob(Job):
         )
 
     async def on_stage_result(self, stage: str, body: Any) -> None:
+        inner, transport_err = _unwrap_stage_body(body)
+        if transport_err is not None:
+            await self.finish(ok=False, error=transport_err)
+            return
+        body = inner
         err = _stage_err(body)
         if err is not None:
             await self.finish(ok=False, error=err)

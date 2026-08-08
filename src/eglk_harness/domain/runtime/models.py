@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Mapping
 
-# Maker / Governor / Checker never downgrade (design/kernel/model_economics.md).
+# Maker / Governor / Checker never downgrade (model economics contract).
 NEVER_DOWNGRADE_ROLES: frozenset[str] = frozenset({"maker", "governor", "checker"})
 
 ROLE_ENV: dict[str, str] = {

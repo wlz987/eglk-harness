@@ -1,7 +1,6 @@
 """Terminal-Bench 2.1 auxiliary connector — never Gate.
 
-LH reports TB 2.1 in papers but does not vendor a frozen tree under LH ``eval/``.
-This suite is pack-first; optional vendor discover for operator-provided runners.
+Pack-first suite; optional vendor tree via ``TB21_VENDOR`` or ``EGLK_EVAL_ROOT/vendor/``.
 """
 
 from __future__ import annotations
@@ -12,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.eval.paths import default_eval_root, vendor_dir
+
 
 @dataclass
 class Tb21Task:
@@ -21,13 +22,13 @@ class Tb21Task:
 
 
 def discover_vendor(eval_root: Path | None = None) -> Path | None:
-    """Return optional Terminal-Bench vendor root if present."""
+    """Return optional Terminal-Bench vendor root when present."""
     roots: list[Path] = []
     env = os.environ.get("TB21_VENDOR", "").strip()
     if env:
         roots.append(Path(env))
-    if eval_root is not None:
-        er = Path(eval_root)
+    er = Path(eval_root).resolve() if eval_root is not None else default_eval_root()
+    if er is not None:
         roots.extend(
             [
                 er / "vendor" / "terminal-bench",
@@ -35,16 +36,15 @@ def discover_vendor(eval_root: Path | None = None) -> Path | None:
                 er / "vendor" / "terminal-bench-2.1",
             ]
         )
-    else:
-        here = Path(__file__).resolve()
-        if len(here.parents) > 5:
-            alw = here.parents[5]
-            roots.extend(
-                [
-                    alw / "experiment" / "eval" / "vendor" / "terminal-bench",
-                    alw / "reference" / "terminal-bench",
-                ]
-            )
+    vend = vendor_dir(er)
+    if vend is not None:
+        roots.extend(
+            [
+                vend / "terminal-bench",
+                vend / "Terminal-Bench",
+                vend / "terminal-bench-2.1",
+            ]
+        )
     for cand in roots:
         if cand.is_dir() and any(cand.iterdir()):
             return cand

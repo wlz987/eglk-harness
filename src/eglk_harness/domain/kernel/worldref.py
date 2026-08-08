@@ -129,7 +129,7 @@ def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
     """Apply Claim.payload.files mapping (relative path → content). Returns written paths.
 
     Refuses ``.goal.md`` / ``.goal_format.md`` / ``.env`` / ``.eglk-harness/**``
-    (GOAL.md invariant: runtime models must not rewrite goal or harness config).
+    (workdir invariant: runtime models must not rewrite goal or harness config).
     """
     workdir = workdir.resolve()
     protected_hits: list[str] = []

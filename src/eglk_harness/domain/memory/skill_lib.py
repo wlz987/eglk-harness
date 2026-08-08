@@ -114,7 +114,7 @@ def distill_from_sigma(
     min_verifications: int = 2,
     limit: int = 5,
 ) -> list[dict[str, Any]]:
-    """Promote high-confidence Σ hits/lessons into K skills (design/context.md §3.2.5)."""
+    """Promote high-confidence Σ hits/lessons into K skills (sigma→K promotion contract)."""
     active = sigma.load_active(workdir)
     items = load_index(workdir)
     by_id = {str(it.get("id")): it for it in items}

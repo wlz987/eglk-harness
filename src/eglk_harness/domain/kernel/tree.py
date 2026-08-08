@@ -274,7 +274,7 @@ class TaskTree:
         return child
 
     def try_merge_siblings_after_admit(self, admitted_id: str) -> dict[str, Any] | None:
-        """Structural overlap merge (design/task_tree.md §3.3).
+        """Structural overlap merge (task_tree merge contract).
 
         After a leaf is admitted: pending/in_progress sibling leaves whose
         ``done_criteria`` intersect the admitted leaf are collapsed into one

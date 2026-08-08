@@ -1,0 +1,119 @@
+[
+  {
+    "sites": [
+      "reddit",
+      "gitlab"
+    ],
+    "task_id": 681,
+    "intent_template_id": 116,
+    "start_urls": [
+      "__REDDIT__",
+      "__GITLAB__"
+    ],
+    "intent": "Find a GitLab repository related to gan implementation and create a new post in the discussion forum with the URL of the repository to the most relevant forum. Use the repository path as the post title and \"<number of commits> commit(s) already!\" as the post body.",
+    "eval": [
+      {
+        "expected": {
+          "task_type": "MUTATE",
+          "status": "SUCCESS",
+          "retrieved_data": null,
+          "error_details": null
+        },
+        "evaluator": "AgentResponseEvaluator",
+        "ordered": false,
+        "results_schema": {
+          "type": "null"
+        }
+      },
+      {
+        "expected": {
+          "url": "^__REDDIT__/submit/?.*$",
+          "headers": null,
+          "query_params": null,
+          "post_data": {
+            "submission[mediaType]": "url",
+            "submission[url]": "__GITLAB__/eriklindernoren/PyTorch-GAN",
+            "submission[title]": "eriklindernoren/PyTorch-GAN",
+            "submission[body]": "193 commits already!",
+            "submission[forum]": "^(10043|10018)$"
+          },
+          "response_content": null,
+          "response_status": 302,
+          "http_method": "POST",
+          "response_cookies": null
+        },
+        "evaluator": "NetworkEventEvaluator",
+        "last_event_only": true,
+        "ignored_query_params": null,
+        "ignored_query_params_patterns": null,
+        "decode_base64_query": false,
+        "query_params_schema": null,
+        "post_data_schema": null,
+        "ignored_post_data_params_patterns": null,
+        "should_not_exist": false
+      }
+    ],
+    "intent_template": "Find a GitLab repository related to {{topic}} and create a new post in the discussion forum with the URL of the repository to the most relevant forum. Use the repository path as the post title and \"<number of commits> commit(s) already!\" as the post body.",
+    "instantiation_dict": {
+      "topic": "gan implementation"
+    },
+    "revision": 2
+  },
+  {
+    "sites": [
+      "gitlab"
+    ],
+    "task_id": 522,
+    "intent_template_id": 352,
+    "start_urls": [
+      "__GITLAB__"
+    ],
+    "intent": "Fork all repos from facebook.",
+    "eval": [
+      {
+        "expected": {
+          "task_type": "MUTATE",
+          "status": "SUCCESS",
+          "retrieved_data": null,
+          "error_details": null
+        },
+        "evaluator": "AgentResponseEvaluator",
+        "ordered": false,
+        "results_schema": {
+          "type": "null"
+        }
+      },
+      {
+        "expected": {
+          "url": "__GITLAB__/api/v4/projects/122/fork",
+          "headers": null,
+          "query_params": null,
+          "post_data": {
+            "id": "122",
+            "name": "create-react-app",
+            "namespace_id": 2505,
+            "path": "create-react-app"
+          },
+          "response_content": null,
+          "response_status": 201,
+          "http_method": "POST",
+          "response_cookies": null
+        },
+        "evaluator": "NetworkEventEvaluator",
+        "last_event_only": true,
+        "ignored_query_params": null,
+        "ignored_query_params_patterns": null,
+        "decode_base64_query": false,
+        "query_params_schema": null,
+        "post_data_schema": null,
+        "ignored_post_data_params_patterns": null,
+        "should_not_exist": false
+      }
+    ],
+    "intent_template": "Fork {{repo}}.",
+    "instantiation_dict": {
+      "repo": "all repos from facebook"
+    },
+    "revision": 2
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "wa-browser": {
+      "command": "python3",
+      "args": [
+        "experiment/eval/wa_hard/mcp/wa_browser_mcp.py"
+      ],
+      "env": {
+        "WA_BROWSER_WORKDIR": "/path/to/task/workdir",
+        "WA_BROWSER_TASK_ID": "681",
+        "WA_BROWSER_HEADED": "0"
+      }
+    }
+  },
+  "note": "Per-task config is auto-written by run_wa_hard_eglk_live.sh when WA_BROWSER_MCP=1"
+}

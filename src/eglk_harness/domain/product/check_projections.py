@@ -1,4 +1,4 @@
-"""CI pin: code projections must match design/kernel/projections.md defaults."""
+"""CI pin: code projections must match packaged EXPECTED constants."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from eglk_harness.domain.kernel import swarm
 from eglk_harness.domain.kernel import tree
 
 
-# Machine-readable pin of design/kernel/projections.md (change design first).
+# Pinned projection table (update here when changing domain/kernel/projections.py).
 EXPECTED: dict[str, Any] = {
     "TAU_DONE": 1.0,
     "TAU_GAP": 0.5,

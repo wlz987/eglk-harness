@@ -4,18 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from eglk_harness.domain.eval import wa_hard as wa
-
-
-FIXTURES = Path("/home/wlz/alw/experiment/eval/wa_hard/fixtures/traces")
+from tests.helpers.eval_root import bundled_wa_hard_fixtures
 
 
 def test_score_har_offline_pass() -> None:
-    path = FIXTURES / "pass_trace.json"
+    fixtures = bundled_wa_hard_fixtures()
+    path = fixtures / "traces" / "pass_trace.json"
     if not path.is_file():
-        import pytest
-
-        pytest.skip("alw fixtures missing")
+        pytest.skip("bundled wa_hard fixtures missing")
     scores = wa.score_har_offline(path)
     assert scores["success"] == 1.0
     assert scores["judge"] == "eglk_har_offline"
@@ -24,11 +23,10 @@ def test_score_har_offline_pass() -> None:
 
 
 def test_score_har_offline_fail() -> None:
-    path = FIXTURES / "fail_trace.json"
+    fixtures = bundled_wa_hard_fixtures()
+    path = fixtures / "traces" / "fail_trace.json"
     if not path.is_file():
-        import pytest
-
-        pytest.skip("alw fixtures missing")
+        pytest.skip("bundled wa_hard fixtures missing")
     scores = wa.score_har_offline(path)
     assert scores["success"] == 0.0
     assert scores["answer_match"] is False

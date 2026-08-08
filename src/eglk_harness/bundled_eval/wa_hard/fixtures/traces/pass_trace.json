@@ -1,0 +1,16 @@
+{
+  "format": "eglk_wa_trace/0.1",
+  "task_id": "wa-hard-001-admin-lookup",
+  "expected": {
+    "success": true,
+    "answer": "user@example.com"
+  },
+  "observed": {
+    "success": true,
+    "answer": "user@example.com"
+  },
+  "sites": [
+    "shopping_admin"
+  ],
+  "note": "CI fixture \u2014 never Gate input"
+}

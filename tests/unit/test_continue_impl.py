@@ -13,6 +13,7 @@ from eglk_harness.domain.product.init_project import init_project
 from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.eval import wa_hard as wa_hard_mod
+from tests.helpers.eval_root import eval_root_for_tests
 
 
 def test_provider_overrides_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,9 +55,7 @@ def test_skill_distill_revise_deprecate(tmp_path: Path) -> None:
 
 
 def test_wa_hard_materialize(tmp_path: Path) -> None:
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not (eval_root / "wa_hard" / "pack.example.json").is_file():
-        pytest.skip("pack.example missing")
+    eval_root = eval_root_for_tests()
     tasks = wa_hard_mod.load_pack_index(eval_root)
     assert tasks
     goal = wa_hard_mod.materialize_goal(tasks[0], tmp_path)
@@ -78,9 +77,7 @@ def test_skill_deconstruct(tmp_path: Path) -> None:
 def test_osworld_materialize(tmp_path: Path) -> None:
     from eglk_harness.domain.eval import osworld as osworld_mod
 
-    eval_root = Path("/home/wlz/alw/experiment/eval")
-    if not (eval_root / "osworld_aux" / "pack.example.json").is_file():
-        pytest.skip("osworld pack.example missing")
+    eval_root = eval_root_for_tests()
     tasks = osworld_mod.load_pack_index(eval_root)
     assert tasks
     goal = osworld_mod.materialize_goal(tasks[0], tmp_path)
