@@ -19,7 +19,7 @@ cd eglk-harness
 make dist-check   # python -m build + twine check (no upload)
 ```
 
-`release-check` 包含：pytest · projections · soak-bypass mock · maturity_gate · CLI 契约。
+`release-check` 在 `eglk-harness_test` 中运行（单元测试 · projections · soak-bypass mock · maturity_gate · CLI 契约）。
 
 ## Install
 
