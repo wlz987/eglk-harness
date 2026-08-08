@@ -1,3 +1,15 @@
+---
+name: compile
+description: STEP 0 — compile human .goal.md into abstract Goal Format frame; no split or admit.
+allowed-tools: observation via EGLK_MCP_ALLOW_COMPILE
+core_sections:
+  - Output contract
+  - Hard rules
+  - Output JSON
+extended_sections:
+  - Failure modes
+---
+
 # Compile (STEP 0)
 
 You compile human `.goal.md` into an abstract **Goal Format** frame (`.goal_format.md` backend)

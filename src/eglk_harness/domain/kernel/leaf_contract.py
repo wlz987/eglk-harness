@@ -128,3 +128,21 @@ def assemble_leaf_contract(
         attempt_index=attempt,
         learned_skills_block=learned_skills_block.strip(),
     )
+
+
+def contract_from_dict(data: Mapping[str, Any]) -> LeafContract:
+    """Rebuild ``LeafContract`` from tick-assembled JSON."""
+    acceptance = data.get("acceptance")
+    boundary = data.get("boundary")
+    prior = data.get("prior_evidence")
+    return LeafContract(
+        leaf_id=str(data.get("leaf_id") or "root"),
+        goal=str(data.get("goal") or ""),
+        acceptance=[str(x) for x in acceptance if str(x).strip()] if isinstance(acceptance, list) else [],
+        boundary=[str(x) for x in boundary if str(x).strip()] if isinstance(boundary, list) else [],
+        prior_evidence=list(prior) if isinstance(prior, list) else [],
+        tick=int(data["tick"]) if data.get("tick") is not None else None,
+        parent_id=str(data["parent_id"]) if data.get("parent_id") else None,
+        attempt_index=int(data["attempt_index"]) if data.get("attempt_index") is not None else None,
+        learned_skills_block=str(data.get("learned_skills_block") or ""),
+    )

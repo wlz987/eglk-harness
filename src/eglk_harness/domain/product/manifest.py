@@ -89,8 +89,8 @@ def build_manifest(
         "sandbox_mode": "strict",
         "swarm_soft": swarm,
         "budget": {
-            "cognitive_tokens_max": P.COGNITIVE_TOKENS_MAX,
-            "repairs_max": P.REPAIRS_MAX,
+            "cognitive_tokens_max": P.effective_cognitive_tokens_max(),
+            "repairs_max": P.effective_repairs_max(),
             # soft tick cap may be recorded later; never replaces cognitive/repairs
             "max_ticks_soft": 0,
         },

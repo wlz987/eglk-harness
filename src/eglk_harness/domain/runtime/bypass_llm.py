@@ -97,7 +97,7 @@ async def run_bypass_json(
     profile = resolve_role_tool_profile(role)
     tool_kw = _episode_tool_kwargs(adapter, role=role, tools_allowed=profile.tools_allowed)
 
-    prompt = render_prompt(role, leaf_block=leaf_block, extra=extra)
+    prompt = render_prompt(role, leaf_block=leaf_block, extra=extra, workdir=workdir)
     from eglk_harness.domain.runtime.prompt_i18n import constraint_block
 
     prompt = f"{prompt}\n\n{constraint_block()}"
@@ -133,7 +133,9 @@ async def run_bypass_json(
     )
     if getattr(result, "text", None):
         repair_extra += f"\nPrevious (truncated):\n```\n{(result.text or '')[:1500]}\n```\n"
-    repair_prompt = render_prompt(role, leaf_block=leaf_block, extra=repair_extra)
+    repair_prompt = render_prompt(
+        role, leaf_block=leaf_block, extra=repair_extra, workdir=workdir, format_repair=True
+    )
     repair_tee = None
     if tee_path:
         p = Path(tee_path)

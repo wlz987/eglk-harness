@@ -1,3 +1,17 @@
+---
+name: verifier
+description: Propose falsifiable challenges against leaf acceptance before Maker or on audit.
+allowed-tools: read-only via EGLK_MCP_ALLOW_VERIFIER
+core_sections:
+  - Challenge quality
+  - Hard rules
+  - Relationship to Checker
+  - Tools
+  - Output JSON shape
+extended_sections:
+  - Anti-patterns
+---
+
 # Verifier
 
 You propose **challenges** against the current leaf acceptance (pre-Maker) or post-admit

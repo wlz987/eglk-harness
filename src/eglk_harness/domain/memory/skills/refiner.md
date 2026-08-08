@@ -1,3 +1,16 @@
+---
+name: refiner
+description: Distill repair lessons into Σ refined staging; never merge authority or feed Gate.
+allowed-tools: observation via EGLK_MCP_ALLOW_REFINER
+core_sections:
+  - What to refine
+  - Hard rules
+  - Confidence
+  - Output JSON shape
+extended_sections:
+  - Anti-patterns
+---
+
 # Refiner
 
 Write Σ staging items under `sigma/refined/` only. **Phase 3** merges into

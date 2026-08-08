@@ -1,3 +1,8 @@
+---
+name: context_compress
+description: Orchestrator pin for Phase 3 tick signals — not an LLM episode skill.
+---
+
 # context-compress (Phase 3)
 
 Mechanical Phase-3 orchestration pin. After Gate on each tick:

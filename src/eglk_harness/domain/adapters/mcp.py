@@ -27,14 +27,52 @@ __all__ = [
 ]
 
 
+def _normalize_mcp_servers_doc(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize Claude ``mcpServers`` or Codex ``mcp_servers`` shapes."""
+    if "mcpServers" in data and isinstance(data.get("mcpServers"), dict):
+        return {"mcpServers": dict(data["mcpServers"])}
+    if "mcp_servers" in data and isinstance(data.get("mcp_servers"), dict):
+        return {"mcpServers": dict(data["mcp_servers"])}
+    return {"mcpServers": dict(data)} if data else {"mcpServers": {}}
+
+
+def _load_mcp_toml(path: Path) -> dict[str, Any]:
+    """Load Codex-plugin TOML (``[mcp_servers.name]``) into Claude-shaped JSON."""
+    import tomllib
+
+    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"mcp toml must be a table: {path}")
+    servers = raw.get("mcp_servers")
+    if not isinstance(servers, dict):
+        # Allow flat mistaken files; still normalize empty
+        servers = {}
+    return {"mcpServers": dict(servers)}
+
+
 def load_mcp_config(path: Path | str | None) -> dict[str, Any] | None:
+    """Load Claude JSON or Codex plugin TOML MCP config.
+
+    Returns ``None`` when the file is missing/unreadable/invalid so callers can
+    skip MCP instead of aborting the whole tick (Explorer/Maker hard-fail).
+    """
     if path is None:
         return None
     p = Path(path)
-    data = json.loads(p.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"mcp config must be object: {p}")
-    return data
+    if not p.is_file():
+        return None
+    try:
+        text = p.read_text(encoding="utf-8")
+        if p.suffix.lower() == ".toml" or text.lstrip().startswith("["):
+            data = _load_mcp_toml(p)
+        else:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                return None
+            data = _normalize_mcp_servers_doc(data)
+    except (OSError, ValueError, json.JSONDecodeError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def resolve_mcp_config(
@@ -183,10 +221,12 @@ def _mcp_server_entry(spec: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def codex_mcp_overrides(mcp_config: Path | None) -> list[str]:
-    """Translate Claude-style mcp.json → Codex ``-c mcp_servers.*`` overrides."""
+    """Translate Claude-style mcp.json / Codex plugin TOML → ``-c mcp_servers.*``."""
     if mcp_config is None:
         return []
     data = load_mcp_config(mcp_config)
+    if not data:
+        return []
     overrides: list[str] = []
     for name, spec in mcp_servers(data).items():
         if not isinstance(spec, dict) or not str(name).strip():

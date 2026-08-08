@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest, EpisodeResult
 from eglk_harness.domain.kernel.schema_validate import try_parse_document
 from eglk_harness.domain.memory.skills import render_prompt
 
 
-def repair_prompt(*, role: str, leaf_block: str, previous_error: str, previous_text: str = "") -> str:
+def repair_prompt(
+    *,
+    role: str,
+    leaf_block: str,
+    previous_error: str,
+    previous_text: str = "",
+    workdir: Path | None = None,
+) -> str:
     """Build a no-tools repair prompt — emit schema JSON only; do not re-mutate the world."""
     extra = (
         f"FORMAT REPAIR: previous output failed validation ({previous_error}).\n"
@@ -18,7 +27,13 @@ def repair_prompt(*, role: str, leaf_block: str, previous_error: str, previous_t
     )
     if previous_text.strip():
         extra += f"\nPrevious output (truncated):\n```\n{previous_text[:2000]}\n```\n"
-    return render_prompt(role, leaf_block=leaf_block, extra=extra)
+    return render_prompt(
+        role,
+        leaf_block=leaf_block,
+        extra=extra,
+        workdir=workdir,
+        format_repair=True,
+    )
 
 
 def _schema_name(expect: str) -> str | None:
@@ -34,6 +49,7 @@ async def run_with_format_repair(
     request: EpisodeRequest,
     *,
     leaf_block: str,
+    workdir: Path | None = None,
     enabled: bool = True,
     max_repairs: int = 2,
 ) -> EpisodeResult:
@@ -74,6 +90,7 @@ async def run_with_format_repair(
                 leaf_block=leaf_block,
                 previous_error=previous_error,
                 previous_text=previous_text,
+                workdir=workdir or request.workdir,
             ),
             workdir=request.workdir,
             # Repair is JSON-only — never re-open tools/MCP (avoids re-running 30min benches).

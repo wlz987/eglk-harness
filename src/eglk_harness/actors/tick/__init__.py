@@ -16,6 +16,7 @@ from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.kernel import worldref
 from eglk_harness.domain.kernel.leaf_contract import assemble_leaf_contract
+from eglk_harness.domain.kernel.compile_goal import load_goal_constraints
 from eglk_harness.domain.kernel.projections import effective_cognitive_tokens_max, effective_repairs_max
 from eglk_harness.domain.kernel.repair_counts import load_runtime_state, repair_counts_from_decisions
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
@@ -250,6 +251,19 @@ class TickJob(Job):
             "pruner": (topics.ROLE_PRUNER_RUN, topics.ROLE_PRUNER_RESULT),
         }
         req, res = prefixes[role]
+        lc_payload = self.leaf_contract if isinstance(self.leaf_contract, dict) else None
+        if lc_payload is None and self.tree is not None:
+            cur_pre = self.tree.in_progress()
+            if cur_pre is not None:
+                try:
+                    pre = assemble_leaf_contract(
+                        cur_pre,
+                        tick=self.tick,
+                        goal_constraints=load_goal_constraints(self.workdir),
+                    )
+                    lc_payload = pre.to_dict()
+                except ValueError:
+                    lc_payload = None
         await self.request(
             stage=f"phase0_{role}",
             request_prefix=req,
@@ -262,6 +276,7 @@ class TickJob(Job):
                     "goal_title": cur.title if cur else self.goal_title,
                     "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
                     "workdir": str(self.workdir),
+                    "leaf_contract": lc_payload,
                 }
             },
         )
@@ -322,10 +337,12 @@ class TickJob(Job):
             acceptance=list(cur.done_criteria),
         )
         learned = skill_lib.render_learned_skills_block(matched)
+        goal_cons = load_goal_constraints(self.workdir)
         try:
             contract = assemble_leaf_contract(
                 cur,
                 tick=self.tick,
+                goal_constraints=goal_cons,
                 prior_evidence=self._load_phase0_priors(),
                 sigma_lessons=lessons,
                 skill_hints=hints,
@@ -430,6 +447,7 @@ class TickJob(Job):
                         "goal_id": self.goal_id,
                         "goal_title": cur.title if cur else self.goal_title,
                         "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
+                        "leaf_contract": self.leaf_contract,
                         "workdir": str(self.workdir),
                         "timeout_s": self.checker_timeout_s or 600.0,
                         "tee_path": str(

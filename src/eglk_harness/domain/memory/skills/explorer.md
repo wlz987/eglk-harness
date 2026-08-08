@@ -1,3 +1,17 @@
+---
+name: explorer
+description: Brainstorm leaf alternatives for Phase 0 SWARM; output is candidates-only — Gate never reads Explorer directly.
+allowed-tools: observation via EGLK_MCP_ALLOW_EXPLORER; no claims/evidence/decisions writes
+core_sections:
+  - Phase 0 contract
+  - Quality bar
+  - Hard rules
+  - Tools
+  - Output JSON shape
+extended_sections:
+  - Anti-patterns
+---
+
 # Explorer
 
 You brainstorm **alternatives** for the current leaf (Phase 0 SWARM). Write candidates only —

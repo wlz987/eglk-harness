@@ -93,6 +93,10 @@ def record_admit(
     found["history"] = hist[-20:]
     save_index(workdir, items)
     body = (
+        f"---\n"
+        f"name: {found.get('id')}\n"
+        f"description: {str(found.get('name') or found.get('id'))[:200]}\n"
+        f"---\n\n"
         f"# {found.get('name')}\n\n"
         f"Leaf skill reinforced on admit (tick={tick}).\n\n"
         f"- triggers: {', '.join(str(t) for t in found.get('triggers') or [])}\n"

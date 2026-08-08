@@ -257,3 +257,33 @@ def compile_goal(
         return CompileResult(None, "error", "empty compile output")
     out.write_text(text, encoding="utf-8")
     return CompileResult(out, "wrote", f"mode={mode_s} backend={backend} source={source}")
+
+
+def load_goal_constraints(workdir: Path) -> list[str]:
+    """Read constraint bullets from ``.goal_format.md`` or ``.goal.md`` for leaf boundary."""
+    workdir = workdir.resolve()
+    gf = workdir / GOAL_FORMAT_NAME
+    if gf.is_file():
+        cons = _section_bullets(
+            gf.read_text(encoding="utf-8"),
+            "constraints",
+            "constraint",
+            "边界",
+            "约束",
+        )
+        if cons:
+            return cons
+    goal = workdir / ".goal.md"
+    if goal.is_file():
+        return _section_bullets(
+            goal.read_text(encoding="utf-8"),
+            "constraints",
+            "constraint",
+            "边界",
+            "约束",
+            "boundary",
+            "delivery",
+            "deliverables",
+            "live environment",
+        )
+    return []

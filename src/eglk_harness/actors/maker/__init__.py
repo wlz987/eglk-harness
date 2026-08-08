@@ -3,17 +3,38 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from eba import RequestResponseActor
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
 from eglk_harness.domain.runtime.format_repair import run_with_format_repair
-from eglk_harness.domain.kernel.leaf_contract import LeafContract
+from eglk_harness.domain.kernel.leaf_contract import LeafContract, contract_from_dict
 from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
 from eglk_harness.protocol import messages, payload, topics
+
+
+def _leaf_from_args(args: Mapping[str, Any], *, tick: int, subgoal_id: str, criteria: list[str], title: str) -> LeafContract:
+    lc = args.get("leaf_contract")
+    if isinstance(lc, dict):
+        leaf = contract_from_dict(lc)
+        if leaf.leaf_id == "root" and subgoal_id != "root":
+            leaf.leaf_id = subgoal_id
+        if not leaf.goal:
+            leaf.goal = title
+        if not leaf.acceptance:
+            leaf.acceptance = criteria
+        if leaf.tick is None:
+            leaf.tick = tick
+        return leaf
+    return LeafContract(
+        leaf_id=subgoal_id,
+        goal=title,
+        acceptance=criteria,
+        tick=tick,
+    )
 
 
 class MakerActor(RequestResponseActor):
@@ -48,14 +69,11 @@ class MakerActor(RequestResponseActor):
         title = str(args.get("goal_title") or args.get("title") or subgoal_id)
         workdir = Path(args.get("workdir") or self.workdir).resolve()
         tee_path = args.get("tee_path")
-        leaf = LeafContract(
-            leaf_id=subgoal_id,
-            goal=title,
-            acceptance=criteria,
-            tick=tick,
+        leaf = _leaf_from_args(
+            args, tick=tick, subgoal_id=subgoal_id, criteria=criteria, title=title
         )
         leaf_block = leaf.render_maker_block()
-        prompt = render_prompt("maker", leaf_block=leaf_block)
+        prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
         request = EpisodeRequest(
             role="maker",
             prompt=prompt,
@@ -69,7 +87,9 @@ class MakerActor(RequestResponseActor):
             meta={"tick": tick, "subgoal_id": subgoal_id},
             tee_path=str(tee_path) if tee_path else None,
         )
-        result = await run_with_format_repair(self.adapter, request, leaf_block=leaf_block)
+        result = await run_with_format_repair(
+            self.adapter, request, leaf_block=leaf_block, workdir=workdir
+        )
         if not result.ok or not isinstance(result.parsed, dict):
             return messages.err_body(result.error or "maker_episode_failed")
         claim = dict(result.parsed)

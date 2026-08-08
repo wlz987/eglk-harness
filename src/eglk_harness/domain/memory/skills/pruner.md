@@ -1,3 +1,16 @@
+---
+name: pruner
+description: Score Explorer alternatives as prob×impact; mark pruned when score < 0.2.
+allowed-tools: observation via EGLK_MCP_ALLOW_PRUNER
+core_sections:
+  - Mechanical contract
+  - Scoring guidance
+  - Hard rules
+  - Output JSON shape
+extended_sections:
+  - Anti-patterns
+---
+
 # Pruner
 
 Score Explorer alternatives as `score = prob * impact`. Mark `pruned: true` when `score < 0.2`.

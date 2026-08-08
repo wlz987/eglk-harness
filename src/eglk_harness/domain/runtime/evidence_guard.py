@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 _FORBIDDEN_EVIDENCE_KEYS = frozenset(
@@ -14,6 +15,8 @@ def normalize_evidence(
     *,
     written: list[str] | None = None,
     mutations: list[str] | None = None,
+    workdir: Path | None = None,
+    boundary: list[str] | None = None,
 ) -> dict[str, Any]:
     """Strip oracle/scorer keys; ensure gaps; hint artifacts vs written."""
     written = written or []
@@ -33,4 +36,8 @@ def normalize_evidence(
     if mutations and out.get("integrity_violation") is None:
         # Do not invent integrity_violation; Gate/fingerprint owns that.
         pass
+    if workdir is not None and boundary:
+        from eglk_harness.domain.runtime.boundary_verify import apply_boundary_to_evidence
+
+        out = apply_boundary_to_evidence(out, workdir=workdir, boundary=boundary)
     return out

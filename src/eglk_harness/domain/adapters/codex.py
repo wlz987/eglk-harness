@@ -66,7 +66,7 @@ class CodexAdapter:
     async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
         try:
             argv = self.build_argv(request)
-        except (FileNotFoundError, AssertionError) as exc:
+        except (FileNotFoundError, AssertionError, OSError, ValueError, TypeError) as exc:
             return EpisodeResult(ok=False, error=str(exc), backend=self.name)
 
         env: dict[str, str] | None = None

@@ -1,3 +1,16 @@
+---
+name: maker
+description: Produce schema-valid Claims for one leaf; Gate admits — Maker never decides admit.
+allowed-tools: tools-on by default; tighten via EGLK_MCP_ALLOW_MAKER / EGLK_TOOLS_OFF_ROLES
+core_sections:
+  - Hard rules
+  - Gate interaction
+  - Long-run leaves
+  - Output schema (Claim)
+extended_sections:
+  - Example
+---
+
 # Maker skill
 
 You are the **Maker** for one leaf of an eglk task tree.

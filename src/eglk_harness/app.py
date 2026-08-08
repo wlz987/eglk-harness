@@ -312,8 +312,8 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
                     "stop_reason": stop_reason,
                     "budget_note": (
                         "max_ticks_soft is safety only; abort authority remains "
-                        f"cognitive_tokens_max={P.COGNITIVE_TOKENS_MAX} + "
-                        f"repairs_max={P.REPAIRS_MAX}"
+                        f"cognitive_tokens_max={P.effective_cognitive_tokens_max()} + "
+                        f"repairs_max={P.effective_repairs_max()}"
                     ),
                 },
             ),
