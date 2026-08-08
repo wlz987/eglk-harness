@@ -296,3 +296,49 @@ def load_goal_constraints(workdir: Path) -> list[str]:
     if gf.is_file():
         _extend(_section_bullets(gf.read_text(encoding="utf-8"), *headers_format))
     return merged
+
+
+_GOAL_EXCERPT_MAX = 8000
+
+
+def _excerpt_text(text: str, *, limit: int = _GOAL_EXCERPT_MAX) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 20].rstrip() + "\n\n…[truncated]…"
+
+
+def load_goal_excerpts(workdir: Path) -> tuple[str, str]:
+    """Return (``.goal.md`` excerpt, ``.goal_format.md`` excerpt).
+
+    Roles must see **both**: human goal is primary; format frame is the STEP0
+    supplement / abstract frame — never a replacement that hides delivery constraints.
+    """
+    workdir = workdir.resolve()
+    goal_txt = ""
+    fmt_txt = ""
+    goal = workdir / ".goal.md"
+    if goal.is_file():
+        goal_txt = _excerpt_text(goal.read_text(encoding="utf-8"))
+    gf = workdir / GOAL_FORMAT_NAME
+    if gf.is_file():
+        fmt_txt = _excerpt_text(gf.read_text(encoding="utf-8"))
+    return goal_txt, fmt_txt
+
+
+def render_goal_dual_block(goal_md: str, goal_format: str) -> str:
+    """Markdown block injecting both goal documents into role prompts."""
+    lines = [
+        "[GOAL_CONTEXT]",
+        "Relation: `.goal.md` is primary human intent + delivery constraints;",
+        "`.goal_format.md` is STEP0 abstract supplement — read both; do not ignore either.",
+        "On conflict about *what to deliver*, union Constraints / MUST_EXIST from both;",
+        "prefer concrete paths and acceptance from `.goal.md` Summary / Done criteria.",
+        "",
+        "## .goal.md (primary)",
+        goal_md.strip() if goal_md.strip() else "(missing)",
+        "",
+        "## .goal_format.md (supplement)",
+        goal_format.strip() if goal_format.strip() else "(missing)",
+    ]
+    return "\n".join(lines)

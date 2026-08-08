@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mcp import filter_mcp_config_for_role
@@ -162,35 +162,29 @@ def coerce_governor_proposal(
     tick: int,
     leaf_id: str,
     fallback: Mapping[str, Any],
+    parent_criteria: Sequence[str] | None = None,
+    parent_title: str = "",
 ) -> dict[str, Any]:
+    from eglk_harness.domain.kernel.governor_split import sanitize_governor_children
+
     if not raw:
         return dict(fallback)
     children = raw.get("children")
     if not isinstance(children, list) or len(children) < 2:
         return dict(fallback)
-    out_children: list[dict[str, Any]] = []
-    for i, c in enumerate(children, start=1):
-        if not isinstance(c, dict):
-            continue
-        cid = str(c.get("id") or f"{leaf_id}.{i:02d}")
-        title = str(c.get("title") or cid)
-        crit = c.get("done_criteria") or c.get("acceptance") or []
-        if not isinstance(crit, list) or not crit:
-            continue
-        out_children.append(
-            {
-                "id": cid,
-                "title": title,
-                "done_criteria": [str(x) for x in crit if str(x).strip()],
-            }
-        )
-    if len(out_children) < 2:
+    cleaned = sanitize_governor_children(
+        children,
+        leaf_id=leaf_id,
+        title=parent_title or leaf_id,
+        parent_criteria=list(parent_criteria or []),
+    )
+    if cleaned is None:
         return dict(fallback)
     return {
         "role": "governor",
         "tick": tick,
         "split_node": str(raw.get("split_node") or leaf_id),
-        "children": out_children,
+        "children": cleaned,
         "source": "llm",
     }
 

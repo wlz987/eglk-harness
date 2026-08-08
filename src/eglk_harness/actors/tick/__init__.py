@@ -16,7 +16,7 @@ from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.kernel import worldref
 from eglk_harness.domain.kernel.leaf_contract import assemble_leaf_contract
-from eglk_harness.domain.kernel.compile_goal import load_goal_constraints
+from eglk_harness.domain.kernel.compile_goal import load_goal_constraints, load_goal_excerpts
 from eglk_harness.domain.kernel.projections import effective_cognitive_tokens_max, effective_repairs_max
 from eglk_harness.domain.kernel.repair_counts import load_runtime_state, repair_counts_from_decisions
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_refiner, decide_swarm, should_veto_after_admit
@@ -256,10 +256,16 @@ class TickJob(Job):
             cur_pre = self.tree.in_progress()
             if cur_pre is not None:
                 try:
+                    gmd, gfmt = load_goal_excerpts(self.workdir)
                     pre = assemble_leaf_contract(
                         cur_pre,
                         tick=self.tick,
                         goal_constraints=load_goal_constraints(self.workdir),
+                        goal_md_excerpt=gmd,
+                        goal_format_excerpt=gfmt,
+                        root_acceptance=list(self.tree.root.done_criteria)
+                        if self.tree.root
+                        else [],
                     )
                     lc_payload = pre.to_dict()
                 except ValueError:
@@ -338,6 +344,8 @@ class TickJob(Job):
         )
         learned = skill_lib.render_learned_skills_block(matched)
         goal_cons = load_goal_constraints(self.workdir)
+        goal_md, goal_fmt = load_goal_excerpts(self.workdir)
+        root_acc = list(self.tree.root.done_criteria) if self.tree.root else []
         try:
             contract = assemble_leaf_contract(
                 cur,
@@ -347,6 +355,9 @@ class TickJob(Job):
                 sigma_lessons=lessons,
                 skill_hints=hints,
                 learned_skills_block=learned,
+                goal_md_excerpt=goal_md,
+                goal_format_excerpt=goal_fmt,
+                root_acceptance=root_acc,
             )
         except ValueError as exc:
             await self.finish(ok=False, error=f"leaf_contract:{exc}")

@@ -55,6 +55,7 @@ def parse_boundary_rules(boundary: Sequence[str]) -> BoundaryRules:
 
 
 def _is_placeholder_har(path: Path) -> bool:
+    """True when HAR is missing, empty, text stub, or not valid Playwright HAR JSON."""
     if not path.is_file():
         return True
     try:
@@ -68,9 +69,21 @@ def _is_placeholder_har(path: Path) -> bool:
         return True
     try:
         data = json.loads(text)
-        return not isinstance(data, dict) or "log" not in data
     except json.JSONDecodeError:
-        return path.stat().st_size < 64
+        # Truncated mid-session HAR must not pass as valid.
+        return True
+    if not isinstance(data, dict) or "log" not in data:
+        return True
+    log = data.get("log")
+    if not isinstance(log, dict):
+        return True
+    entries = log.get("entries")
+    if not isinstance(entries, list):
+        return True
+    # Empty entries after a real finalize is rare; treat as incomplete delivery.
+    if len(entries) < 1:
+        return True
+    return False
 
 
 def _forbidden_hits(workdir: Path, prefixes: Sequence[str]) -> list[str]:

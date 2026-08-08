@@ -11,6 +11,7 @@ from eba import RequestResponseActor
 from eglk_harness.domain.adapters.base import AgentAdapter
 from eglk_harness.domain.runtime.budgets import timeout_for_role
 from eglk_harness.domain.runtime.bypass_llm import coerce_governor_proposal, run_bypass_json
+from eglk_harness.domain.kernel.compile_goal import load_goal_excerpts, render_goal_dual_block
 from eglk_harness.domain.kernel.governor_split import proposal_document
 from eglk_harness.domain.kernel.loop_store import load_tree
 from eglk_harness.protocol import messages, payload, topics
@@ -62,22 +63,37 @@ class GovernorActor(RequestResponseActor):
             done_criteria=criteria,
             repair_streak=streak,
         )
+        goal_md, goal_fmt = load_goal_excerpts(workdir)
+        goal_block = render_goal_dual_block(goal_md, goal_fmt)
         leaf_block = (
             f"[LEAF]\nid: {leaf_id}\ntitle: {title}\n"
             f"repair_streak: {streak}\nacceptance:\n"
             + "\n".join(f"  - {c}" for c in criteria)
+            + "\n\n"
+            + goal_block
         )
         raw = await run_bypass_json(
             self.adapter,
             role="governor",
             workdir=workdir,
             leaf_block=leaf_block,
-            extra='JSON shape: {"split_node":"...","children":[{"id","title","done_criteria":[]}]}',
+            extra=(
+                'JSON shape: {"split_node":"...","children":[{"id","title","done_criteria":[]}]}. '
+                "Children must partition parent acceptance / goal deliverables — "
+                "never invent wa_start_session/session_id/isinstance micro-leaves."
+            ),
             tick=tick,
             subgoal_id=leaf_id,
             timeout_s=float(args.get("timeout_s") or timeout_for_role("governor")),
         )
-        proposal = coerce_governor_proposal(raw, tick=tick, leaf_id=leaf_id, fallback=fallback)
+        proposal = coerce_governor_proposal(
+            raw,
+            tick=tick,
+            leaf_id=leaf_id,
+            fallback=fallback,
+            parent_criteria=criteria,
+            parent_title=title,
+        )
         if loop_dir is not None:
             cand = loop_dir / "candidates"
             cand.mkdir(parents=True, exist_ok=True)

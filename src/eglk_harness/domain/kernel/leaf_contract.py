@@ -19,11 +19,21 @@ class LeafContract:
     parent_id: str | None = None
     attempt_index: int | None = None
     learned_skills_block: str = ""
+    goal_md_excerpt: str = ""
+    goal_format_excerpt: str = ""
+    root_acceptance: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # drop Nones / empty optional strings for cleaner JSON
-        return {k: v for k, v in d.items() if v is not None and v != ""}
+        return {k: v for k, v in d.items() if v is not None and v != "" and v != []}
+
+    def _goal_context_lines(self) -> list[str]:
+        if not (self.goal_md_excerpt or self.goal_format_excerpt):
+            return []
+        from eglk_harness.domain.kernel.compile_goal import render_goal_dual_block
+
+        return ["", render_goal_dual_block(self.goal_md_excerpt, self.goal_format_excerpt)]
 
     def render_maker_block(self) -> str:
         lines = [
@@ -39,6 +49,9 @@ class LeafContract:
             lines.extend(f"  - {b}" for b in self.boundary)
         else:
             lines.append("  - (none)")
+        if self.root_acceptance and self.leaf_id != "root":
+            lines.append("root_acceptance (whole-task — still required for root admit):")
+            lines.extend(f"  - {a}" for a in self.root_acceptance)
         lines.append("prior_evidence:")
         for p in self.prior_evidence:
             if isinstance(p, Mapping):
@@ -47,6 +60,7 @@ class LeafContract:
                 lines.append(f"  - {p}")
         if not self.prior_evidence:
             lines.append("  - (none)")
+        lines.extend(self._goal_context_lines())
         if self.learned_skills_block:
             lines.extend(["", self.learned_skills_block])
         return "\n".join(lines)
@@ -66,6 +80,9 @@ class LeafContract:
             lines.extend(f"  - {b}" for b in self.boundary)
         else:
             lines.append("  - (none)")
+        if self.root_acceptance and self.leaf_id != "root":
+            lines.append("root_acceptance (whole-task):")
+            lines.extend(f"  - {a}" for a in self.root_acceptance)
         lines.append("prior_evidence (titles only):")
         for p in self.prior_evidence:
             if isinstance(p, Mapping):
@@ -76,6 +93,7 @@ class LeafContract:
                 lines.append(f"  - {str(p)[:80]}")
         if not self.prior_evidence:
             lines.append("  - (none)")
+        lines.extend(self._goal_context_lines())
         return "\n".join(lines)
 
 
@@ -89,6 +107,9 @@ def assemble_leaf_contract(
     sigma_lessons: Sequence[Mapping[str, Any]] | None = None,
     skill_hints: Sequence[str] | None = None,
     learned_skills_block: str = "",
+    goal_md_excerpt: str = "",
+    goal_format_excerpt: str = "",
+    root_acceptance: Sequence[str] | None = None,
 ) -> LeafContract:
     """Build a LeafContract for an in_progress (or any) leaf node.
 
@@ -129,6 +150,9 @@ def assemble_leaf_contract(
         parent_id=leaf.parent_id,
         attempt_index=attempt,
         learned_skills_block=learned_skills_block.strip(),
+        goal_md_excerpt=goal_md_excerpt.strip(),
+        goal_format_excerpt=goal_format_excerpt.strip(),
+        root_acceptance=[str(x) for x in (root_acceptance or []) if str(x).strip()],
     )
 
 
@@ -137,6 +161,7 @@ def contract_from_dict(data: Mapping[str, Any]) -> LeafContract:
     acceptance = data.get("acceptance")
     boundary = data.get("boundary")
     prior = data.get("prior_evidence")
+    root_acc = data.get("root_acceptance")
     return LeafContract(
         leaf_id=str(data.get("leaf_id") or "root"),
         goal=str(data.get("goal") or ""),
@@ -147,4 +172,7 @@ def contract_from_dict(data: Mapping[str, Any]) -> LeafContract:
         parent_id=str(data["parent_id"]) if data.get("parent_id") else None,
         attempt_index=int(data["attempt_index"]) if data.get("attempt_index") is not None else None,
         learned_skills_block=str(data.get("learned_skills_block") or ""),
+        goal_md_excerpt=str(data.get("goal_md_excerpt") or ""),
+        goal_format_excerpt=str(data.get("goal_format_excerpt") or ""),
+        root_acceptance=[str(x) for x in root_acc if str(x).strip()] if isinstance(root_acc, list) else [],
     )
