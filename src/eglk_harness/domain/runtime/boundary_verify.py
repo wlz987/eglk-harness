@@ -54,8 +54,8 @@ def parse_boundary_rules(boundary: Sequence[str]) -> BoundaryRules:
     return rules
 
 
-def _is_placeholder_har(path: Path) -> bool:
-    """True when HAR is missing, empty, text stub, or not valid capture JSON."""
+def _is_placeholder_capture(path: Path) -> bool:
+    """True when a HAR-style network capture is missing, stub, or incomplete JSON."""
     if not path.is_file():
         return True
     try:
@@ -91,7 +91,7 @@ def is_valid_must_exist_file(path: Path, *, rel: str) -> bool:
     if not path.is_file():
         return False
     if rel.endswith(".har"):
-        return not _is_placeholder_har(path)
+        return not _is_placeholder_capture(path)
     return path.stat().st_size > 0
 
 
@@ -179,7 +179,7 @@ def verify_boundary(workdir: Path, boundary: Sequence[str]) -> list[str]:
                 msg += f" ({note})"
             violations.append(msg)
             continue
-        if rel.endswith(".har") and _is_placeholder_har(path):
+        if rel.endswith(".har") and _is_placeholder_capture(path):
             violations.append(f"boundary: {rel} is not a valid HAR (placeholder or missing log)")
 
     for hit in _forbidden_hits(workdir, rules.forbidden_prefixes):

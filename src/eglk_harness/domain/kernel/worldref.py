@@ -80,7 +80,9 @@ def snapshot_workdir(
 
 
 _RESTORE_CORE_SKIP = frozenset({".eglk-harness", ".git", ".venv"})
-_DEFAULT_PRESERVE_TOP = ("artifacts", "deliverables", "evidence_pack", "agent_runs", "out")
+# Generic delivery roots only — suite-specific tops (e.g. agent_runs) come from
+# MUST_EXIST first-segment parsing or EGLK_RESTORE_PRESERVE_DIRS.
+_DEFAULT_PRESERVE_TOP = ("artifacts", "deliverables", "evidence_pack", "out")
 
 
 def _preserve_top_dirs(workdir: Path) -> frozenset[str]:

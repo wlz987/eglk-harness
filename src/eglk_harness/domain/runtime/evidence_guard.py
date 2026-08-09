@@ -43,23 +43,21 @@ def normalize_evidence(
         )
 
         out = apply_boundary_to_evidence(out, workdir=workdir, boundary=boundary)
-        if not verify_boundary(workdir, boundary):
-            gaps = [str(g) for g in (out.get("gaps") or []) if str(g).strip()]
-            try:
-                audit = float(out.get("audit_progress", 0))
-            except (TypeError, ValueError):
-                audit = 0.0
-            if not gaps and audit < 1.0:
-                out["audit_progress"] = 1.0
-            challenges = [str(c) for c in (out.get("challenges") or []) if str(c).strip()]
-            if challenges and not gaps:
-                artifacts = list(out.get("artifacts") or [])
-                for c in challenges:
-                    tag = f"[methodology] {c}"
-                    if tag not in artifacts:
-                        artifacts.append(tag)
-                out["artifacts"] = artifacts
-                out["challenges"] = []
+        violations = verify_boundary(workdir, boundary)
+        if violations:
+            # Boundary failed — keep mechanical clamp from apply_boundary_to_evidence;
+            # never lift audit_progress when MUST_EXIST / FORBIDDEN are unmet.
+            return out
+        gaps = [str(g) for g in (out.get("gaps") or []) if str(g).strip()]
+        challenges = [str(c) for c in (out.get("challenges") or []) if str(c).strip()]
+        if challenges and not gaps:
+            artifacts = list(out.get("artifacts") or [])
+            for c in challenges:
+                tag = f"[methodology] {c}"
+                if tag not in artifacts:
+                    artifacts.append(tag)
+            out["artifacts"] = artifacts
+            out["challenges"] = []
     return out
 
 
