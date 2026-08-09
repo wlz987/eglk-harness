@@ -86,9 +86,12 @@ def format_goal_frame(goal_text: str) -> str:
             "Prefer verifiable done criteria from the human goal.",
         ]
 
-    body_preview = "\n".join(
-        ln for ln in goal_text.strip().splitlines() if ln.strip() and not ln.strip().startswith("#")
-    )[:800]
+    body_preview = _excerpt_text(
+        "\n".join(
+            ln for ln in goal_text.strip().splitlines() if ln.strip() and not ln.strip().startswith("#")
+        ),
+        limit=_COMPILE_SOURCE_EXCERPT_MAX,
+    )
 
     crit_block = "\n".join(f"- {c}" for c in criteria)
     cons_block = "\n".join(f"- {c}" for c in constraints)
@@ -119,7 +122,7 @@ def frame_from_compile_json(doc: dict[str, Any], *, source_excerpt: str = "") ->
     crit = "\n".join(f"- {c}" for c in acceptance)
     cons = "\n".join(f"- {c}" for c in constraints)
     extra = f"\n## Notes\n\n{notes}\n" if notes else ""
-    excerpt = source_excerpt[:800] if source_excerpt else ""
+    excerpt = _excerpt_text(source_excerpt, limit=_COMPILE_SOURCE_EXCERPT_MAX) if source_excerpt else ""
     return (
         f"# Goal Format\n\n"
         f"> Compiled abstract frame (STEP 0 · Adapter). No concrete subtask split.\n\n"
@@ -299,6 +302,8 @@ def load_goal_constraints(workdir: Path) -> list[str]:
 
 
 _GOAL_EXCERPT_MAX = 8000
+# Stored in `.goal_format.md` — align with prompt excerpts; eval goals can be long.
+_COMPILE_SOURCE_EXCERPT_MAX = _GOAL_EXCERPT_MAX
 
 
 def _excerpt_text(text: str, *, limit: int = _GOAL_EXCERPT_MAX) -> str:
