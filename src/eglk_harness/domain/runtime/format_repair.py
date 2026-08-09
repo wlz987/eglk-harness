@@ -16,6 +16,7 @@ def repair_prompt(
     previous_error: str,
     previous_text: str = "",
     workdir: Path | None = None,
+    failure_kind: str | None = None,
 ) -> str:
     """Build a no-tools repair prompt — emit schema JSON only; do not re-mutate the world."""
     extra = (
@@ -25,6 +26,11 @@ def repair_prompt(
         "Do **not** re-run tools, shell, or long benches — world artifacts already exist; "
         "only emit the missing Claim/Evidence JSON as your final assistant message.\n"
     )
+    from eglk_harness.domain.runtime.episode_failure import failure_repair_extra
+
+    kind_extra = failure_repair_extra(failure_kind)
+    if kind_extra:
+        extra += kind_extra + "\n"
     if previous_text.strip():
         extra += f"\nPrevious output (truncated):\n```\n{previous_text[:2000]}\n```\n"
     return render_prompt(
@@ -68,6 +74,9 @@ async def run_with_format_repair(
     last = first
     previous_text = first.text or ""
     previous_error = first.error or "unparseable"
+    from eglk_harness.domain.runtime.episode_failure import failure_kind_from_raw
+
+    failure_kind = failure_kind_from_raw(previous_text)
 
     # Deterministic recovery on the first raw text before spending another LLM call
     if schema and previous_text.strip():
@@ -85,12 +94,13 @@ async def run_with_format_repair(
     for attempt in range(max_repairs):
         repair_req = EpisodeRequest(
             role=request.role,
-            prompt=repair_prompt(
+            prompt=            repair_prompt(
                 role=request.role,
                 leaf_block=leaf_block,
                 previous_error=previous_error,
                 previous_text=previous_text,
                 workdir=workdir or request.workdir,
+                failure_kind=failure_kind,
             ),
             workdir=request.workdir,
             # Repair is JSON-only — never re-open tools/MCP (avoids re-running 30min benches).
