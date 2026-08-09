@@ -24,6 +24,13 @@ _FORBIDDEN_RE = re.compile(r"^FORBIDDEN_PATH_PREFIX:\s*(.+)$", re.IGNORECASE)
 _USE_MCP_RE = re.compile(r"^USE_MCP:\s*(.+)$", re.IGNORECASE)
 _FORBIDDEN_TEXT_RE = re.compile(r"^FORBIDDEN:\s*(.+)$", re.IGNORECASE)
 
+# Tiny literal stub files (not multi-MB captures with incidental HTML attributes).
+_STUB_MAX_BYTES = 4096
+_STUB_TEXT_RE = re.compile(
+    r"^\s*(\[binary[^\]]*\]|placeholder\s*har|todo:\s*har|stub\s*har)\s*$",
+    re.IGNORECASE,
+)
+
 
 def parse_boundary_rules(boundary: Sequence[str]) -> BoundaryRules:
     rules = BoundaryRules()
@@ -54,36 +61,52 @@ def parse_boundary_rules(boundary: Sequence[str]) -> BoundaryRules:
     return rules
 
 
+def _is_text_stub_capture(path: Path) -> bool:
+    """True for small hand-written stub files, not real browser captures."""
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return True
+    if size == 0:
+        return True
+    if size > _STUB_MAX_BYTES:
+        return False
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return True
+    if not text:
+        return True
+    if text.lower().startswith("[binary"):
+        return True
+    return bool(_STUB_TEXT_RE.match(text))
+
+
+def _har_json_valid(path: Path) -> bool:
+    """Parse HAR JSON structure; ignore incidental ``placeholder=`` in captured HTML."""
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(data, dict) or "log" not in data:
+        return False
+    log = data.get("log")
+    if not isinstance(log, dict):
+        return False
+    entries = log.get("entries")
+    if not isinstance(entries, list) or len(entries) < 1:
+        return False
+    return True
+
+
 def _is_placeholder_capture(path: Path) -> bool:
     """True when a HAR-style network capture is missing, stub, or incomplete JSON."""
     if not path.is_file():
         return True
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    if _is_text_stub_capture(path):
         return True
-    stripped = text.strip()
-    if not stripped:
-        return True
-    if stripped.lower().startswith("[binary") or "placeholder" in stripped.lower():
-        return True
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        # Truncated mid-session HAR must not pass as valid.
-        return True
-    if not isinstance(data, dict) or "log" not in data:
-        return True
-    log = data.get("log")
-    if not isinstance(log, dict):
-        return True
-    entries = log.get("entries")
-    if not isinstance(entries, list):
-        return True
-    # Empty entries after a real finalize is rare; treat as incomplete delivery.
-    if len(entries) < 1:
-        return True
-    return False
+    return not _har_json_valid(path)
 
 
 def is_valid_must_exist_file(path: Path, *, rel: str) -> bool:

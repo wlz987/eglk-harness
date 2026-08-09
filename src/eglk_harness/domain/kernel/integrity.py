@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -15,6 +16,12 @@ _SKIP_NAMES = {
     ".local",
     ".env",
 }
+
+# Browser MCP may flush screenshots / partial HAR while Checker audits (Maker session).
+_ASYNC_INTEGRITY_RE = re.compile(
+    r"^agent_runs/[^/]+/(screenshot.*\.(png|meta\.json)|network\.har\.partial)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -47,6 +54,11 @@ def _should_skip(path: Path, workdir: Path) -> bool:
     return False
 
 
+def _integrity_async_noise(rel: str) -> bool:
+    """Ignore delivery-zone flushes that are not Checker writes."""
+    return bool(_ASYNC_INTEGRITY_RE.match(rel.replace("\\", "/")))
+
+
 def fingerprint_workdir(workdir: Path) -> WorldFingerprint:
     """Hash file contents under workdir (excluding harness/git/venv)."""
     workdir = workdir.resolve()
@@ -72,6 +84,7 @@ def apply_integrity_flag(
 ) -> list[str]:
     """If Checker mutated the world, force integrity_violation (never admit)."""
     mutated = before.mutated_paths(after)
+    mutated = [p for p in mutated if not _integrity_async_noise(p)]
     if not mutated:
         return []
     evidence["integrity_violation"] = True
