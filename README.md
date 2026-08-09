@@ -46,7 +46,7 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `dashboard` | Read-only HTTP browse（无 approve/inject） |
 | `check-update` | PyPI version hint（不自动升级） |
 | `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |
-| `eval` | 辅尺：内置 `bundled_eval/` 或 `EGLK_EVAL_ROOT`；scorer **不进 Gate**（见 [`docs/KERNEL_VS_EVAL.md`](./docs/KERNEL_VS_EVAL.md)） |
+| `eval` | 辅尺：`EGLK_EVAL_ROOT`（如 `experiment/eval`）动态加载 `lib/`；scorer **不进 Gate**（见 [`docs/KERNEL_VS_EVAL.md`](./docs/KERNEL_VS_EVAL.md)） |
 | `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
 | `check-projections` | 常量钉扎 vs `domain/kernel/projections.py` |
 
@@ -55,4 +55,4 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 配置优先级：**CLI > `.eglk-harness/config.toml` > `.env`/环境变量 > 内置默认**（`run` 启动时 bootstrap）。
 
 Eval Manifests land under workdir `.local/runs/<run_id>/` (gitignored).  
-示例任务索引见 `src/eglk_harness/bundled_eval/`；可用 `EGLK_EVAL_ROOT` 覆盖。
+设置 `EGLK_EVAL_ROOT=experiment/eval`（pack、`lib/` 套件连接器、`skills/` overlay）。

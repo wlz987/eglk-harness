@@ -35,8 +35,9 @@ def prepare_task_workdir(
         task = _load_task(tasks_path, task_id)
         goal.write_text(_goal_from_task(task), encoding="utf-8")
     elif suite == "osworld_aux":
-        from eglk_harness.domain.eval import osworld as osworld_mod
+        from eglk_harness.domain.eval.loader import load_suite_module
 
+        osworld_mod = load_suite_module("osworld_aux", eval_root)
         tasks = {t.task_id: t for t in osworld_mod.load_pack_index(eval_root)}
         task = tasks.get(task_id)
         if task is None:
@@ -79,8 +80,9 @@ def score_offline(
         scores["contains_ok"] = ok
         return EvalResult(suite, task_id, workdir, ok, "offline_check", scores)
     if suite == "osworld_aux":
-        from eglk_harness.domain.eval import osworld as osworld_mod
+        from eglk_harness.domain.eval.loader import load_suite_module
 
+        osworld_mod = load_suite_module("osworld_aux", eval_root)
         scores.update(osworld_mod.score_placeholder(task_id=task_id, workdir=workdir))
         return EvalResult(suite, task_id, workdir, True, "recorded_only", scores)
     # Placeholder suites

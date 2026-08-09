@@ -30,11 +30,11 @@ from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.product.observe.dashboard import serve_dashboard
 from eglk_harness.domain.product.status import collect_status
 from eglk_harness.domain.product.update_check import check_update
-from eglk_harness.domain.eval import EVAL_SUITES
-from eglk_harness.domain.eval import wa_hard as wa_hard_mod
-from eglk_harness.domain.eval import osworld as osworld_mod
-from eglk_harness.domain.eval import weave_lh as weave_lh_mod
-from eglk_harness.domain.eval import tb21 as tb21_mod
+from eglk_harness.domain.eval.loader import eval_suite_choices, load_suite_module
+
+
+def _suite_mod(suite: str, eval_root: Path):
+    return load_suite_module(suite, eval_root)
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -440,8 +440,8 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     eval_root = Path(args.eval_root).resolve() if args.eval_root else default_eval_root()
     if eval_root is None or not eval_root.is_dir():
         print(
-            "error: eval root not found; set EGLK_EVAL_ROOT to experiment/eval "
-            "(or EGLK_USE_BUNDLED_EVAL=1). Scorers never feed Gate.",
+            "error: eval root not found; set EGLK_EVAL_ROOT to experiment/eval. "
+            "Scorers never feed Gate.",
             flush=True,
         )
         return 2
@@ -449,17 +449,21 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     if getattr(args, "list_tasks", False):
         rows: list[dict[str, str]] = []
         if args.suite == "wa_hard":
+            wa_hard_mod = _suite_mod("wa_hard", eval_root)
             rows = [{"id": t.task_id, "summary": t.intent} for t in wa_hard_mod.load_pack_index(eval_root)]
         elif args.suite == "osworld_aux":
+            osworld_mod = _suite_mod("osworld_aux", eval_root)
             rows = [
                 {"id": t.task_id, "summary": t.instruction}
                 for t in osworld_mod.load_pack_index(eval_root)
             ]
         elif args.suite == "weave_lh":
+            weave_lh_mod = _suite_mod("weave_lh", eval_root)
             rows = [
                 {"id": t.task_id, "summary": t.summary} for t in weave_lh_mod.load_pack_index(eval_root)
             ]
         elif args.suite == "tb21":
+            tb21_mod = _suite_mod("tb21", eval_root)
             rows = [
                 {"id": t.task_id, "summary": t.summary} for t in tb21_mod.load_pack_index(eval_root)
             ]
@@ -493,6 +497,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             Path(args.score_agent_runs).resolve() if getattr(args, "score_agent_runs", None) else None
         )
         if agent_runs is not None and not args.prepare_only:
+            wa_hard_mod = _suite_mod("wa_hard", eval_root)
             # Prefer official agent-run ingest over placeholder when scoring a batch.
             summary = wa_hard_mod.run_batch(
                 eval_root,
@@ -514,6 +519,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             print(json.dumps(summary, indent=2, ensure_ascii=False))
             print("note: offline scores are Manifest-only — never Gate inputs")
             return 0 if ingested.get("ok") else 1
+        wa_hard_mod = _suite_mod("wa_hard", eval_root)
         summary = wa_hard_mod.run_batch(
             eval_root,
             out_root=out,
@@ -528,6 +534,16 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     if not args.task_id:
         print("error: --task-id required unless --batch or --list-tasks", flush=True)
         return 2
+
+    wa_hard_mod = osworld_mod = weave_lh_mod = tb21_mod = None
+    if args.suite == "wa_hard":
+        wa_hard_mod = _suite_mod("wa_hard", eval_root)
+    elif args.suite == "osworld_aux":
+        osworld_mod = _suite_mod("osworld_aux", eval_root)
+    elif args.suite == "weave_lh":
+        weave_lh_mod = _suite_mod("weave_lh", eval_root)
+    elif args.suite == "tb21":
+        tb21_mod = _suite_mod("tb21", eval_root)
 
     if args.suite == "wa_hard":
         tasks = {t.task_id: t for t in wa_hard_mod.load_pack_index(eval_root)}
@@ -877,7 +893,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument(
         "--suite",
         required=True,
-        choices=sorted(EVAL_SUITES),
+        choices=sorted(eval_suite_choices()),
     )
     ev.add_argument("--task-id", default=None, help="Single task id (required unless --batch)")
     ev.add_argument("--eval-root", default=None, help="Eval pack root (default: bundled or EGLK_EVAL_ROOT)")

@@ -33,5 +33,4 @@ eglk_harness = [
   "domain/schemas/*.json",
   "domain/schemas/README.md",
   "domain/memory/skills/*.md",
-  "bundled_eval/**/*",
 ]

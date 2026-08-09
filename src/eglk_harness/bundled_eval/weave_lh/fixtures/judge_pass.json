@@ -1,9 +1,0 @@
-{
-  "task_id": "weave-smoke-001",
-  "scores": {
-    "success": 1.0,
-    "pass": 1.0,
-    "partial": 0.0
-  },
-  "notes": "CI fixture judge — Manifest-only, never Gate"
-}

@@ -1,8 +1,0 @@
-{
-  "task_id": "osworld-example-001",
-  "scores": {
-    "success": 0.0,
-    "partial": 0.0
-  },
-  "notes": "CI fixture — Manifest-only, never Gate"
-}

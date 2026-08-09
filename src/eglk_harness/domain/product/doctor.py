@@ -208,7 +208,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
 
     # Eval adjunct (only when EGLK_EVAL_ROOT points at experiment/eval or similar)
     from eglk_harness.domain.eval.paths import default_eval_root
-    from eglk_harness.domain.eval.eval_env_probes import collect_eval_env_status, doctor_checks_from_status
+    from eglk_harness.domain.eval.loader import load_env_probes_module
 
     eval_root = default_eval_root()
     if eval_root is None:
@@ -220,7 +220,8 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
             )
         )
     else:
-        env_st = collect_eval_env_status(eval_root)
+        probes = load_env_probes_module(eval_root)
+        env_st = probes.collect_eval_env_status(eval_root)
         report.checks.append(
             DoctorCheck(
                 name="eval_root",
@@ -239,7 +240,7 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                 ),
             )
         )
-        for name, ok, detail in doctor_checks_from_status(env_st):
+        for name, ok, detail in probes.doctor_checks_from_status(env_st):
             warn_only = name in (
                 "eval_playwright",
                 "eval_wa_sites",
