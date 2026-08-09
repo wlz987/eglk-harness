@@ -440,8 +440,8 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     eval_root = Path(args.eval_root).resolve() if args.eval_root else default_eval_root()
     if eval_root is None or not eval_root.is_dir():
         print(
-            "error: eval root not found; pass --eval-root or set EGLK_EVAL_ROOT. "
-            "Scorers never feed Gate.",
+            "error: eval root not found; set EGLK_EVAL_ROOT to experiment/eval "
+            "(or EGLK_USE_BUNDLED_EVAL=1). Scorers never feed Gate.",
             flush=True,
         )
         return 2

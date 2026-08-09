@@ -206,11 +206,8 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         ok = False
     report.checks.append(DoctorCheck(name="plugins", ok=ok, detail=detail))
 
-    # Eval vendor hints (Manifest-only scorers; never Gate)
+    # Eval adjunct (only when EGLK_EVAL_ROOT points at experiment/eval or similar)
     from eglk_harness.domain.eval.paths import default_eval_root
-    from eglk_harness.domain.eval import wa_hard as wa_hard_mod
-    from eglk_harness.domain.eval import osworld as osworld_mod
-    from eglk_harness.domain.eval import tb21 as tb21_mod
     from eglk_harness.domain.eval.eval_env_probes import collect_eval_env_status, doctor_checks_from_status
 
     eval_root = default_eval_root()
@@ -219,13 +216,10 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
             DoctorCheck(
                 name="eval_root",
                 ok=True,
-                detail="bundled eval packs missing [warn] — set EGLK_EVAL_ROOT",
+                detail="unset — benchmarks use EGLK_EVAL_ROOT + EGLK_SKILL_DIRS (experiment/eval/)",
             )
         )
     else:
-        wa_st = wa_hard_mod.vendor_status(eval_root)
-        os_hint = osworld_mod.path_hint(eval_root)
-        tb_st = tb21_mod.vendor_status(eval_root)
         env_st = collect_eval_env_status(eval_root)
         report.checks.append(
             DoctorCheck(
@@ -236,42 +230,22 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         )
         report.checks.append(
             DoctorCheck(
-                name="eval_wa_vendor",
+                name="eval_summary",
                 ok=True,
                 detail=(
-                    f"docker={wa_st.get('docker_ready')} "
-                    f"vendor={wa_st.get('vendor_path') or 'none'} "
-                    f"can_live_hard={wa_st.get('can_run_live_hard')} "
-                    f"pack_tasks={env_st.get('wa_hard_pack_count')}"
-                ),
-            )
-        )
-        report.checks.append(
-            DoctorCheck(
-                name="eval_lh_vendor",
-                ok=True,
-                detail=(
-                    f"weave={'yes' if env_st.get('lh_weave') else 'no'} "
-                    f"osworld_lh={'yes' if env_st.get('lh_osworld') else 'no'} "
-                    f"osworld_hint={os_hint or 'none'} "
-                    f"weave_pack={env_st.get('weave_lh_pack_count')}"
-                ),
-            )
-        )
-        report.checks.append(
-            DoctorCheck(
-                name="eval_tb21",
-                ok=True,
-                detail=(
-                    f"pack={'yes' if (eval_root / 'tb21' / 'pack.json').is_file() else 'no'} "
-                    f"vendor_ready={tb_st.get('vendor_ready')} "
-                    f"vendor={tb_st.get('vendor_path') or 'none'}"
+                    f"wa_pack={env_st.get('wa_hard_pack_count')} "
+                    f"weave_pack={env_st.get('weave_lh_pack_count')} "
+                    f"can_wa_browser_har={env_st.get('can_wa_browser_har')}"
                 ),
             )
         )
         for name, ok, detail in doctor_checks_from_status(env_st):
-            # Probes are informational; warn-only unless critical path broken
-            warn_only = name in ("eval_playwright", "eval_wa_sites")
+            warn_only = name in (
+                "eval_playwright",
+                "eval_wa_sites",
+                "eval_full_readiness",
+                "eval_weave_pack",
+            )
             report.checks.append(
                 DoctorCheck(
                     name=name,

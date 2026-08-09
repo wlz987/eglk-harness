@@ -8,6 +8,7 @@ from importlib import resources
 from pathlib import Path
 
 from eglk_harness.domain.memory.skill_frontmatter import join_sections, parse_skill_text, SkillDocument
+from eglk_harness.domain.memory.skill_overlay import load_role_overlay
 
 
 class DisclosureLevel(str, Enum):
@@ -114,6 +115,9 @@ def render_prompt(
     parts: list[str] = [header]
     if skill_body:
         parts.extend(["", skill_body.strip()])
+    overlay = load_role_overlay(role, workdir)
+    if overlay.strip():
+        parts.extend(["", "[INJECTED SKILL]", overlay.strip()])
     block = leaf_block.strip()
     if block:
         parts.extend(["", block])

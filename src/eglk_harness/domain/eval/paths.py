@@ -22,13 +22,15 @@ def bundled_eval_root() -> Path | None:
 
 
 def default_eval_root() -> Path | None:
-    """``EGLK_EVAL_ROOT`` when set, else packaged ``bundled_eval``."""
+    """``EGLK_EVAL_ROOT`` when set. Bundled packs only when ``EGLK_USE_BUNDLED_EVAL=1``."""
     raw = os.environ.get("EGLK_EVAL_ROOT", "").strip()
     if raw:
         path = Path(raw).expanduser().resolve()
         if path.is_dir():
             return path
-    return bundled_eval_root()
+    if os.environ.get("EGLK_USE_BUNDLED_EVAL", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return bundled_eval_root()
+    return None
 
 
 def vendor_dir(eval_root: Path | None = None) -> Path | None:
