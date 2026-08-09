@@ -204,14 +204,16 @@ class VerifierActor(Worker):
         _write_candidate(loop_dir, name, doc)
         return messages.ok_value(artifact=doc)
 
-class PrunerActor(Worker):
+class CandidateSelectorActor(Worker):
+    """Mechanical candidate filter (design: CandidateSelector; wire topic remains pruner)."""
+
     pattern = f"{topics.ROLE_PRUNER_RUN}.*"
     result_prefix = topics.ROLE_PRUNER_RESULT
-    error_code = "pruner_failed"
+    error_code = "candidate_selector_failed"
 
     def __init__(self, *, adapter: AgentAdapter | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.adapter = adapter  # reserved; pruning stays mechanical
+        self.adapter = adapter  # reserved; selection stays mechanical
 
     async def work(self, envelope_payload: Any) -> Any:
         args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
@@ -229,6 +231,17 @@ class PrunerActor(Worker):
                 entry["score"] = score
                 entry["pruned"] = score < 0.2
                 alts.append(entry)
-        doc = {"role": "pruner", "tick": tick, "alternatives": alts, "source": "mechanical"}
-        _write_candidate(loop_dir, f"pruner_{tick:03d}.json", doc)
+        doc = {
+            "role": "candidate_selector",
+            "tick": tick,
+            "alternatives": alts,
+            "source": "mechanical",
+        }
+        _write_candidate(loop_dir, f"candidate_selector_{tick:03d}.json", doc)
         return messages.ok_value(artifact=doc)
+
+
+class PrunerActor(CandidateSelectorActor):
+    """Backward-compatible alias for CandidateSelectorActor."""
+
+    error_code = "pruner_failed"

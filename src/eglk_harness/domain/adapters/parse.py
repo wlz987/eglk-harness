@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
-from eglk_harness.domain.schema_validate import parse_and_validate
+from eglk_harness.domain.kernel.schema_validate import parse_and_validate
 
 
 def episode_from_text(request: EpisodeRequest, text: str, *, backend: str) -> EpisodeResult:

@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.kernel import paths
-from eglk_harness.domain.memory import sigma
+from eglk_harness.domain.memory.lifecycle import load_active_records
+from eglk_harness.domain.memory.sigma import save_active_record
 
 def skills_root(workdir: Path) -> Path:
     d = paths.memory_skills_dir(workdir)
@@ -110,7 +111,7 @@ def distill_from_sigma(
     limit: int = 5,
 ) -> list[dict[str, Any]]:
     """Promote high-confidence Σ hits/lessons into K skills (sigma→K promotion contract)."""
-    active = sigma.load_active(workdir)
+    active = load_active_records(workdir)
     items = load_index(workdir)
     by_id = {str(it.get("id")): it for it in items}
     created: list[dict[str, Any]] = []
@@ -163,15 +164,11 @@ def distill_from_sigma(
         created.append(entry)
         σ2 = dict(σ)
         σ2["distilled_into"] = key
-        for i, old in enumerate(active):
-            if isinstance(old, dict) and str(old.get("id")) == sid:
-                active[i] = σ2
-                break
+        save_active_record(workdir, σ2)
         if len(created) >= limit:
             break
     if created:
         save_index(workdir, list(by_id.values()))
-        sigma.save_active(workdir, [x for x in active if isinstance(x, dict)])
     return created
 
 def _triggers_from_text(text: str) -> list[str]:

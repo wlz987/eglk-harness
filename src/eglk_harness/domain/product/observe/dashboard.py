@@ -86,13 +86,14 @@ class _Handler(BaseHTTPRequestHandler):
         goals = sorted(p for p in loop.iterdir() if p.is_dir())
         if not goals:
             return {"error": "empty"}
-        tree_path = goals[-1] / "subgoals_tree.json"
+        goal_dir = goals[-1]
+        tree_path = goal_dir / "projections" / "task_structure.json"
         if not tree_path.is_file():
-            return {"goal_id": goals[-1].name, "tree": None}
+            return {"goal_id": goal_dir.name, "tree": None}
         try:
-            return {"goal_id": goals[-1].name, "tree": json.loads(tree_path.read_text(encoding="utf-8"))}
+            return {"goal_id": goal_dir.name, "tree": json.loads(tree_path.read_text(encoding="utf-8"))}
         except (OSError, json.JSONDecodeError):
-            return {"goal_id": goals[-1].name, "error": "unreadable"}
+            return {"goal_id": goal_dir.name, "error": "unreadable"}
 
     def _load_ticks(self) -> list[str]:
         loop = paths.loop_root(self.workdir)

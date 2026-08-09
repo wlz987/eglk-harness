@@ -322,6 +322,24 @@ def _cmd_status(args: argparse.Namespace) -> int:
         print(report.render())
     return 0
 
+def _cmd_replay(args: argparse.Namespace) -> int:
+    from eglk_harness.domain.kernel.goal_parse import goal_id, read_goal_text
+    from eglk_harness.domain.kernel import paths as kpaths
+    from eglk_harness.domain.kernel.projection_replay import replay_workdir
+
+    workdir = Path(args.workdir).resolve()
+    gid = args.goal_id or goal_id(read_goal_text(workdir, None))
+    exported = replay_workdir(workdir, gid)
+    if getattr(args, "json", False):
+        print(json.dumps(exported, indent=2, ensure_ascii=False))
+    else:
+        print(f"replayed projections for goal_id={gid}")
+        print(f"  run_status={exported['run'].get('run_status')}")
+        print(f"  last_sequence={exported['run'].get('last_sequence')}")
+        print(f"  path={kpaths.projections_dir(workdir, gid)}")
+    return 0
+
+
 def _cmd_check_projections(args: argparse.Namespace) -> int:
     report = check_projections()
     if getattr(args, "json", False):
@@ -836,7 +854,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--tick",
         type=int,
         default=None,
-        help="Start tick index (default: auto-resume from state.json + 1)",
+        help="Start tick index (default: auto-resume from ticks.jsonl / run_projection)",
     )
     run_p.add_argument(
         "--dashboard",
@@ -925,6 +943,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cp.add_argument("--json", action="store_true", help="Machine-readable JSON")
     cp.set_defaults(func=_cmd_check_projections)
+
+    rp = sub.add_parser("replay", help="Rebuild projections from events.db (SSOT replay)")
+    rp.add_argument("--workdir", default=".", help="Project root")
+    rp.add_argument("--goal-id", default=None, help="Loop goal id (default: from .goal.md)")
+    rp.add_argument("--json", action="store_true", help="Machine-readable JSON")
+    rp.set_defaults(func=_cmd_replay)
 
     soak = sub.add_parser(
         "soak-bypass",

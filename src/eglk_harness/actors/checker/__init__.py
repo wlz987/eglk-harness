@@ -97,6 +97,17 @@ class CheckerActor(Worker):
             f"{observe_note}"
         )
         prompt = render_prompt("checker", leaf_block=leaf_block, extra=extra, workdir=workdir)
+        obligation_refs = [
+            str(x)
+            for x in (
+                args.get("obligation_refs")
+                or (args.get("leaf_contract") or {}).get("obligation_refs")
+                or []
+            )
+            if str(x).strip()
+        ]
+        contract_ref = str(args.get("contract_ref") or claim.get("contract_ref") or "")
+        world_revision = args.get("world_revision")
         request = EpisodeRequest(
             role="checker",
             prompt=prompt,
@@ -107,7 +118,16 @@ class CheckerActor(Worker):
             expect="evidence",
             model=resolve_model("checker"),
             timeout_s=float(args.get("timeout_s") or 600.0),
-            meta={"tick": tick, "subgoal_id": subgoal_id, "written": written, "claim": claim},
+            meta={
+                "tick": tick,
+                "subgoal_id": subgoal_id,
+                "written": written,
+                "claim": claim,
+                "done_criteria": criteria,
+                "obligation_refs": obligation_refs or None,
+                "contract_ref": contract_ref or None,
+                "world_revision": int(world_revision) if world_revision is not None else None,
+            },
             tee_path=str(tee_path) if tee_path else None,
         )
         result = await run_with_format_repair(
@@ -128,8 +148,18 @@ class CheckerActor(Worker):
         )
         evidence["tick"] = tick
         evidence["subgoal_id"] = subgoal_id
+        import uuid
+
+        maker_sid = str(claim.get("maker_session_id") or "")
+        csid = str(evidence.get("checker_session_id") or "").strip()
+        if not csid or csid == "unknown" or csid == maker_sid:
+            evidence["checker_session_id"] = f"checker-{uuid.uuid4().hex[:12]}"
+        if claim.get("contract_ref"):
+            evidence.setdefault("contract_ref", claim.get("contract_ref"))
         return messages.ok_value(
             evidence=evidence,
             tokens=int(result.tokens or 0),
             cost_usd=float(result.cost_usd or 0.0),
+            format_repair_tokens=int(result.format_repair_tokens or 0),
+            format_repair_cost_usd=float(result.format_repair_cost_usd or 0.0),
         )

@@ -271,75 +271,8 @@ class TaskTree:
         parent.children.append(child)
         return child
 
-    def try_merge_siblings_after_admit(self, admitted_id: str) -> dict[str, Any] | None:
-        """Structural overlap merge (task_tree merge contract).
-
-        After a leaf is admitted: pending/in_progress sibling leaves whose
-        ``done_criteria`` intersect the admitted leaf are collapsed into one
-        new pending sibling. The admitted leaf stays ``admitted``.
-        """
-        admitted = self.find(admitted_id)
-        if admitted is None or admitted.status != "admitted":
-            return None
-        if admitted.parent_id is None:
-            return None
-        parent = self.find(admitted.parent_id)
-        if parent is None:
-            return None
-
-        admitted_crit = {_norm_crit(c) for c in admitted.done_criteria}
-        if not admitted_crit:
-            return None
-
-        to_merge: list[TreeNode] = []
-        for sib in parent.children:
-            if sib.id == admitted_id:
-                continue
-            if sib.children:
-                continue
-            if sib.status not in {"pending", "in_progress"}:
-                continue
-            sib_crit = {_norm_crit(c) for c in sib.done_criteria}
-            if admitted_crit & sib_crit:
-                to_merge.append(sib)
-        if not to_merge:
-            return None
-
-        source_ids = [n.id for n in to_merge]
-        union: list[str] = []
-        seen: set[str] = set()
-        for c in list(admitted.done_criteria) + [c for n in to_merge for c in n.done_criteria]:
-            key = _norm_crit(c)
-            if key in seen:
-                continue
-            seen.add(key)
-            union.append(c)
-        new_id = f"{parent.id}.m{len(parent.children) + 1}"
-        title = f"merged:{','.join(source_ids)}"
-        # Clear in_progress among sources before merge (they become merged)
-        was_pointer = any(n.status == "in_progress" for n in to_merge)
-        self.merge_sibling_leaves(
-            parent_id=parent.id,
-            source_ids=source_ids,
-            new_id=new_id,
-            title=title,
-            done_criteria=union,
-        )
-        if was_pointer or self.in_progress() is None:
-            self.ensure_pointer()
-        return {
-            "event": "merge",
-            "nodes": source_ids,
-            "into": new_id,
-            "kept_admitted": admitted_id,
-            "reason": "done_criteria overlap with admitted sibling",
-        }
-
     def clone(self) -> TaskTree:
         return TaskTree.from_document(deepcopy(self.to_document()))
-
-def _norm_crit(text: str) -> str:
-    return " ".join(str(text).lower().split())
 
 def make_root(title: str, done_criteria: list[str], *, leaf: bool = True) -> TaskTree:
     """Create a minimal tree: root as single in_progress leaf, or root with no work yet."""

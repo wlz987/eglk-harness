@@ -7,13 +7,15 @@ description: Orchestrator pin for Phase 3 tick signals — not an LLM episode sk
 
 Mechanical Phase-3 orchestration pin. After Gate on each tick:
 
-1. Update `focus_score` / `uncertainty` from projections (signals only).
-2. Plan next `run_swarm` from `τ_focus` / `τ_unc` / `SWARM_BUDGET_FLOOR`.
-3. Merge `loop/.../sigma/refined/` → `.eglk-harness/memory/sigma/active.json` (Σ authority).
-4. Archive spent `candidates/`; append `ticks.jsonl`; refresh `state.json`.
+1. Update `focus_score` / `uncertainty` from projections (diagnostic only).
+2. Plan next SWARM from **candidate backlog** + `SWARM_BUDGET_FLOOR` (not `τ_focus` / `τ_unc` abort).
+3. **Stage** tick lessons under `loop/.../sigma/refined/` (mechanical snapshot only).
+4. Archive spent `candidates/`; append `ticks.jsonl`; export `projections/run_projection.json`.
+
+**Refiner** runs **once at run end** (terminal `succeeded`/`aborted`/`invalid`/`faulted`) — see `refiner_batch.run_end_refiner_batch`. It polishes staged `sigma/refined/` and flushes into lifecycle `candidate/` (never `active` in the same run).
 
 ## Abort authority (critical)
-- **Never abort** on `τ_focus` or `τ_unc` alone — signals for SWARM planning only.
+- **Never abort** on `focus_score` or `uncertainty` alone — diagnostic signals only.
 - **Only** `cognitive_tokens` exhaustion or `repairs_max` triggers `abort`.
 - `--max-ticks` is soft (Manifest); does not replace token/repair authority.
 
@@ -22,18 +24,17 @@ Mechanical Phase-3 orchestration pin. After Gate on each tick:
 - Never write `claims/`, `evidence/`, `decisions/` in Phase 3.
 - Gate decisions are inputs; Phase 3 does not reverse admit.
 
-## Σ merge rules (summary)
-- Refined items merge by `id` / similarity; bump `conf` on repeat hits.
-- Archive or freeze low-conf noise; cap `SIGMA_ACTIVE_MAX` per projections.
-- Loop `sigma/refined/` is staging only — memory `active.json` is SSOT.
+## Σ lifecycle (summary)
+- Per-tick: mechanical stage → `loop/sigma/refined/` (not readable by same run).
+- Run end: Refiner batch → `memory/sigma/candidate/` via `MemoryCandidateWritten`.
+- Promotion to `active` requires later independent runs (see `context.md` §3).
 
 ## Tools
 **No tools. No MCP. No world mutation.** Pure orchestrator + domain functions.
 
 ## Surfaces touched
-`ticks.jsonl`, `state.json`, `.eglk-harness/memory/sigma/active.json`,
-`candidates/` archive, skill_lib `distill_from_sigma` when configured.
+`ticks.jsonl`, `projections/run_projection.json`, `loop/sigma/refined/`, lifecycle `candidate/`, `candidates/` archive.
 
 ## SWARM re-entry
-- High `τ_unc` → more Explorer/Verifier budget next tick.
-- Low focus → prefer Pruner-heavy Phase 0, not endless Maker retries in same session.
+- `len(candidates/) > N_max` → CandidateSelector + Verifier.
+- Budget floor → throttle Explorer/Verifier; never abort on SWARM alone.

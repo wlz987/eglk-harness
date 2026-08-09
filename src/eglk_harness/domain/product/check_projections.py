@@ -174,9 +174,25 @@ def check_projections() -> ProjectionReport:
     )
     report.checks.append(
         ProjectionCheck(
-            name="advisors.module",
-            ok=hasattr(advisors, "run_candidate_selector"),
-            detail="CandidateSelector present",
+            name="command_handler.commit_split",
+            ok=hasattr(command_handler.CommandHandler, "commit_split"),
+            detail="split command present",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="command_handler.commit_merge",
+            ok=hasattr(command_handler.CommandHandler, "commit_merge"),
+            detail="merge command present",
+        )
+    )
+    from eglk_harness.domain.kernel import projection_replay
+
+    report.checks.append(
+        ProjectionCheck(
+            name="projection_replay.module",
+            ok=hasattr(projection_replay, "rebuild_from_events"),
+            detail="replay rebuild present",
         )
     )
     report.checks.append(
@@ -191,6 +207,56 @@ def check_projections() -> ProjectionReport:
             name="scheduler.deps",
             ok=hasattr(scheduler, "deps_satisfied") and hasattr(scheduler, "ready_pool"),
             detail="depends_on-aware ready_pool present",
+        )
+    )
+    from eglk_harness.domain.kernel import context_audit, session_policy, recovery, transaction_audit, run_loop
+    from eglk_harness.domain.kernel.reducer import apply_event
+
+    pkg = Path(__file__).resolve().parent.parent.parent  # eglk_harness package root
+    for row in context_audit.run_context_audits(pkg):
+        report.checks.append(
+            ProjectionCheck(name=row["name"], ok=bool(row["ok"]), detail=str(row["detail"]))
+        )
+    report.checks.append(
+        ProjectionCheck(
+            name="session_policy.module",
+            ok=hasattr(session_policy, "validate_maker_session"),
+            detail="fresh session policy present",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="recovery.module",
+            ok=hasattr(recovery, "reconcile_dangling_transactions"),
+            detail="crash recovery present",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="run_engine.tick_job_factory",
+            ok=hasattr(run_engine.RunEngine, "tick_job_factory"),
+            detail="app.run uses RunEngine job factory",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="reducer.apply_event",
+            ok=callable(apply_event),
+            detail="incremental projection apply present",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="run_loop.module",
+            ok=hasattr(run_loop, "TickRunLoop"),
+            detail="tick orchestration in kernel/run_loop",
+        )
+    )
+    report.checks.append(
+        ProjectionCheck(
+            name="transaction_audit.module",
+            ok=hasattr(transaction_audit, "audit_transaction_sequences"),
+            detail="tx state machine audit present",
         )
     )
     return report

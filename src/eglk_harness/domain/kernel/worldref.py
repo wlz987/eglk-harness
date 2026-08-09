@@ -294,3 +294,39 @@ def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> lis
             _ack_or_write(workdir, rel, content, written)
         return written
     return []
+
+
+def claim_payload_from_actions(actions: list[Mapping[str, Any]] | None) -> dict[str, Any] | None:
+    """Build ``{"files": {rel: content}}`` from ActionClaim.actions (mock/MCP shape)."""
+    if not actions:
+        return None
+    files: dict[str, Any] = {}
+    for action in actions:
+        if not isinstance(action, Mapping):
+            continue
+        if str(action.get("kind") or "") != "file_write":
+            continue
+        payload = action.get("payload") if isinstance(action.get("payload"), Mapping) else {}
+        rel = str(payload.get("path") or "").strip().lstrip("/").replace("\\", "/")
+        if not rel:
+            target = str(action.get("target") or "").strip()
+            if target.startswith("workdir/"):
+                rel = target[len("workdir/") :].lstrip("/")
+            else:
+                rel = target.lstrip("/")
+        if not rel or ".." in Path(rel).parts:
+            continue
+        content = payload.get("content")
+        if content is None:
+            content = payload.get("text")
+        if content is not None:
+            files[rel] = str(content)
+    return {"files": files} if files else None
+
+
+def resolve_claim_payload(claim: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Prefer explicit ``claim.payload``; else derive from ``claim.actions``."""
+    payload = claim.get("payload")
+    if isinstance(payload, Mapping):
+        return dict(payload)
+    return claim_payload_from_actions(list(claim.get("actions") or []))

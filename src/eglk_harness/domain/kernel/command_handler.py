@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -16,6 +17,16 @@ from eglk_harness.domain.kernel.reducer import (
     task_structure_dict,
 )
 from eglk_harness.domain.kernel.scheduler import coverage_complete
+from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.coverage_proof import validate_merge_obligations, validate_split_coverage
+from eglk_harness.domain.kernel.covers import covers_closure_complete, covers_edges_from_refinement
+from eglk_harness.domain.kernel.session_policy import (
+    assign_checker_session,
+    assign_maker_session,
+    validate_checker_session,
+    validate_maker_session,
+)
+from eglk_harness.domain.kernel.reducer import obligation_ledger_dict
 
 
 @dataclass
@@ -53,9 +64,19 @@ class CommandHandler:
         return self._projection
 
     def _append(self, type_: str, payload: Mapping[str, Any], **kw: Any) -> EventEnvelope:
-        ev = self.store.append(type_, payload, actor=kw.get("actor"), causation_id=kw.get("causation_id"), correlation_id=kw.get("correlation_id"))
-        # incremental: rebuild for correctness (small logs)
-        self._projection = reduce_events(self.store.read_all())
+        from eglk_harness.domain.kernel.reducer import apply_event, reduce_events
+
+        ev = self.store.append(
+            type_,
+            payload,
+            actor=kw.get("actor"),
+            causation_id=kw.get("causation_id"),
+            correlation_id=kw.get("correlation_id"),
+        )
+        if self._projection is None:
+            self._projection = reduce_events(self.store.read_all())
+        else:
+            apply_event(self._projection, ev)
         return ev
 
     def verify_or_fault(self) -> CommandResult:
@@ -88,6 +109,17 @@ class CommandHandler:
         return CommandResult(ok=True, events=[ev])
 
     def goal_compiled(self, payload: Mapping[str, Any]) -> CommandResult:
+        digest = str(payload.get("source_digest") or "")
+        for ev in self.store.read_all():
+            if ev.type != "GoalCompiled":
+                continue
+            prior = str((ev.payload or {}).get("source_digest") or "")
+            if prior and digest and prior != digest:
+                return self.run_invalid(
+                    "goal_drift",
+                    detail=f"expected={prior} actual={digest}",
+                )
+            break
         ev = self._append("GoalCompiled", payload)
         return CommandResult(ok=True, events=[ev])
 
@@ -146,31 +178,55 @@ class CommandHandler:
 
     def record_evidence(self, evidence: Mapping[str, Any], *, actor: str) -> CommandResult:
         maker_sid = None
-        # Maker≠Checker: compare against last ActionDispatched if present
+        contract_ref = str(evidence.get("contract_ref") or "")
         for ev in reversed(self.store.read_all()):
             if ev.type == "ActionDispatched":
-                maker_sid = (ev.payload or {}).get("maker_session_id")
+                p = ev.payload or {}
+                maker_sid = p.get("maker_session_id")
+                if not contract_ref:
+                    contract_ref = str(p.get("contract_ref") or "")
                 break
-        checker_sid = evidence.get("checker_session_id")
-        if maker_sid and checker_sid and str(maker_sid) == str(checker_sid):
+        ev_doc = dict(evidence)
+        raw_checker = str(ev_doc.get("checker_session_id") or "").strip()
+        if maker_sid and raw_checker and raw_checker == str(maker_sid):
             return CommandResult(
                 ok=False,
                 events=[],
                 error="maker_equals_checker",
                 rejected=True,
             )
-        ev = self._append("EvidenceRecorded", {"evidence": dict(evidence)}, actor=actor)
+        if contract_ref:
+            assign_checker_session(
+                ev_doc,
+                contract_ref,
+                maker_session_id=str(maker_sid or ""),
+            )
+        ok, reason = validate_checker_session(
+            ev_doc,
+            maker_session_id=str(maker_sid or "") if maker_sid else None,
+            events=self.store.read_all(),
+        )
+        if not ok:
+            return CommandResult(ok=False, events=[], error=reason, rejected=True)
+        ev = self._append("EvidenceRecorded", {"evidence": ev_doc}, actor=actor)
         return CommandResult(ok=True, events=[ev])
 
     def action_dispatched(self, claim: Mapping[str, Any], *, actor: str) -> CommandResult:
+        claim_doc = dict(claim)
+        contract_ref = str(claim_doc.get("contract_ref") or "")
+        if contract_ref:
+            assign_maker_session(claim_doc, contract_ref)
+        ok, reason = validate_maker_session(claim_doc, self.store.read_all())
+        if not ok:
+            return self.reject_command(command="action_dispatched", reason=reason, actor=actor)
         ev = self._append(
             "ActionDispatched",
             {
-                "claim_id": claim.get("claim_id"),
-                "contract_ref": claim.get("contract_ref"),
-                "maker_session_id": claim.get("maker_session_id"),
-                "actions": claim.get("actions") or [],
-                "claim": dict(claim),
+                "claim_id": claim_doc.get("claim_id"),
+                "contract_ref": claim_doc.get("contract_ref"),
+                "maker_session_id": claim_doc.get("maker_session_id"),
+                "actions": claim_doc.get("actions") or [],
+                "claim": claim_doc,
             },
             actor=actor,
         )
@@ -197,7 +253,7 @@ class CommandHandler:
             repair_counts=proj.repair_counts,
             pending_amendment_obligation_ids=list(proj.pending_amendments),
             is_closure_gate=is_closure_gate,
-            closure_complete=coverage_complete(proj) if is_closure_gate else None,
+            closure_complete=covers_closure_complete(proj) if is_closure_gate else None,
         )
         events: list[EventEnvelope] = []
         gd = decision.to_dict()
@@ -258,16 +314,20 @@ class CommandHandler:
         proj = self.projection()
         touch_set = set(touches)
         for oid, ob in proj.obligations.items():
-            if ob.status == "satisfied" and set(ob.watch_set) & touch_set:
-                events.append(
-                    self._append(
-                        "ObligationInvalidated",
-                        {
-                            "obligation_id": oid,
-                            "cause_transaction_id": transaction_id,
-                        },
-                    )
+            if ob.status != "satisfied" or not (set(ob.watch_set) & touch_set):
+                continue
+            # Obligations proven at this revision (or later) are not stale yet.
+            if ob.world_revision is not None and int(ob.world_revision) >= int(world_revision):
+                continue
+            events.append(
+                self._append(
+                    "ObligationInvalidated",
+                    {
+                        "obligation_id": oid,
+                        "cause_transaction_id": transaction_id,
+                    },
                 )
+            )
         return CommandResult(ok=True, events=events)
 
     def quota_updated(
@@ -299,14 +359,290 @@ class CommandHandler:
         )
         return CommandResult(ok=True, events=[ev])
 
+    def memory_candidate_written(
+        self,
+        record: Mapping[str, Any],
+        *,
+        actor: str = "maker",
+    ) -> CommandResult:
+        ev = self._append(
+            "MemoryCandidateWritten",
+            {"record": dict(record), "record_id": record.get("id")},
+            actor=actor,
+        )
+        return CommandResult(ok=True, events=[ev])
+
+    def memory_promoted(
+        self,
+        *,
+        record_id: str,
+        from_status: str,
+        to_status: str,
+        actor: str = "refiner",
+    ) -> CommandResult:
+        ev = self._append(
+            "MemoryPromoted",
+            {
+                "record_id": record_id,
+                "from_status": from_status,
+                "to_status": to_status,
+            },
+            actor=actor,
+        )
+        return CommandResult(ok=True, events=[ev])
+
+    def memory_deprecated(
+        self,
+        *,
+        record_id: str,
+        from_status: str,
+        reason: str = "ttl_expired",
+        actor: str = "refiner",
+    ) -> CommandResult:
+        ev = self._append(
+            "MemoryDeprecated",
+            {
+                "record_id": record_id,
+                "from_status": from_status,
+                "reason": reason,
+            },
+            actor=actor,
+        )
+        return CommandResult(ok=True, events=[ev])
+
     def export_projections(self) -> dict[str, Any]:
         proj = self.projection(force_rebuild=True)
         return {
             "run": run_projection_dict(proj),
             "task_structure": task_structure_dict(proj),
+            "obligation_ledger": obligation_ledger_dict(proj),
             "repair_counts": dict(proj.repair_counts),
             "last_gate": proj.last_gate,
         }
+
+    def reject_command(
+        self,
+        *,
+        command: str,
+        reason: str,
+        actor: str = "command_handler",
+        detail: str | None = None,
+    ) -> CommandResult:
+        ev = self._append(
+            "CommandRejected",
+            {"command": command, "reason": reason, "detail": detail or ""},
+            actor=actor,
+        )
+        return CommandResult(ok=False, events=[ev], error=reason, rejected=True)
+
+    def check_goal_drift(self, workdir: Path) -> CommandResult:
+        from eglk_harness.domain.kernel import paths as kpaths
+        from eglk_harness.domain.kernel.run_engine import _goal_digest
+
+        proj = self.projection()
+        goal_path = kpaths.goal_path(workdir)
+        if not goal_path.is_file():
+            return CommandResult(ok=True, events=[])
+        digest = _goal_digest(goal_path.read_text(encoding="utf-8"))
+        if proj.goal_spec_ref and proj.last_sequence >= 0:
+            # compare against GoalCompiled payload in log
+            for ev in self.store.read_all():
+                if ev.type == "GoalCompiled":
+                    compiled = str((ev.payload or {}).get("source_digest") or "")
+                    if compiled and compiled != digest:
+                        inv = self._append(
+                            "RunInvalid",
+                            {"reason": "goal_drift", "expected": compiled, "actual": digest},
+                        )
+                        return CommandResult(ok=False, events=[inv], error="goal_drift")
+                    break
+        return CommandResult(ok=True, events=[])
+
+    def run_invalid(self, reason: str, *, detail: str | None = None) -> CommandResult:
+        ev = self._append("RunInvalid", {"reason": reason, "detail": detail or ""})
+        return CommandResult(ok=False, events=[ev], error=reason)
+
+    def run_faulted(self, reason: str, *, detail: str | None = None) -> CommandResult:
+        ev = self._append("RunFaulted", {"reason": reason, "detail": detail or ""})
+        return CommandResult(ok=False, events=[ev], error=reason)
+
+    def run_recovery_started(self, reason: str = "crash_recovery") -> CommandResult:
+        ev = self._append("RunRecoveryStarted", {"reason": reason})
+        return CommandResult(ok=True, events=[ev])
+
+    def run_recovery_completed(self, run_status: str = "running") -> CommandResult:
+        ev = self._append("RunRecoveryCompleted", {"run_status": run_status})
+        return CommandResult(ok=True, events=[ev])
+
+    def transaction_prepared(self, tx: Mapping[str, Any]) -> CommandResult:
+        ev = self._append("TransactionPrepared", dict(tx))
+        return CommandResult(ok=True, events=[ev])
+
+    def transaction_observed(
+        self,
+        *,
+        transaction_id: str,
+        world_revision: int,
+        observation: Mapping[str, Any] | None = None,
+    ) -> CommandResult:
+        ev = self._append(
+            "TransactionObserved",
+            {
+                "transaction_id": transaction_id,
+                "world_revision": world_revision,
+                "observation": dict(observation or {}),
+            },
+        )
+        return CommandResult(ok=True, events=[ev])
+
+    def transaction_rolled_back(self, transaction_id: str) -> CommandResult:
+        ev = self._append("TransactionRolledBack", {"transaction_id": transaction_id})
+        return CommandResult(ok=True, events=[ev])
+
+    def transaction_compensated(self, transaction_id: str) -> CommandResult:
+        ev = self._append("TransactionCompensated", {"transaction_id": transaction_id})
+        return CommandResult(ok=True, events=[ev])
+
+    def commit_split(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str = "governor",
+    ) -> CommandResult:
+        """Validate CoverageProof and append SplitCommitted + opened obligations."""
+        proj = self.projection()
+        node_id = str(payload.get("split_node") or payload.get("node_id") or "")
+        node = proj.nodes.get(node_id)
+        if node is None:
+            return self.reject_command(command="split", reason="unknown_node", actor=actor)
+        depth = node.depth
+        if depth >= P.MAX_SPLIT_DEPTH:
+            return self.reject_command(command="split", reason="max_split_depth", actor=actor)
+
+        proof = payload.get("coverage_proof") or {}
+        parent_obs = [str(x) for x in (proof.get("parent_obligation_ids") or node.obligation_refs or [])]
+        child_map_raw = proof.get("child_obligation_map") or {}
+        child_map: dict[str, list[str]] = {}
+        if isinstance(child_map_raw, Mapping):
+            for k, v in child_map_raw.items():
+                child_map[str(k)] = [str(x) for x in (v or [])]
+
+        opened = [dict(x) for x in (payload.get("opened_obligations") or []) if isinstance(x, Mapping)]
+        proof_kind = str(proof.get("proof_kind") or "partition")
+        ok, reason = validate_split_coverage(
+            parent_obligation_ids=parent_obs,
+            child_obligation_map=child_map,
+            proof_kind=proof_kind,
+            opened_obligations=opened,
+        )
+        if not ok:
+            return self.reject_command(command="split", reason=reason, actor=actor)
+
+        children = [dict(c) for c in (payload.get("children") or []) if isinstance(c, Mapping)]
+        if not (P.SPLIT_CHILDREN_MIN <= len(children) <= P.SPLIT_CHILDREN_MAX):
+            return self.reject_command(command="split", reason="children_count", actor=actor)
+
+        events: list[EventEnvelope] = []
+        for ob in opened:
+            oid = str(ob.get("id") or "")
+            if not oid:
+                continue
+            events.append(
+                self._append(
+                    "ObligationOpened",
+                    {
+                        "obligation_id": oid,
+                        "requirement_id": ob.get("requirement_id"),
+                        "parent_obligation_id": ob.get("parent_obligation_id"),
+                        "statement": ob.get("statement"),
+                        "verification_type": ob.get("verification_type"),
+                        "origin": ob.get("origin") or "derived",
+                    },
+                    actor=actor,
+                )
+            )
+
+        obligation_covers = covers_edges_from_refinement(opened)
+        depends_on = [dict(x) for x in (payload.get("depends_on") or []) if isinstance(x, Mapping)]
+
+        split_ev = self._append(
+            "SplitCommitted",
+            {
+                "node_id": node_id,
+                "coverage_proof_ref": proof.get("ref") or None,
+                "coverage_proof": dict(proof),
+                "children": children,
+                "opened_obligation_ids": [str(o.get("id")) for o in opened if o.get("id")],
+                "obligation_covers": obligation_covers,
+                "depends_on": depends_on,
+            },
+            actor=actor,
+        )
+        events.append(split_ev)
+
+        for child in children:
+            cid = str(child.get("id") or "")
+            if cid:
+                events.append(self._append("NodeReady", {"node_id": cid}, actor=actor))
+
+        return CommandResult(ok=True, events=events)
+
+    def commit_merge(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str = "governor",
+    ) -> CommandResult:
+        proj = self.projection()
+        into = str(payload.get("into") or "")
+        source_ids = [str(x) for x in (payload.get("node_ids") or payload.get("nodes") or [])]
+        merged_refs = [str(x) for x in (payload.get("obligation_refs") or [])]
+        if not into or not source_ids:
+            return self.reject_command(command="merge", reason="missing_into_or_sources", actor=actor)
+
+        source_sets: list[list[str]] = []
+        satisfied: list[str] = []
+        for sid in source_ids:
+            n = proj.nodes.get(sid)
+            if n is None:
+                return self.reject_command(command="merge", reason=f"unknown_node:{sid}", actor=actor)
+            source_sets.append(list(n.obligation_refs))
+            for oid in n.obligation_refs:
+                ob = proj.obligations.get(oid)
+                if ob and ob.status == "satisfied":
+                    satisfied.append(oid)
+
+        if not merged_refs:
+            union: list[str] = []
+            seen: set[str] = set()
+            for refs in source_sets:
+                for oid in refs:
+                    if oid not in seen:
+                        seen.add(oid)
+                        union.append(oid)
+            merged_refs = union
+
+        ok, reason = validate_merge_obligations(
+            source_obligation_sets=source_sets,
+            merged_obligation_refs=merged_refs,
+            satisfied_obligation_ids=satisfied,
+        )
+        if not ok:
+            return self.reject_command(command="merge", reason=reason, actor=actor)
+
+        ev = self._append(
+            "MergeCommitted",
+            {
+                "into": into,
+                "node_ids": source_ids,
+                "obligation_refs": merged_refs,
+                "parent_id": payload.get("parent_id"),
+                "title": payload.get("title"),
+            },
+            actor=actor,
+        )
+        self._append("NodeReady", {"node_id": into}, actor=actor)
+        return CommandResult(ok=True, events=[ev])
 
     def propose_obligation_amendment(
         self,

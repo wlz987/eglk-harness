@@ -96,7 +96,7 @@ class GovernorActor(Worker):
         if loop_dir is not None:
             cand = loop_dir / "candidates"
             cand.mkdir(parents=True, exist_ok=True)
-            (cand / "subgoals_tree.json").write_text(
+            (cand / "governor_proposal.json").write_text(
                 json.dumps(proposal, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )

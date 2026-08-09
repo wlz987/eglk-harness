@@ -37,16 +37,24 @@ async def run_with_format_repair(
 ) -> EpisodeResult:
     """Run episode; on unparseable claim/evidence, re-coerce then LLM-repair up to ``max_repairs``."""
     first = await adapter.run_episode(request)
+    primary_tokens = int(first.tokens or 0)
+    primary_cost = float(first.cost_usd or 0.0)
+    repair_tokens = 0
+    repair_cost = 0.0
     if request.expect == "text":
         return first
     if first.ok and isinstance(first.parsed, dict):
+        first.format_repair_tokens = 0
+        first.format_repair_cost_usd = 0.0
         return first
     if not enabled or max_repairs <= 0:
+        first.format_repair_tokens = 0
+        first.format_repair_cost_usd = 0.0
         return first
 
     schema = _schema_name(request.expect)
-    tokens = int(first.tokens or 0)
-    cost = float(first.cost_usd or 0.0)
+    tokens = primary_tokens
+    cost = primary_cost
     last = first
     previous_text = first.text or ""
     previous_error = first.error or "unparseable"
@@ -62,6 +70,8 @@ async def run_with_format_repair(
                 tokens=tokens,
                 cost_usd=cost,
                 backend=first.backend,
+                format_repair_tokens=repair_tokens,
+                format_repair_cost_usd=repair_cost,
             )
 
     for attempt in range(max_repairs):
@@ -84,10 +94,14 @@ async def run_with_format_repair(
             tee_path=request.tee_path,
         )
         nxt = await adapter.run_episode(repair_req)
-        tokens += int(nxt.tokens or 0)
-        cost += float(nxt.cost_usd or 0.0)
+        repair_tokens += int(nxt.tokens or 0)
+        repair_cost += float(nxt.cost_usd or 0.0)
+        tokens = primary_tokens + repair_tokens
+        cost = primary_cost + repair_cost
         nxt.tokens = tokens
         nxt.cost_usd = cost
+        nxt.format_repair_tokens = repair_tokens
+        nxt.format_repair_cost_usd = repair_cost
         if nxt.ok and isinstance(nxt.parsed, dict):
             return nxt
         if schema and (nxt.text or "").strip():
@@ -100,6 +114,8 @@ async def run_with_format_repair(
                     tokens=tokens,
                     cost_usd=cost,
                     backend=nxt.backend or first.backend,
+                    format_repair_tokens=repair_tokens,
+                    format_repair_cost_usd=repair_cost,
                 )
         if not nxt.error and previous_error:
             nxt.error = previous_error
@@ -107,4 +123,6 @@ async def run_with_format_repair(
         previous_text = nxt.text or previous_text
         previous_error = nxt.error or previous_error
 
+    last.format_repair_tokens = repair_tokens
+    last.format_repair_cost_usd = repair_cost
     return last

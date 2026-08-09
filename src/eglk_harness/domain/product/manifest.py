@@ -13,6 +13,7 @@ from eglk_harness.domain.kernel import paths
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.schema_validate import validate_document
 from eglk_harness.domain.memory.lifecycle import digest_active_snapshot
+from eglk_harness.domain.memory.memory_policy import manifest_memory_fields
 
 
 def local_runs_root(workdir: Path) -> Path:
@@ -246,6 +247,7 @@ def build_manifest(
         "adapter": agent,
         "swarm_soft": swarm,
         "kernel_commit": kernel_commit or "",
+        **manifest_memory_fields(workdir),
         "last_decision": {
             "decision": decision.get("decision") if isinstance(decision, Mapping) else None,
             "reason": decision.get("reason") if isinstance(decision, Mapping) else None,

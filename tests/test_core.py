@@ -273,8 +273,11 @@ class TestRunEngine(unittest.TestCase):
             self.assertEqual(out.get("decision", {}).get("decision"), "admit")
             # second step → closure
             out2 = engine.step_with_artifacts(claim=claim, evidence=evidence)
+            self.assertTrue(out2.get("closure"), out2)
             proj = engine.handler.projection()
-            self.assertIn(proj.run_status, {"succeeded", "running"})
+            self.assertEqual(proj.run_status, "succeeded")
+            types = [e.type for e in engine.store.read_all()]
+            self.assertIn("RunSucceeded", types)
             engine.store.verify_hash_chain()
             digest = digest_active_snapshot(workdir)
             self.assertTrue(digest.startswith("sha256:"))
@@ -472,6 +475,39 @@ class TestObserve(unittest.TestCase):
             self.assertEqual(obs["side_effect_class"], "read_only")
             self.assertEqual(obs["world_revision"], 1)
             self.assertTrue(any(f.get("path") == "hello.txt" for f in obs["files"]))
+
+
+class TestClaimPayloadResolution(unittest.TestCase):
+    def test_resolve_from_actions(self) -> None:
+        from eglk_harness.domain.kernel.worldref import claim_payload_from_actions, resolve_claim_payload
+
+        actions = [
+            {
+                "kind": "file_write",
+                "target": "workdir/hello.txt",
+                "payload": {"path": "hello.txt", "content": "mock line\n"},
+            }
+        ]
+        payload = claim_payload_from_actions(actions)
+        self.assertEqual(payload, {"files": {"hello.txt": "mock line\n"}})
+        claim = {"actions": actions}
+        self.assertEqual(resolve_claim_payload(claim), payload)
+        claim_with_payload = {"payload": {"files": {"a.txt": "x"}}, "actions": actions}
+        self.assertEqual(resolve_claim_payload(claim_with_payload), {"files": {"a.txt": "x"}})
+
+        with tempfile.TemporaryDirectory() as td:
+            from eglk_harness.domain.environment.world_transaction import LocalFilesystemAdapter
+
+            root = Path(td)
+            workdir = root / "work"
+            world = root / "world"
+            workdir.mkdir()
+            adapter = LocalFilesystemAdapter(workdir, world)
+            tx = adapter.begin(node_id="root", base_revision=0, side_effect_class="reversible")
+            tx = adapter.prepare(tx, actions)
+            tx = adapter.apply(tx, claim_payload=resolve_claim_payload(claim))
+            self.assertIn("hello.txt", tx.touches)
+            self.assertEqual((workdir / "hello.txt").read_text(encoding="utf-8"), "mock line\n")
 
 
 if __name__ == "__main__":

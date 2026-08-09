@@ -50,6 +50,7 @@ _EVENT_TYPES = frozenset(
         "RunFaulted",
         "RunRecoveryStarted",
         "RunRecoveryCompleted",
+        "CommandRejected",
     }
 )
 

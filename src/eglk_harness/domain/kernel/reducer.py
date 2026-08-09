@@ -181,10 +181,31 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
         oid = str(p["obligation_id"])
         if oid in s.obligations:
             s.obligations[oid].status = "invalidated"
+        cause_tx = p.get("cause_transaction_id")
+        if cause_tx:
+            s.edges.append(
+                EdgeState(
+                    kind="invalidates",
+                    from_id=str(cause_tx),
+                    to_id=oid,
+                    event_ref=ev.event_id,
+                )
+            )
         # Reopen owning admitted nodes
         for node in s.nodes.values():
             if oid in node.obligation_refs and node.status == "admitted":
                 node.status = "in_progress"
+    elif t == "TransactionPrepared":
+        pass
+    elif t == "TransactionObserved":
+        if p.get("world_revision") is not None:
+            s.world_revision = max(s.world_revision, int(p["world_revision"]))
+    elif t == "TransactionRolledBack":
+        pass
+    elif t == "TransactionCompensated":
+        pass
+    elif t == "CommandRejected":
+        pass
     elif t == "GateDecided":
         s.last_gate = dict(p)
         reason = str(p.get("reason") or "")
@@ -204,9 +225,28 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
             s.repair_counts[reason] = int(s.repair_counts.get(reason, 0)) + 1
     elif t == "SplitCommitted":
         parent = str(p["node_id"])
+        proof_ref = p.get("coverage_proof_ref") or ev.event_id
         if parent in s.nodes:
             s.nodes[parent].status = "split"
-            s.nodes[parent].coverage_proof_ref = p.get("coverage_proof_ref") or ev.event_id
+            s.nodes[parent].coverage_proof_ref = proof_ref
+        for edge in p.get("obligation_covers") or []:
+            if not isinstance(edge, Mapping):
+                continue
+            fr = str(edge.get("from") or edge.get("from_id") or "")
+            to = str(edge.get("to") or edge.get("to_id") or "")
+            if fr and to:
+                s.edges.append(
+                    EdgeState(kind="covers", from_id=fr, to_id=to, event_ref=ev.event_id)
+                )
+        for dep in p.get("depends_on") or []:
+            if not isinstance(dep, Mapping):
+                continue
+            fr = str(dep.get("from") or dep.get("from_id") or "")
+            to = str(dep.get("to") or dep.get("to_id") or "")
+            if fr and to:
+                s.edges.append(
+                    EdgeState(kind="depends_on", from_id=fr, to_id=to, event_ref=ev.event_id)
+                )
         for child in p.get("children") or []:
             if not isinstance(child, Mapping):
                 continue
@@ -219,7 +259,7 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
                 parent_id=parent,
                 depth=int(child.get("depth") or (s.nodes[parent].depth + 1 if parent in s.nodes else 1)),
                 split_from=parent,
-                coverage_proof_ref=p.get("coverage_proof_ref") or ev.event_id,
+                coverage_proof_ref=proof_ref,
             )
             if parent in s.nodes:
                 s.nodes[parent].children.append(cid)
@@ -229,13 +269,31 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
                 )
     elif t == "MergeCommitted":
         into = str(p["into"])
+        parent_id = p.get("parent_id")
         for nid in p.get("node_ids") or []:
-            if str(nid) in s.nodes:
-                s.nodes[str(nid)].status = "superseded"
+            sid = str(nid)
+            if sid in s.nodes:
+                s.nodes[sid].status = "superseded"
+        if into not in s.nodes and parent_id:
+            parent = str(parent_id)
+            depth = int(s.nodes[parent].depth + 1) if parent in s.nodes else 1
+            s.nodes[into] = NodeState(
+                id=into,
+                title=str(p.get("title") or into),
+                status="pending",
+                obligation_refs=[],
+                parent_id=parent,
+                depth=depth,
+                merged_from=[],
+            )
+            if parent in s.nodes:
+                s.nodes[parent].children.append(into)
         if into in s.nodes:
             s.nodes[into].obligation_refs = [str(x) for x in (p.get("obligation_refs") or s.nodes[into].obligation_refs)]
             s.nodes[into].status = "pending"
             s.nodes[into].merged_from = [str(x) for x in (p.get("node_ids") or [])]
+            if p.get("title"):
+                s.nodes[into].title = str(p["title"])
     elif t == "QuotaUpdated":
         if p.get("cognitive_tokens") is not None:
             s.cognitive_tokens = int(p["cognitive_tokens"])
@@ -263,7 +321,15 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
         s.run_status = "recovering"
     elif t == "RunRecoveryCompleted":
         s.run_status = str(p.get("run_status") or "running")
+    elif t in {"MemoryCandidateWritten", "MemoryPromoted", "MemoryDeprecated"}:
+        pass  # Σ/K lifecycle tracked in memory dirs; events are audit trail only
     return s
+
+
+def apply_event(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
+    """Apply one event to projection state in place (incremental reducer path)."""
+    _apply(state, ev)
+    return state
 
 
 def reduce_events(
@@ -332,4 +398,25 @@ def task_structure_dict(state: ProjectionState) -> dict[str, Any] | None:
             }
             for e in state.edges
         ],
+    }
+
+
+def obligation_ledger_dict(state: ProjectionState) -> dict[str, Any]:
+    return {
+        "schema": "eglk.obligation_ledger",
+        "obligations": [
+            {
+                "id": ob.id,
+                "requirement_id": ob.requirement_id,
+                "parent_obligation_id": ob.parent_obligation_id,
+                "statement": ob.statement,
+                "verification_type": ob.verification_type,
+                "status": ob.status,
+                "origin": ob.origin,
+                "watch_set": list(ob.watch_set),
+                "world_revision": ob.world_revision,
+            }
+            for ob in state.obligations.values()
+        ],
+        "pending_amendments": sorted(state.pending_amendments),
     }

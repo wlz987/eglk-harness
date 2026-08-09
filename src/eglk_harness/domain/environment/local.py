@@ -66,7 +66,7 @@ class LocalEnvironment:
                 chunks.append(line)
                 if mirror and tee_file is not None:
                     try:
-                        from eglk_harness.domain.redact import redact_secrets
+                        from eglk_harness.domain.runtime.redact import redact_secrets
 
                         tee_file.write(redact_secrets(line.decode("utf-8", errors="replace")))
                         tee_file.flush()

@@ -1,4 +1,4 @@
-"""Phase-3 context-compress helpers (Phase-3 compress helpers)."""
+"""Phase-3 context-compress — tick signals orchestration (skill: ``context_compress``)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,13 @@ from typing import Any
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_swarm
 from eglk_harness.domain.memory.tokens import update_focus_uncertainty
+
+
+def skill_ref() -> dict[str, str]:
+    """Packaged skill pin for audit logs (``context.md`` §6)."""
+    from eglk_harness.domain.memory.skills import load_skill_metadata
+
+    return load_skill_metadata("context_compress")
 
 def compress_tick_signals(
     *,

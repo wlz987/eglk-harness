@@ -11,18 +11,26 @@ from typing import Any
 from eba import ActorId, Bus, Inbox, make_envelope, run_actors
 
 from eglk_harness.actors.checker import CheckerActor
-from eglk_harness.actors.gate import GateActor
 from eglk_harness.actors.governor import GovernorActor
 from eglk_harness.actors.host import RunHost
 from eglk_harness.actors.maker import MakerActor
 from eglk_harness.actors.refiner import RefinerActor
-from eglk_harness.actors.swarm import ExplorerActor, PrunerActor, VerifierActor
+from eglk_harness.actors.swarm import (
+    CandidateSelectorActor,
+    ExplorerActor,
+    PrunerActor,
+    VerifierActor,
+)
 from eglk_harness.actors.tick import TickJob
+from eglk_harness.domain.kernel.event_runtime import finalize_run_closure_workdir
+from eglk_harness.domain.memory.refiner_batch import run_end_refiner_batch
+from eglk_harness.domain.memory.memory_policy import bootstrap_frozen_digest
+from eglk_harness.domain.kernel.run_engine import RunEngine
 from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
 from eglk_harness.domain.kernel.compile_goal import compile_goal
 from eglk_harness.domain.kernel.goal_parse import done_criteria, goal_id, read_goal_text, title_from_goal
-from eglk_harness.domain.kernel.loop_store import load_tree, read_json
+from eglk_harness.domain.kernel.loop_store import read_json
 from eglk_harness.domain.product.manifest import build_manifest, new_run_id, write_manifest
 from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.kernel import paths
@@ -53,7 +61,7 @@ class RunRequest:
     mcp_config: Path | None = None
     mcp_add_dirs: list[str] = field(default_factory=list)
     fake_mode: str = "admit"
-    tick: int | None = None  # None → auto-resume from state.json
+    tick: int | None = None  # None → auto-resume from run_projection
     compile: str | None = None
     focus_score: float = 1.0
     uncertainty: float = 0.0
@@ -71,32 +79,22 @@ def _request_timeout(agent: str) -> float:
     return _env_float("EGLK_TICK_TIMEOUT", _LIVE_TIMEOUT_S)
 
 def resolve_start_tick(workdir: Path, goal_id_str: str, explicit: int | None) -> int:
-    """Resume after the last completed tick when ``state.json`` exists.
-
-    Explicit ``--tick`` always wins. Otherwise start at ``state.tick + 1`` so a
-    failed tick can retry without rewriting earlier claim/evidence artifacts.
-    """
+    """Resume from ``run_projection.last_sequence`` (SSOT)."""
     if explicit is not None:
         return max(0, int(explicit))
-    state_path = paths.loop_goal_dir(workdir, goal_id_str) / "state.json"
-    if not state_path.is_file():
-        return 0
-    try:
-        data = read_json(state_path)
-    except (OSError, ValueError):
-        return 0
-    if not isinstance(data, dict):
-        return 0
-    try:
-        last = int(data.get("tick", -1))
-    except (TypeError, ValueError):
-        return 0
-    if last < 0:
-        return 0
-    tree = load_tree(paths.loop_goal_dir(workdir, goal_id_str))
-    if tree is not None and tree.all_work_admitted():
-        return last
-    return last + 1
+    loop_dir = paths.loop_goal_dir(workdir, goal_id_str)
+    rp = loop_dir / "projections" / "run_projection.json"
+    if rp.is_file():
+        try:
+            data = read_json(rp)
+            if isinstance(data, dict) and data.get("run_status") == "succeeded":
+                return int(data.get("last_sequence", 0))
+            seq = int(data.get("last_sequence", -1))
+            if seq >= 0:
+                return seq + 1
+        except (OSError, ValueError, TypeError):
+            pass
+    return 0
 
 def _should_continue(job: TickJob) -> bool:
     """Continue when work remains after admit, or Gate asked for repair retry."""
@@ -105,12 +103,17 @@ def _should_continue(job: TickJob) -> bool:
     answer = (job.outcome or {}).get("answer") if isinstance(job.outcome, dict) else {}
     if not isinstance(answer, dict):
         answer = {}
+    if answer.get("run_status") == "succeeded":
+        return False
     if kind == "abort":
         return False
     if kind == "admit":
         if answer.get("root_done"):
             return False
-        # Belt-and-suspenders: trust in-memory tree if outcome raced
+        if job.ctx is not None and job.ctx.root_done():
+            return False
+        if job.ctx is not None and job.ctx.handler.projection().run_status == "succeeded":
+            return False
         if job.tree is not None and job.tree.all_work_admitted():
             return False
         return True
@@ -123,7 +126,7 @@ def _should_continue(job: TickJob) -> bool:
 
 def _assemble_actors(
     request: RunRequest, workdir: Path
-) -> tuple[Bus, list[Any], RunHost, str, str, list[str]]:
+) -> tuple[Bus, list[Any], RunHost, str, str, list[str], Any]:
     text = read_goal_text(workdir, request.goal)
     gid = goal_id(text)
     title = title_from_goal(text)
@@ -167,7 +170,6 @@ def _assemble_actors(
     actors: list[Any] = [
         MakerActor(actor_id=ActorId(keys.MAKER), bus=bus, inbox=_inbox(), **tool_kw),
         CheckerActor(actor_id=ActorId(keys.CHECKER), bus=bus, inbox=_inbox(), **tool_kw),
-        GateActor(actor_id=ActorId(keys.GATE), bus=bus, inbox=_inbox()),
         GovernorActor(
             actor_id=ActorId(keys.GOVERNOR),
             bus=bus,
@@ -181,7 +183,9 @@ def _assemble_actors(
         VerifierActor(
             actor_id=ActorId(keys.VERIFIER), bus=bus, inbox=_inbox(), adapter=adapter
         ),
-        PrunerActor(actor_id=ActorId(keys.PRUNER), bus=bus, inbox=_inbox(), adapter=adapter),
+        CandidateSelectorActor(
+            actor_id=ActorId(keys.PRUNER), bus=bus, inbox=_inbox(), adapter=adapter
+        ),
         RefinerActor(
             actor_id=ActorId(keys.REFINER), bus=bus, inbox=_inbox(), adapter=adapter
         ),
@@ -190,7 +194,7 @@ def _assemble_actors(
         actor_id=ActorId(keys.HOST),
         bus=bus,
         inbox=_inbox(),
-        job_factory=TickJob,
+        job_factory=RunEngine.tick_job_factory(),
         workdir=workdir,
         goal_id=gid,
         goal_title=title,
@@ -203,9 +207,9 @@ def _assemble_actors(
         request_timeout=_request_timeout(request.agent),
     )
     actors.append(host)
-    return bus, actors, host, gid, title, criteria
+    return bus, actors, host, gid, title, criteria, adapter
 
-async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
+async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> Any:
     async with asyncio.timeout(timeout_s):
         while True:
             if len(host.jobs) > index:
@@ -214,20 +218,20 @@ async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
                     break
             await asyncio.sleep(0.005)
     job = host.jobs[index]
-    assert isinstance(job, TickJob)
     return job
 
 async def _run_loop(request: RunRequest) -> dict[str, Any]:
     workdir = request.workdir.resolve()
     if not paths.harness_root(workdir).is_dir():
         init_project(workdir)
+    bootstrap_frozen_digest(workdir)
 
     backend = "mock" if request.agent in {"mock", "fake"} else request.agent
     compiled = compile_goal(workdir, mode=request.compile, backend=backend)
     if compiled.action == "error":
         raise RuntimeError(f"STEP0 compile failed: {compiled.detail}")
 
-    bus, actors, host, gid, title, criteria = _assemble_actors(request, workdir)
+    bus, actors, host, gid, title, criteria, adapter = _assemble_actors(request, workdir)
     max_ticks = max(1, int(request.max_ticks or _DEFAULT_MAX_TICKS_SOFT))
     per_tick_timeout = _request_timeout(request.agent)
     start_tick = resolve_start_tick(workdir, gid, request.tick)
@@ -236,7 +240,7 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
         tick = int(start_tick)
         decisions: list[dict[str, Any]] = []
         written_all: list[str] = []
-        last_job: TickJob | None = None
+        last_job: Any | None = None
         stop_reason = "completed"
 
         for i in range(max_ticks):
@@ -285,6 +289,25 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
         else:
             stop_reason = "max_ticks_soft"
 
+        finalize_run_closure_workdir(workdir, gid)
+        refiner_out = await run_end_refiner_batch(workdir, gid, adapter)
+        loop_dir = paths.loop_goal_dir(workdir, gid)
+        rp_path = loop_dir / "projections" / "run_projection.json"
+        projection_run_status: str | None = None
+        event_log_hash: str | None = None
+        if rp_path.is_file():
+            try:
+                rp_data = read_json(rp_path)
+                if isinstance(rp_data, dict):
+                    projection_run_status = str(rp_data.get("run_status") or "") or None
+                    lh = rp_data.get("last_hash")
+                    if isinstance(lh, str) and lh.startswith("sha256:"):
+                        event_log_hash = lh
+            except (OSError, ValueError, TypeError):
+                pass
+        if projection_run_status == "succeeded":
+            stop_reason = "terminal:succeeded"
+
         last_decision = decisions[-1] if decisions else {}
         quota_extra: dict[str, Any] = {}
         if last_job is not None:
@@ -305,11 +328,14 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
                 swarm=request.swarm,
                 decision=last_decision,
                 extra={
+                    "run_status": projection_run_status,
+                    "event_log_hash": event_log_hash,
                     "ticks_run": len(decisions),
                     "start_tick": start_tick,
                     "max_ticks_soft": max_ticks,
                     "stop_reason": stop_reason,
                     "quota": quota_extra,
+                    "refiner_batch": refiner_out,
                     "budget_note": (
                         "max_ticks_soft is safety only; abort authority remains "
                         f"cognitive_tokens_max={P.effective_cognitive_tokens_max()} + "

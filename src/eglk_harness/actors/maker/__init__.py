@@ -72,6 +72,25 @@ class MakerActor(Worker):
         )
         leaf_block = leaf.render_maker_block()
         prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
+        obligation_refs = [
+            str(x)
+            for x in (
+                args.get("obligation_refs")
+                or (args.get("leaf_contract") or {}).get("obligation_refs")
+                or []
+            )
+            if str(x).strip()
+        ]
+        contract_ref = str(args.get("contract_ref") or "")
+        world_revision = args.get("world_revision")
+        meta = {
+            "tick": tick,
+            "subgoal_id": subgoal_id,
+            "done_criteria": criteria,
+            "obligation_refs": obligation_refs or None,
+            "contract_ref": contract_ref or None,
+            "world_revision": int(world_revision) if world_revision is not None else None,
+        }
         request = EpisodeRequest(
             role="maker",
             prompt=prompt,
@@ -82,7 +101,7 @@ class MakerActor(Worker):
             expect="claim",
             model=resolve_model("maker"),
             timeout_s=float(args.get("timeout_s") or 600.0),
-            meta={"tick": tick, "subgoal_id": subgoal_id},
+            meta=meta,
             tee_path=str(tee_path) if tee_path else None,
         )
         result = await run_with_format_repair(
@@ -93,8 +112,15 @@ class MakerActor(Worker):
         claim = dict(result.parsed)
         claim["tick"] = tick
         claim["subgoal_id"] = subgoal_id
+        import uuid
+
+        sid = str(claim.get("maker_session_id") or "").strip()
+        if not sid or sid == "unknown":
+            claim["maker_session_id"] = f"maker-{uuid.uuid4().hex[:12]}"
         return messages.ok_value(
             claim=claim,
             tokens=int(result.tokens or 0),
             cost_usd=float(result.cost_usd or 0.0),
+            format_repair_tokens=int(result.format_repair_tokens or 0),
+            format_repair_cost_usd=float(result.format_repair_cost_usd or 0.0),
         )

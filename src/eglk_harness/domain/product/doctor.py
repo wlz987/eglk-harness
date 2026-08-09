@@ -72,7 +72,12 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
     )
 
     schema_dir = Path(__file__).resolve().parent.parent / "schemas"
-    required = ("state.schema.json", "claim.schema.json", "evidence.schema.json", "gate_decision.schema.json")
+    required = (
+        "run_projection.schema.json",
+        "gate_decision.schema.json",
+        "task_structure.schema.json",
+        "event.schema.json",
+    )
     missing = [n for n in required if not (schema_dir / n).is_file()]
     report.checks.append(
         DoctorCheck(
@@ -252,4 +257,70 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
                 )
             )
 
+    _append_loop_projection_checks(report, workdir)
+
     return report
+
+
+def _append_loop_projection_checks(report: DoctorReport, workdir: Path) -> None:
+    """When loop runs exist, verify events.db hash chain and projection replay drift."""
+    from eglk_harness.domain.kernel import paths as kernel_paths
+    from eglk_harness.domain.kernel.projection_read import events_summary, read_run_projection
+    from eglk_harness.domain.kernel.projection_replay import projection_diff, rebuild_from_events
+
+    loop_root = kernel_paths.loop_root(workdir)
+    if not loop_root.is_dir():
+        return
+    goals = sorted(p.name for p in loop_root.iterdir() if p.is_dir())
+    if not goals:
+        return
+
+    checked = 0
+    broken: list[str] = []
+    for gid in goals:
+        ev = events_summary(workdir, gid)
+        if not ev.get("present"):
+            continue
+        checked += 1
+        ok = bool(ev.get("hash_chain_ok"))
+        parts = [
+            f"events={ev.get('event_count')}",
+            "chain=ok" if ok else "chain=BROKEN",
+        ]
+        if ev.get("error"):
+            parts.append(str(ev["error"]))
+        loop_dir = kernel_paths.loop_goal_dir(workdir, gid)
+        try:
+            replayed = rebuild_from_events(loop_dir)
+            cached = read_run_projection(workdir, gid)
+            if cached:
+                diffs = projection_diff(replayed.get("run"), cached)
+                if diffs:
+                    ok = False
+                    parts.append(f"projection_drift={len(diffs)}")
+            else:
+                parts.append("projection_cache=absent")
+        except Exception as exc:  # noqa: BLE001
+            ok = False
+            parts.append(f"replay_error={exc}")
+        if not ok:
+            broken.append(f"{gid}:{' '.join(parts)}")
+        report.checks.append(
+            DoctorCheck(
+                name=f"loop_projection:{gid}",
+                ok=ok,
+                detail=" ".join(parts),
+            )
+        )
+
+    if checked:
+        report.checks.append(
+            DoctorCheck(
+                name="loop_projection_summary",
+                ok=not broken,
+                detail=(
+                    f"checked={checked} broken={len(broken)}"
+                    + (f" ({'; '.join(broken)})" if broken else "")
+                ),
+            )
+        )

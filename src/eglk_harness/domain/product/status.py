@@ -30,6 +30,11 @@ class StatusReport:
     leaf_contract: dict[str, Any] | None = None
     last_tick: dict[str, Any] | None = None
     sigma_active_count: int = 0
+    run_status: str | None = None
+    run_status_reason: str | None = None
+    events_db_present: bool = False
+    events_hash_chain_ok: bool = False
+    last_sequence: int | None = None
     notes: list[str] = field(default_factory=list)
 
     def render(self) -> str:
@@ -78,6 +83,13 @@ class StatusReport:
             f"usd_used={q.get('usd_used', 0)}"
         )
         lines.append(f"sigma.active: {self.sigma_active_count}")
+        if self.run_status:
+            extra = f" ({self.run_status_reason})" if self.run_status_reason else ""
+            lines.append(f"run:         {self.run_status}{extra}")
+        if self.events_db_present:
+            chain = "ok" if self.events_hash_chain_ok else "BROKEN"
+            seq = self.last_sequence if self.last_sequence is not None else "?"
+            lines.append(f"events.db:   present  hash_chain={chain}  last_seq={seq}")
 
         if self.leaf_contract:
             lc = self.leaf_contract
@@ -123,6 +135,11 @@ class StatusReport:
             "leaf_contract": self.leaf_contract,
             "last_tick": self.last_tick,
             "sigma_active_count": self.sigma_active_count,
+            "run_status": self.run_status,
+            "run_status_reason": self.run_status_reason,
+            "events_db_present": self.events_db_present,
+            "events_hash_chain_ok": self.events_hash_chain_ok,
+            "last_sequence": self.last_sequence,
             "notes": list(self.notes),
             "read_only": True,
             "hitl": False,
@@ -188,7 +205,7 @@ def _pick_run(loop_root: Path, prefer: str | None) -> str | None:
 def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
     """Assemble a read-only snapshot. Never mutates harness state."""
     workdir = workdir.resolve()
-    # Prefer config/env effective max so status matches run bootstrap before state.json exists.
+    # Prefer config/env effective max so status matches run bootstrap before projections exist.
     try:
         from eglk_harness.domain.product.config_resolve import load_config_toml
 
@@ -226,8 +243,56 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
         return report
 
     loop_dir = loop_root / selected
+    from eglk_harness.domain.kernel.projection_read import (
+        events_summary,
+        read_run_projection,
+        read_task_structure,
+    )
+
+    rp = read_run_projection(workdir, selected)
+    if rp:
+        report.run_status = str(rp.get("run_status") or "") or None
+        report.run_status_reason = rp.get("run_status_reason")
+        if rp.get("last_sequence") is not None:
+            try:
+                report.last_sequence = int(rp["last_sequence"])
+            except (TypeError, ValueError):
+                pass
+        if isinstance(rp.get("quota"), dict):
+            report.quota.update(rp["quota"])
+
+    evs = events_summary(workdir, selected)
+    report.events_db_present = bool(evs.get("present"))
+    report.events_hash_chain_ok = bool(evs.get("hash_chain_ok"))
+    if evs.get("last_sequence") is not None and report.last_sequence is None:
+        try:
+            report.last_sequence = int(evs["last_sequence"])
+        except (TypeError, ValueError):
+            pass
+    if evs.get("error"):
+        report.notes.append(f"events.db: {evs['error']}")
+
+    ts_doc = read_task_structure(workdir, selected)
+    if ts_doc and isinstance(ts_doc.get("root"), dict):
+        def _walk_tree(node: dict[str, Any], depth: int = 0) -> None:
+            report.tree_summary.append(
+                {
+                    "id": node.get("id"),
+                    "title": node.get("title"),
+                    "status": node.get("status"),
+                    "repair_streak": 0,
+                    "depth": depth,
+                }
+            )
+            for ch in node.get("children") or []:
+                if isinstance(ch, dict):
+                    _walk_tree(ch, depth + 1)
+
+        if not report.tree_summary:
+            _walk_tree(ts_doc["root"])
+
     tree = loop_store.load_tree(loop_dir)
-    if tree is not None:
+    if tree is not None and not report.tree_summary:
         for node, _depth in tree.walk():
             report.tree_summary.append(
                 {
@@ -245,25 +310,23 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
     if dec_dir.is_dir():
         report.decision_count = sum(1 for _ in dec_dir.glob("*.json"))
 
-    state_path = loop_dir / "state.json"
-    if state_path.is_file():
-        try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            if isinstance(state, dict):
-                if isinstance(state.get("quota"), dict):
-                    report.quota.update(state["quota"])
-                if state.get("tick") is not None:
-                    report.tick = int(state["tick"])
-                if state.get("focus_score") is not None:
-                    report.focus_score = float(state["focus_score"])
-                if state.get("uncertainty") is not None:
-                    report.uncertainty = float(state["uncertainty"])
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            pass
+    had_projection_quota = bool(rp and isinstance(rp.get("quota"), dict))
+    if had_projection_quota:
+        report.tick = report.last_sequence if report.last_sequence is not None else report.tick
 
     report.last_tick = _last_jsonl(loop_dir / "ticks.jsonl")
     if report.last_tick and isinstance(report.last_tick.get("quota"), dict):
         report.quota.update(report.last_tick["quota"])
+    if report.last_tick and report.last_tick.get("focus_score") is not None:
+        try:
+            report.focus_score = float(report.last_tick["focus_score"])
+        except (TypeError, ValueError):
+            pass
+    if report.last_tick and report.last_tick.get("uncertainty") is not None:
+        try:
+            report.uncertainty = float(report.last_tick["uncertainty"])
+        except (TypeError, ValueError):
+            pass
     if report.tick is None and report.last_tick and report.last_tick.get("tick") is not None:
         try:
             report.tick = int(report.last_tick["tick"])

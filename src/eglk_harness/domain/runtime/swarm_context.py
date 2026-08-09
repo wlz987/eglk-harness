@@ -14,15 +14,6 @@ def last_gate_decision(loop_dir: Path, tick: int) -> dict[str, Any] | None:
         return None
     path = loop_dir / "decisions" / f"{tick - 1:03d}.json"
     if not path.is_file():
-        st_path = loop_dir / "state.json"
-        if st_path.is_file():
-            try:
-                st = json.loads(st_path.read_text(encoding="utf-8"))
-                ld = st.get("last_decision")
-                if isinstance(ld, dict):
-                    return ld
-            except (OSError, json.JSONDecodeError):
-                pass
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

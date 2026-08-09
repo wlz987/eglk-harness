@@ -85,18 +85,29 @@ def decide_swarm(
     return SwarmPlan(explorer, verifier, selector, tuple(reasons))
 
 
+def should_run_end_refiner(
+    run_status: str,
+    *,
+    sigma_staging_count: int = 0,
+) -> bool:
+    """Refiner runs only after terminal run status (multi_agent §5.4)."""
+    if run_status not in {"succeeded", "aborted", "invalid", "faulted"}:
+        return False
+    return sigma_staging_count > 0 or run_status in {"succeeded", "aborted", "invalid", "faulted"}
+
+
 def decide_refiner(
     *,
     sigma_staging_count: int = 0,
     force: bool = False,
     decision: str = "",
+    run_status: str = "",
 ) -> bool:
-    """Stage Σ lessons each tick (repair/admit/abort); force when staging exceeds M_max."""
-    if force:
-        return True
-    if sigma_staging_count > P.SIGMA_STAGING_MAX:
-        return True
-    return decision in {"repair", "abort", "admit"}
+    """Deprecated per-tick hook — use ``should_run_end_refiner`` at run boundary."""
+    _ = (decision, force)
+    if run_status:
+        return should_run_end_refiner(run_status, sigma_staging_count=sigma_staging_count)
+    return False
 
 
 def should_veto_after_admit(*_args: Any, **_kwargs: Any) -> bool:

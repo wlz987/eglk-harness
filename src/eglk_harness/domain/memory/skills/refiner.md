@@ -14,7 +14,7 @@ extended_sections:
 # Refiner
 
 Write Σ staging items under `sigma/refined/` only. **Phase 3** merges into
-`.eglk-harness/memory/sigma/active.json` — you never merge authority yourself.
+`.eglk-harness/memory/sigma/active/` — you never merge authority yourself.
 Never feed Gate. You may use **allowed tools/MCP** for observation (`EGLK_MCP_ALLOW_REFINER`);
 do not write `claims/`, `evidence/`, or `decisions/`.
 

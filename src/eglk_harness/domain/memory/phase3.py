@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from eglk_harness.domain.memory import sigma
-from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.kernel.swarm import SwarmPlan
 
 _ARCHIVE_GLOBS = (
@@ -15,6 +14,7 @@ _ARCHIVE_GLOBS = (
     "verifier_*.json",
     "verifier_audit_*.json",
     "pruner_*.json",
+    "candidate_selector_*.json",
     "leaf_contract_*.json",
 )
 # Note: merge_suggest_*.json survives Phase-3 for next-tick apply (then deleted).
@@ -22,7 +22,7 @@ _ARCHIVE_GLOBS = (
 def archive_candidates(loop_dir: Path, *, tick: int) -> list[str]:
     """Append Phase-0/2 bypass artifacts to reasoning_log; clear them.
 
-    Keeps ``subgoals_tree.json`` (and any non-matching files).
+    Keeps task tree only under ``projections/task_structure.json``.
     """
     cand = loop_dir / "candidates"
     if not cand.is_dir():
@@ -59,10 +59,20 @@ def run_phase3(
     focus_score: float = 1.0,
     uncertainty: float = 0.0,
     soft: str | None = None,
+    handler: Any | None = None,
+    claim: Mapping[str, Any] | None = None,
+    evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Merge refined→active, archive candidates, compute next swarm plan, append ticks.jsonl."""
-    merged = sigma.merge_refined_into_active(workdir, loop_dir)
-    distilled = skill_lib.distill_from_sigma(workdir) if merged else []
+    """Archive candidates, stage Σ lessons, compute next swarm plan, append ticks.jsonl."""
+    from eglk_harness.domain.memory.refiner_batch import stage_tick_lesson
+
+    staged_path = stage_tick_lesson(
+        loop_dir,
+        tick=tick,
+        decision=decision,
+        claim=claim if isinstance(claim, Mapping) else None,
+        evidence=evidence if isinstance(evidence, Mapping) else None,
+    )
     archived = archive_candidates(loop_dir, tick=tick)
 
     quota = dict(quota or {})
@@ -74,7 +84,7 @@ def run_phase3(
         if (loop_dir / "candidates").is_dir()
         else 0
     )
-    from eglk_harness.domain.memory.context_compress import compress_tick_signals
+    from eglk_harness.domain.memory.context_compress import compress_tick_signals, skill_ref
 
     compressed = compress_tick_signals(
         decision=kind,
@@ -109,32 +119,18 @@ def run_phase3(
         "written": list(written or []),
         "swarm_enabled": enabled,
         "next_swarm": next_plan.to_dict(),
-        "sigma_merged": merged,
-        "skills_distilled": [d.get("id") for d in distilled],
+        "sigma_merged": 0,
+        "sigma_staged": 1 if staged_path else 0,
+        "skills_distilled": [],
         "candidates_archived": archived,
         "quota": dict(compressed.get("quota") or {"cognitive_tokens": tokens, "cognitive_tokens_max": tokens_max}),
         "focus_score": focus_score,
         "uncertainty": uncertainty,
         "model_downgrade": model_downgrade,
+        "skill_ref": skill_ref(),
     }
     path = loop_dir / "ticks.jsonl"
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    # Mirror for status (read-only consumers); Gate does not read this file.
-    state_path = loop_dir / "state.json"
-    state = {
-        "tick": tick,
-        "quota": record["quota"],
-        "focus_score": focus_score,
-        "uncertainty": uncertainty,
-        "last_decision": {
-            "decision": decision.get("decision"),
-            "reason": decision.get("reason"),
-        },
-        "swarm_enabled": enabled,
-        "sigma_active_len": len(sigma.load_active(workdir)),
-        "model_downgrade": model_downgrade,
-    }
-    state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return record

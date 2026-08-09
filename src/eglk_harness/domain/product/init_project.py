@@ -105,14 +105,6 @@ def init_project(workdir: Path, *, force: bool = False) -> InitResult:
     for status, d in paths.memory_lifecycle_dirs(workdir).items():
         _ensure_dir(d)
 
-    sigma_active = paths.memory_sigma_dir(workdir) / "active.json"
-    if not sigma_active.is_file() or force:
-        sigma_active.parent.mkdir(parents=True, exist_ok=True)
-        sigma_active.write_text("[]\n", encoding="utf-8")
-        rel = str(sigma_active.relative_to(workdir))
-        if rel not in result.created:
-            result.created.append(rel)
-
     _write(paths.config_path(workdir), _DEFAULT_CONFIG)
     _write(paths.goal_path(workdir), _DEFAULT_GOAL)
 

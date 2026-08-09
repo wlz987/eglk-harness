@@ -67,6 +67,8 @@ class EpisodeResult:
     tokens: int = 0
     cost_usd: float = 0.0
     backend: str = ""
+    format_repair_tokens: int = 0
+    format_repair_cost_usd: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -77,6 +79,8 @@ class EpisodeResult:
             "tokens": self.tokens,
             "cost_usd": self.cost_usd,
             "backend": self.backend,
+            "format_repair_tokens": self.format_repair_tokens,
+            "format_repair_cost_usd": self.format_repair_cost_usd,
         }
 
 

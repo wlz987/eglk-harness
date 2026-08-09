@@ -103,3 +103,28 @@ def align_claim_delivery_progress(
     out.pop("done_progress", None)
     out.pop("confidence", None)
     return out
+
+
+def align_evidence_world_revision(
+    evidence: Mapping[str, Any],
+    world_revision: int,
+) -> dict[str, Any]:
+    """Stamp authoritative ``world_revision`` on evidence and nested attestations."""
+    ev = dict(evidence)
+    rev = int(world_revision)
+    ev["world_revision"] = rev
+    verdicts: list[dict[str, Any]] = []
+    for verdict in ev.get("verdicts") or []:
+        if not isinstance(verdict, Mapping):
+            continue
+        vd = dict(verdict)
+        atts: list[dict[str, Any]] = []
+        for att in vd.get("attestations") or []:
+            if isinstance(att, Mapping):
+                ad = dict(att)
+                ad["world_revision"] = rev
+                atts.append(ad)
+        vd["attestations"] = atts
+        verdicts.append(vd)
+    ev["verdicts"] = verdicts
+    return ev

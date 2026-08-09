@@ -21,9 +21,9 @@ from eglk_harness.domain.kernel.projections import (
     effective_repairs_max,
 )
 from eglk_harness.domain.kernel.obligation_compile import compile_root_obligations
+from eglk_harness.domain.kernel.covers import covers_closure_complete
 from eglk_harness.domain.kernel.scheduler import (
     assemble_work_contract,
-    coverage_complete,
     select_ready_node,
     should_propose_split,
 )
@@ -101,9 +101,20 @@ class RunEngine:
         self.env = LocalFilesystemAdapter(self.workdir, self.loop_dir / "world")
         self.outcome: dict[str, Any] | None = None
 
+    @staticmethod
+    def tick_job_factory() -> type:
+        """EBA Job adapter — mechanical orchestration over RunEventContext."""
+        from eglk_harness.actors.tick import TickJob
+
+        return TickJob
+
     def bootstrap(self) -> None:
         self.handler.acquire()
         try:
+            from eglk_harness.domain.kernel.recovery import reconcile_dangling_transactions
+
+            reconcile_dangling_transactions(self.handler)
+            self.handler.check_goal_drift(self.workdir)
             self.handler.verify_or_fault()
             proj = self.handler.projection()
             if proj.run_status in {"succeeded", "aborted", "invalid", "faulted"}:
@@ -176,7 +187,7 @@ class RunEngine:
 
             node_id = select_ready_node(proj)
             if node_id is None:
-                if coverage_complete(proj):
+                if covers_closure_complete(proj):
                     # closure gate with synthetic empty claim/evidence for root
                     root = proj.root_id or "root"
                     contract = assemble_work_contract(
@@ -299,9 +310,9 @@ class RunEngine:
                 node_id=node_id, base_revision=proj.world_revision, side_effect_class=sec
             )
             tx = self.env.prepare(tx, list(claim_doc.get("actions") or []))
-            # For mock/tests: payload may be absent; apply no-op
-            payload = claim.get("payload") if isinstance(claim.get("payload"), Mapping) else None
-            tx = self.env.apply(tx, claim_payload=payload)
+            from eglk_harness.domain.kernel.worldref import resolve_claim_payload
+
+            tx = self.env.apply(tx, claim_payload=resolve_claim_payload(claim_doc))
             world_rev = self.env.observe_revision(tx)
             ev_doc["world_revision"] = world_rev
 
@@ -322,8 +333,10 @@ class RunEngine:
                 )
             elif dec in {"repair", "abort"} and tx.side_effect_class == "reversible":
                 self.env.rollback(tx, self.workdir)
+                self.handler.transaction_rolled_back(tx.transaction_id)
             elif dec in {"repair", "abort"} and tx.side_effect_class == "compensatable":
                 self.env.compensate(tx)
+                self.handler.transaction_compensated(tx.transaction_id)
 
             # split proposal hint (Governor is advisor — recorded in outcome only here)
             proj2 = self.handler.projection()

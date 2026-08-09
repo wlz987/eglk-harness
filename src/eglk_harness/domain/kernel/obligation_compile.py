@@ -21,7 +21,7 @@ VERIFICATION_TYPES = frozenset(
 
 _EXPLICIT_EXISTS = re.compile(
     r"\b(MUST_EXIST|file\s+exists|exists\s+at|path\s+exists)\b|"
-    r"(?:^|[\s`])(/[\w./\-]+\.\w{1,8}|[\w\-]+/[\w./\-]+)(?:$|[\s`])",
+    r"(?:^|[\s`])(/[\w./\-]+\.\w{1,8}|[\w./\-]+\.\w{1,8}|[\w\-]+/[\w./\-]+)(?:$|[\s`])",
     re.IGNORECASE,
 )
 
