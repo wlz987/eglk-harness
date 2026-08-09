@@ -8,12 +8,14 @@ from eglk_harness.domain.plugins.codex_computer_use import (  # noqa: F401
     CodexPluginError,
     CodexPluginState,
     StatusCallback,
+    codex_gui_grants,
+    get_codex_plugin_state,
+    install_computer_use_plugin,
+    runtime_app_path,
+    uninstall_computer_use_plugin,
     _enable_plugin_in_user_config,
     _resolve_codex_binary,
     _run_codex,
-    get_codex_plugin_state,
-    install_computer_use_plugin,
-    uninstall_computer_use_plugin,
 )
 
 __all__ = [
@@ -21,8 +23,10 @@ __all__ = [
     "CodexPluginError",
     "CodexPluginState",
     "StatusCallback",
+    "codex_gui_grants",
     "get_codex_plugin_state",
     "install_computer_use_plugin",
+    "runtime_app_path",
     "uninstall_computer_use_plugin",
     "_run_codex",
     "_resolve_codex_binary",

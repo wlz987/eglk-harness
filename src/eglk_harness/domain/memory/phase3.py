@@ -92,7 +92,7 @@ def run_phase3(
     next_plan = SwarmPlan(
         explorer=bool(ns.get("explorer")),
         verifier=bool(ns.get("verifier")),
-        pruner=bool(ns.get("pruner")),
+        candidate_selector=bool(ns.get("pruner") or ns.get("candidate_selector")),
         reasons=tuple(ns.get("reasons") or ()),
     )
     model_downgrade = compressed.get("model_downgrade") or {"active": False, "roles": {}}

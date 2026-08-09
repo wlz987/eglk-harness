@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from eba import RequestResponseActor
+from eba import Worker
 
 from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.adapters.base import AgentAdapter
@@ -41,7 +41,7 @@ def _gap_bits(evidence: Mapping[str, Any] | None) -> list[str]:
             texts.append(str(g))
     return texts
 
-class RefinerActor(RequestResponseActor):
+class RefinerActor(Worker):
     pattern = f"{topics.ROLE_REFINER_RUN}.*"
     result_prefix = topics.ROLE_REFINER_RESULT
     error_code = "refiner_failed"
@@ -54,8 +54,8 @@ class RefinerActor(RequestResponseActor):
         super().__init__(**kwargs)
         self.adapter = adapter
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         loop_dir = Path(str(args["loop_dir"]))
         tick = int(args.get("tick", 0))
         decision = str(args.get("decision") or "")
@@ -141,4 +141,4 @@ class RefinerActor(RequestResponseActor):
         except Exception:
             pass
 
-        return messages.ok_body(refined=item, path=str(path))
+        return messages.ok_value(refined=item, path=str(path))

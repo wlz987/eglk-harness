@@ -74,7 +74,7 @@ async def run_with_format_repair(
                 previous_text=previous_text,
             ),
             workdir=request.workdir,
-            tools_allowed=request.tools_allowed,
+            tools_allowed=False,
             mcp_config=request.mcp_config,
             add_dirs=request.add_dirs,
             model=request.model,

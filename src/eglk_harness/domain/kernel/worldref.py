@@ -208,6 +208,36 @@ def _ack_or_write(
     if (workdir / rel).is_file():
         written.append(rel)
 
+def apply_claim_actions(workdir: Path, actions: list[Mapping[str, Any]] | None) -> list[str]:
+    """Apply ActionClaim.actions (e.g. file_write) to the task workdir."""
+    if not actions:
+        return []
+    workdir = workdir.resolve()
+    written: list[str] = []
+    for action in actions:
+        if not isinstance(action, Mapping):
+            continue
+        if str(action.get("kind") or "") != "file_write":
+            continue
+        payload = action.get("payload") if isinstance(action.get("payload"), Mapping) else {}
+        rel = str(payload.get("path") or "").strip().lstrip("/").replace("\\", "/")
+        if not rel:
+            target = str(action.get("target") or "").strip()
+            if target.startswith("workdir/"):
+                rel = target[len("workdir/") :].lstrip("/")
+            else:
+                rel = target.lstrip("/")
+        if not rel or ".." in Path(rel).parts:
+            continue
+        content = payload.get("content")
+        if content is None:
+            content = payload.get("text")
+        if content is not None:
+            written.extend(apply_files(workdir, {rel: str(content)}))
+        elif (workdir / rel).is_file():
+            written.append(rel)
+    return written
+
 def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> list[str]:
     """Apply supported Claim payload kinds. Returns list of written or acknowledged paths.
 

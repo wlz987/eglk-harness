@@ -2,25 +2,42 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://eglk.local/schemas/quota.schema.json",
   "title": "Quota",
+  "description": "Resource projection derived from QuotaUpdated events. Only cognitive_tokens and repairs are abort-authoritative (see ../GOAL.md §10). uncertainty/focus_score are diagnostic-only when present elsewhere — not abort thresholds.",
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "schema",
     "cognitive_tokens",
     "cognitive_tokens_max",
-    "uncertainty",
-    "focus_score",
+    "cognitive_tokens_by_role",
     "repairs_used",
     "repairs_max",
     "usd_used"
   ],
   "properties": {
-    "cognitive_tokens": { "type": "integer", "minimum": 0 },
+    "schema": { "type": "string", "const": "eglk.quota" },
+    "cognitive_tokens": { "type": "integer", "minimum": 0, "description": "Sum of input+output tokens across ALL roles (Maker/Checker/advisors/format-repair); missing usage must be conservatively estimated, never recorded as zero." },
     "cognitive_tokens_max": { "type": "integer", "minimum": 1 },
-    "uncertainty": { "type": "number", "minimum": 0, "maximum": 1 },
-    "focus_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "cognitive_tokens_by_role": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 },
+      "description": "Per-role breakdown for auditability; keys are role names."
+    },
     "repairs_used": { "type": "integer", "minimum": 0 },
     "repairs_max": { "type": "integer", "minimum": 0 },
-    "usd_used": { "type": "number", "minimum": 0 },
+    "usd_used": { "type": "number", "minimum": 0, "description": "Diagnostic only; never abort-authoritative." },
     "usd_soft": { "type": ["number", "null"], "minimum": 0 }
+  },
+  "$defs": {
+    "Limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cognitive_tokens_max", "repairs_max"],
+      "properties": {
+        "cognitive_tokens_max": { "type": "integer", "minimum": 1 },
+        "repairs_max": { "type": "integer", "minimum": 0 },
+        "usd_soft": { "type": ["number", "null"], "minimum": 0 }
+      }
+    }
   }
 }

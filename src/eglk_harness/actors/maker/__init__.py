@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from eba import RequestResponseActor
+from eba import Worker
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
@@ -35,7 +35,7 @@ def _leaf_from_args(args: Mapping[str, Any], *, tick: int, subgoal_id: str, crit
         tick=tick,
     )
 
-class MakerActor(RequestResponseActor):
+class MakerActor(Worker):
     pattern = f"{topics.ROLE_MAKER_RUN}.*"
     result_prefix = topics.ROLE_MAKER_RESULT
     error_code = "maker_failed"
@@ -59,8 +59,8 @@ class MakerActor(RequestResponseActor):
         self.mcp_config = mcp_config
         self.add_dirs = tuple(add_dirs or ())
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         tick = int(args.get("tick", 0))
         subgoal_id = str(args.get("subgoal_id") or "root")
         criteria = [str(x) for x in (args.get("done_criteria") or ["done"])]
@@ -86,14 +86,14 @@ class MakerActor(RequestResponseActor):
             tee_path=str(tee_path) if tee_path else None,
         )
         result = await run_with_format_repair(
-            self.adapter, request, leaf_block=leaf_block, workdir=workdir
+            self.adapter, request, leaf_block=leaf_block
         )
         if not result.ok or not isinstance(result.parsed, dict):
-            return messages.err_body(result.error or "maker_episode_failed")
+            messages.work_error(result.error or "maker_episode_failed")
         claim = dict(result.parsed)
         claim["tick"] = tick
         claim["subgoal_id"] = subgoal_id
-        return messages.ok_body(
+        return messages.ok_value(
             claim=claim,
             tokens=int(result.tokens or 0),
             cost_usd=float(result.cost_usd or 0.0),

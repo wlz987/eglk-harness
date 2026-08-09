@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from eba import RequestResponseActor
+from eba import Worker
 
 from eglk_harness.domain.adapters.base import AgentAdapter
 from eglk_harness.domain.kernel.leaf_contract import contract_from_dict, LeafContract
@@ -127,7 +127,7 @@ def verifier_challenges(title: str, criteria: Sequence[str], *, audit: bool) -> 
         )
     return challenges
 
-class ExplorerActor(RequestResponseActor):
+class ExplorerActor(Worker):
     pattern = f"{topics.ROLE_EXPLORER_RUN}.*"
     result_prefix = topics.ROLE_EXPLORER_RESULT
     error_code = "explorer_failed"
@@ -136,8 +136,8 @@ class ExplorerActor(RequestResponseActor):
         super().__init__(**kwargs)
         self.adapter = adapter
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         loop_dir = Path(str(args["loop_dir"]))
         tick = int(args.get("tick", 0))
         leaf, title, criteria, contract = _leaf_ctx(args)
@@ -162,9 +162,9 @@ class ExplorerActor(RequestResponseActor):
         doc = coerce_explorer(raw, tick=tick, leaf=leaf, fallback=mech)
         doc["title"] = title
         _write_candidate(loop_dir, f"explorer_{tick:03d}.json", doc)
-        return messages.ok_body(artifact=doc)
+        return messages.ok_value(artifact=doc)
 
-class VerifierActor(RequestResponseActor):
+class VerifierActor(Worker):
     pattern = f"{topics.ROLE_VERIFIER_RUN}.*"
     result_prefix = topics.ROLE_VERIFIER_RESULT
     error_code = "verifier_failed"
@@ -174,8 +174,8 @@ class VerifierActor(RequestResponseActor):
         self.audit = audit
         self.adapter = adapter
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         loop_dir = Path(str(args["loop_dir"]))
         tick = int(args.get("tick", 0))
         leaf, title, criteria, contract = _leaf_ctx(args)
@@ -200,9 +200,9 @@ class VerifierActor(RequestResponseActor):
         doc["title"] = title
         name = f"verifier_audit_{tick:03d}.json" if is_audit else f"verifier_{tick:03d}.json"
         _write_candidate(loop_dir, name, doc)
-        return messages.ok_body(artifact=doc)
+        return messages.ok_value(artifact=doc)
 
-class PrunerActor(RequestResponseActor):
+class PrunerActor(Worker):
     pattern = f"{topics.ROLE_PRUNER_RUN}.*"
     result_prefix = topics.ROLE_PRUNER_RESULT
     error_code = "pruner_failed"
@@ -211,8 +211,8 @@ class PrunerActor(RequestResponseActor):
         super().__init__(**kwargs)
         self.adapter = adapter  # reserved; pruning stays mechanical
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         loop_dir = Path(str(args["loop_dir"]))
         tick = int(args.get("tick", 0))
         explorer_path = loop_dir / "candidates" / f"explorer_{tick:03d}.json"
@@ -229,4 +229,4 @@ class PrunerActor(RequestResponseActor):
                 alts.append(entry)
         doc = {"role": "pruner", "tick": tick, "alternatives": alts, "source": "mechanical"}
         _write_candidate(loop_dir, f"pruner_{tick:03d}.json", doc)
-        return messages.ok_body(artifact=doc)
+        return messages.ok_value(artifact=doc)

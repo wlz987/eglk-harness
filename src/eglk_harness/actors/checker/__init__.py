@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from eba import RequestResponseActor
+from eba import Worker
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
@@ -42,7 +42,7 @@ def _leaf_from_args(
         tick=tick,
     )
 
-class CheckerActor(RequestResponseActor):
+class CheckerActor(Worker):
     pattern = f"{topics.ROLE_CHECKER_RUN}.*"
     result_prefix = topics.ROLE_CHECKER_RESULT
     error_code = "checker_failed"
@@ -66,8 +66,8 @@ class CheckerActor(RequestResponseActor):
         self.mcp_config = mcp_config
         self.add_dirs = tuple(add_dirs or ())
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         tick = int(args.get("tick", 0))
         claim = args.get("claim") if isinstance(args.get("claim"), dict) else {}
         subgoal_id = str(args.get("subgoal_id") or claim.get("subgoal_id") or "root")
@@ -105,10 +105,9 @@ class CheckerActor(RequestResponseActor):
             self.adapter,
             request,
             leaf_block=f"{leaf_block}\n\n{extra}",
-            workdir=workdir,
         )
         if not result.ok or not isinstance(result.parsed, dict):
-            return messages.err_body(result.error or "checker_episode_failed")
+            messages.work_error(result.error or "checker_episode_failed")
         from eglk_harness.domain.runtime.evidence_guard import normalize_evidence
 
         evidence = normalize_evidence(
@@ -120,7 +119,7 @@ class CheckerActor(RequestResponseActor):
         )
         evidence["tick"] = tick
         evidence["subgoal_id"] = subgoal_id
-        return messages.ok_body(
+        return messages.ok_value(
             evidence=evidence,
             tokens=int(result.tokens or 0),
             cost_usd=float(result.cost_usd or 0.0),

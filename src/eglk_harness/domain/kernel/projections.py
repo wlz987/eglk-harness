@@ -11,6 +11,7 @@ COGNITIVE_TOKENS_MAX: int = 64000
 # ── Advisor throttle (never abort) ──
 CANDIDATES_MAX: int = 20  # N_max
 SIGMA_STAGING_MAX: int = 50  # M_max
+SIGMA_ACTIVE_MAX: int = 50
 SWARM_BUDGET_FLOOR: float = 0.10
 
 # ── Task tree ──
@@ -102,6 +103,7 @@ def as_dict() -> dict[str, object]:
         "COGNITIVE_TOKENS_MAX": COGNITIVE_TOKENS_MAX,
         "CANDIDATES_MAX": CANDIDATES_MAX,
         "SIGMA_STAGING_MAX": SIGMA_STAGING_MAX,
+        "SIGMA_ACTIVE_MAX": SIGMA_ACTIVE_MAX,
         "SWARM_BUDGET_FLOOR": SWARM_BUDGET_FLOOR,
         "SPLIT_REPAIR_STREAK": SPLIT_REPAIR_STREAK,
         "MAX_SPLIT_DEPTH": MAX_SPLIT_DEPTH,

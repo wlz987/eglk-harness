@@ -32,7 +32,11 @@ class LeafContract:
             "acceptance:",
             *[f"  - {a}" for a in self.acceptance],
             "boundary:",
-            *[f"  - {b}" for b in self.boundary] or ["  - (none)"],
+            *(
+                [f"  - {b}" for b in self.boundary]
+                if self.boundary
+                else ["  - (none)"]
+            ),
             "prior_evidence:",
         ]
         for p in self.prior_evidence:

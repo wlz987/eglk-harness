@@ -44,10 +44,13 @@ def compress_tick_signals(
 
 def should_enable_refiner(
     *,
-    decision: str,
-    active_len: int,
-    focus_score: float,
+    sigma_staging_count: int = 0,
+    force: bool = False,
+    decision: str = "",
+    active_len: int = 0,
+    focus_score: float = 1.0,
 ) -> bool:
-    from eglk_harness.domain.swarm import decide_refiner
+    from eglk_harness.domain.kernel.swarm import decide_refiner
 
-    return decide_refiner(decision=decision, active_len=active_len, focus_score=focus_score)
+    _ = (decision, active_len, focus_score)  # legacy call-site compat
+    return decide_refiner(sigma_staging_count=sigma_staging_count or active_len, force=force)

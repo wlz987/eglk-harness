@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eba import is_result_err, is_result_ok, result_error, result_value
+from eba import ErrBody, OkBody, is_result_err, is_result_ok, result_error, result_value
 from eba_job import Job
 
 from eglk_harness.domain.kernel import integrity
@@ -24,8 +24,8 @@ from eglk_harness.domain.memory.tokens import add_tokens
 from eglk_harness.domain.kernel.tree import TaskTree, make_root
 from eglk_harness.protocol import topics
 
-def _unwrap_stage_body(body: Any) -> tuple[Any | None, str | None]:
-    """Unwrap eba ``ResultBody`` to actor ``ok_body`` / ``err_body`` payload."""
+def _unwrap_stage_body(body: OkBody | ErrBody | Any) -> tuple[Any | None, str | None]:
+    """Unwrap eba ResultBody to stage payload dict."""
     if is_result_ok(body):
         return result_value(body), None
     if is_result_err(body):
@@ -33,6 +33,7 @@ def _unwrap_stage_body(body: Any) -> tuple[Any | None, str | None]:
     return body, None
 
 def _stage_err(body: Any) -> str | None:
+    """Legacy guard if inner payload still carries ``ok: false``."""
     if not isinstance(body, dict):
         return "non_dict_result"
     if body.get("ok") is False:
@@ -388,7 +389,7 @@ class TickJob(Job):
             },
         )
 
-    async def on_stage_result(self, stage: str, body: Any) -> None:
+    async def on_stage_result(self, stage: str, body: OkBody | ErrBody) -> None:
         inner, transport_err = _unwrap_stage_body(body)
         if transport_err is not None:
             await self.finish(ok=False, error=transport_err)
@@ -431,10 +432,16 @@ class TickJob(Job):
                 body.get("cost_usd") or 0
             )
             try:
-                self.written = worldref.apply_claim_payload(
-                    self.workdir,
-                    claim.get("payload") if isinstance(claim.get("payload"), dict) else None,
+                written: list[str] = []
+                written.extend(
+                    worldref.apply_claim_actions(
+                        self.workdir,
+                        claim.get("actions") if isinstance(claim.get("actions"), list) else None,
+                    )
                 )
+                payload = claim.get("payload") if isinstance(claim.get("payload"), dict) else None
+                written.extend(worldref.apply_claim_payload(self.workdir, payload))
+                self.written = list(dict.fromkeys(written))
             except ValueError as exc:
                 await self.finish(ok=False, error=f"apply_failed:{exc}")
                 return
@@ -599,10 +606,10 @@ class TickJob(Job):
     async def _start_phase2(self, decision: dict[str, Any]) -> None:
         assert self.loop_dir is not None
         kind = str(decision.get("decision") or "")
-        active_len = len(sigma.load_active(self.workdir))
+        staging_count = len(sigma.list_refined(self.loop_dir))
         leaf_id = str(decision.get("subgoal_id") or "root")
         cur = self.tree.find(leaf_id) if self.tree else None
-        if decide_refiner(decision=kind, active_len=active_len, focus_score=self.focus_score):
+        if decide_refiner(sigma_staging_count=staging_count, decision=kind):
             await self.request(
                 stage="refiner",
                 request_prefix=topics.ROLE_REFINER_RUN,

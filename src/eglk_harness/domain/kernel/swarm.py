@@ -89,11 +89,14 @@ def decide_refiner(
     *,
     sigma_staging_count: int = 0,
     force: bool = False,
+    decision: str = "",
 ) -> bool:
-    """Refiner is run-end batch only; enable when staging exceeds M_max or forced."""
+    """Stage Σ lessons each tick (repair/admit/abort); force when staging exceeds M_max."""
     if force:
         return True
-    return sigma_staging_count > P.SIGMA_STAGING_MAX
+    if sigma_staging_count > P.SIGMA_STAGING_MAX:
+        return True
+    return decision in {"repair", "abort", "admit"}
 
 
 def should_veto_after_admit(*_args: Any, **_kwargs: Any) -> bool:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -31,7 +32,16 @@ def load_mcp_config(path: Path | str | None) -> dict[str, Any] | None:
     if path is None:
         return None
     p = Path(path)
-    data = json.loads(p.read_text(encoding="utf-8"))
+    raw = p.read_text(encoding="utf-8")
+    if p.suffix.lower() == ".toml":
+        data = tomllib.loads(raw)
+        # Codex plugin TOML: [mcp_servers.name] → JSON mcpServers
+        if isinstance(data, dict) and "mcp_servers" in data:
+            servers = data.get("mcp_servers")
+            if isinstance(servers, dict):
+                return {"mcpServers": servers}
+        return data if isinstance(data, dict) else None
+    data = json.loads(raw)
     if not isinstance(data, dict):
         raise ValueError(f"mcp config must be object: {p}")
     return data

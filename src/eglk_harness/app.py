@@ -286,6 +286,13 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
             stop_reason = "max_ticks_soft"
 
         last_decision = decisions[-1] if decisions else {}
+        quota_extra: dict[str, Any] = {}
+        if last_job is not None:
+            quota_extra = dict(last_job.quota or {})
+            if last_job.focus_score is not None:
+                quota_extra.setdefault("focus_score", float(last_job.focus_score))
+            if last_job.uncertainty is not None:
+                quota_extra.setdefault("uncertainty", float(last_job.uncertainty))
         manifest_path = write_manifest(
             workdir,
             build_manifest(
@@ -302,6 +309,7 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
                     "start_tick": start_tick,
                     "max_ticks_soft": max_ticks,
                     "stop_reason": stop_reason,
+                    "quota": quota_extra,
                     "budget_note": (
                         "max_ticks_soft is safety only; abort authority remains "
                         f"cognitive_tokens_max={P.effective_cognitive_tokens_max()} + "

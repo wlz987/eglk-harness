@@ -7,7 +7,7 @@ from pathlib import Path
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
 from eglk_harness.domain.adapters import mcp as mcp_mod
-from eglk_harness.domain.adapters.codex_overrides import mcp_config_overrides, provider_overrides
+from eglk_harness.domain.adapters.codex_overrides import provider_overrides
 from eglk_harness.domain.adapters.parse import episode_from_text
 from eglk_harness.domain.adapters.process import require_binary, run_cli
 
@@ -60,7 +60,7 @@ class CodexAdapter:
             )
         )
         if mcp_path and request.tools_allowed:
-            for override in mcp_config_overrides(mcp_path):
+            for override in mcp_mod.codex_mcp_overrides(mcp_path):
                 if ["-c", override] not in [argv[i : i + 2] for i in range(len(argv) - 1)]:
                     argv.extend(["-c", override])
 

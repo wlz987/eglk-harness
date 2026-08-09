@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eba import RequestResponseActor
+from eba import Worker
 
 from eglk_harness.domain.adapters.base import AgentAdapter
 from eglk_harness.domain.runtime.budgets import timeout_for_role
@@ -16,7 +16,7 @@ from eglk_harness.domain.kernel.governor_split import proposal_document
 from eglk_harness.domain.kernel.loop_store import load_tree
 from eglk_harness.protocol import messages, payload, topics
 
-class GovernorActor(RequestResponseActor):
+class GovernorActor(Worker):
     pattern = f"{topics.ROLE_GOVERNOR_RUN}.*"
     result_prefix = topics.ROLE_GOVERNOR_RESULT
     error_code = "governor_failed"
@@ -36,8 +36,8 @@ class GovernorActor(RequestResponseActor):
         self.workdir = Path(workdir).resolve() if workdir else Path.cwd()
         self.adapter = adapter
 
-    async def work(self, body: Any) -> Any:
-        args = payload.get_args(body if isinstance(body, dict) else {})
+    async def work(self, envelope_payload: Any) -> Any:
+        args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
         loop_dir = Path(str(args["loop_dir"])) if args.get("loop_dir") else None
         tick = int(args.get("tick", 0))
         leaf_id = str(args.get("subgoal_id") or "root")
@@ -100,4 +100,4 @@ class GovernorActor(RequestResponseActor):
                 json.dumps(proposal, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
-        return messages.ok_body(proposal=proposal)
+        return messages.ok_value(proposal=proposal)
