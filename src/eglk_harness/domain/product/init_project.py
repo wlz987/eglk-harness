@@ -35,7 +35,7 @@ swarm = "auto"                   # auto | off | on
 [limits]
 # Defaults: projections constants
 # Live Codex runs often need a high override (design default 64000 is too tight).
-cognitive_tokens_max = 128000000
+cognitive_tokens_max = 512000000
 # repairs_max = 8
 # max_ticks_soft = 0
 
