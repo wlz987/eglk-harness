@@ -11,6 +11,10 @@ from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.attestation import (
+    obligation_type_map,
+    verdict_has_valid_attestation,
+)
 from eglk_harness.domain.kernel.projections import GATE_DECISION_SCHEMA
 
 _ABORT_REASONS = frozenset(
@@ -84,11 +88,6 @@ def _verdict_map(evidence: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return out
 
 
-def _attestation_valid(verdict: Mapping[str, Any]) -> bool:
-    atts = _as_list(verdict.get("attestations"))
-    return any(isinstance(a, Mapping) and a.get("digest") and a.get("method") for a in atts)
-
-
 def decide(
     contract: Mapping[str, Any],
     claim: Mapping[str, Any],
@@ -154,6 +153,11 @@ def decide(
         return _repair("integrity_violation")
 
     verdicts = _verdict_map(evidence)
+    type_map = obligation_type_map(contract)
+    try:
+        expected_rev = int(evidence["world_revision"]) if "world_revision" in evidence else None
+    except (TypeError, ValueError):
+        expected_rev = None
     pending: list[str] = []
     for oid in obligation_refs:
         v = verdicts.get(oid)
@@ -163,7 +167,11 @@ def decide(
             continue
         status = v.get("status")
         if status == "satisfied":
-            if not _attestation_valid(v):
+            if not verdict_has_valid_attestation(
+                v,
+                verification_type=type_map.get(oid),
+                expected_world_revision=expected_rev,
+            ):
                 return _repair("no_attestation")
             satisfied.append(oid)
         else:

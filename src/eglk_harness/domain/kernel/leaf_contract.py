@@ -22,6 +22,7 @@ class LeafContract:
     goal_md_excerpt: str = ""
     goal_format_excerpt: str = ""
     root_acceptance: list[str] = field(default_factory=list)
+    repair_feedback: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -34,6 +35,13 @@ class LeafContract:
         from eglk_harness.domain.kernel.compile_goal import render_goal_dual_block
 
         return ["", render_goal_dual_block(self.goal_md_excerpt, self.goal_format_excerpt)]
+
+    def _repair_feedback_lines(self, *, titles_only: bool) -> list[str]:
+        if not self.repair_feedback:
+            return []
+        from eglk_harness.domain.kernel.repair_feedback import render_repair_feedback_block
+
+        return ["", render_repair_feedback_block(self.repair_feedback, titles_only=titles_only)]
 
     def render_maker_block(self) -> str:
         lines = [
@@ -60,6 +68,7 @@ class LeafContract:
                 lines.append(f"  - {p}")
         if not self.prior_evidence:
             lines.append("  - (none)")
+        lines.extend(self._repair_feedback_lines(titles_only=False))
         lines.extend(self._goal_context_lines())
         if self.learned_skills_block:
             lines.extend(["", self.learned_skills_block])
@@ -93,6 +102,7 @@ class LeafContract:
                 lines.append(f"  - {str(p)[:80]}")
         if not self.prior_evidence:
             lines.append("  - (none)")
+        lines.extend(self._repair_feedback_lines(titles_only=True))
         lines.extend(self._goal_context_lines())
         return "\n".join(lines)
 
@@ -110,6 +120,7 @@ def assemble_leaf_contract(
     goal_md_excerpt: str = "",
     goal_format_excerpt: str = "",
     root_acceptance: Sequence[str] | None = None,
+    repair_feedback: Mapping[str, Any] | None = None,
 ) -> LeafContract:
     """Build a LeafContract for an in_progress (or any) leaf node.
 
@@ -139,6 +150,12 @@ def assemble_leaf_contract(
     for ch in leaf.verifier_challenges:
         priors.append({"kind": "challenge", "text": ch, "ref": leaf.id})
 
+    fb = dict(repair_feedback) if isinstance(repair_feedback, Mapping) else None
+    if fb and fb.get("prior_decision") == "repair":
+        from eglk_harness.domain.kernel.repair_feedback import repair_feedback_as_prior_evidence
+
+        priors = repair_feedback_as_prior_evidence(fb) + priors
+
     attempt = leaf.repair_streak  # attempts so far; caller may override via field
     return LeafContract(
         leaf_id=leaf.id,
@@ -153,6 +170,7 @@ def assemble_leaf_contract(
         goal_md_excerpt=goal_md_excerpt.strip(),
         goal_format_excerpt=goal_format_excerpt.strip(),
         root_acceptance=[str(x) for x in (root_acceptance or []) if str(x).strip()],
+        repair_feedback=fb,
     )
 
 
@@ -162,6 +180,7 @@ def contract_from_dict(data: Mapping[str, Any]) -> LeafContract:
     boundary = data.get("boundary")
     prior = data.get("prior_evidence")
     root_acc = data.get("root_acceptance")
+    fb = data.get("repair_feedback")
     return LeafContract(
         leaf_id=str(data.get("leaf_id") or "root"),
         goal=str(data.get("goal") or ""),
@@ -175,4 +194,5 @@ def contract_from_dict(data: Mapping[str, Any]) -> LeafContract:
         goal_md_excerpt=str(data.get("goal_md_excerpt") or ""),
         goal_format_excerpt=str(data.get("goal_format_excerpt") or ""),
         root_acceptance=[str(x) for x in root_acc if str(x).strip()] if isinstance(root_acc, list) else [],
+        repair_feedback=dict(fb) if isinstance(fb, Mapping) else None,
     )

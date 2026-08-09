@@ -81,11 +81,20 @@ class CheckerActor(Worker):
             args, tick=tick, subgoal_id=subgoal_id, criteria=criteria, title=title
         )
         leaf_block = leaf.render_checker_block()
+        observe_note = ""
+        obs = args.get("observation")
+        if isinstance(obs, dict) and obs.get("world_revision") is not None:
+            observe_note = (
+                f"\nFrozen observe world_revision={obs.get('world_revision')} "
+                f"files={len(obs.get('files') or [])} artifacts={len(obs.get('artifacts') or [])}.\n"
+                "Bind Attestation.world_revision to this revision; fill observation narrative only — no ground-truth answers.\n"
+            )
         extra = (
             f"Maker claim:\n```json\n{claim}\n```\n"
             f"Applied paths: {written}\n"
             "Inspect the workdir; do not modify files.\n"
             "Verify every MUST_EXIST / FORBIDDEN boundary line mechanically."
+            f"{observe_note}"
         )
         prompt = render_prompt("checker", leaf_block=leaf_block, extra=extra, workdir=workdir)
         request = EpisodeRequest(

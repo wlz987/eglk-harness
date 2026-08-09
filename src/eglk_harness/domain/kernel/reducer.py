@@ -145,6 +145,8 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
         s.pending_amendments.discard(oid)
         if oid in s.obligations:
             s.obligations[oid].statement = str(p.get("new_statement") or s.obligations[oid].statement)
+            if p.get("new_verification_type"):
+                s.obligations[oid].verification_type = str(p["new_verification_type"])
             s.obligations[oid].status = "open"
     elif t == "ObligationAmendmentRejected":
         s.pending_amendments.discard(str(p["obligation_id"]))

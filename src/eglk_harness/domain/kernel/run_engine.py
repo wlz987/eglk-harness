@@ -20,6 +20,7 @@ from eglk_harness.domain.kernel.projections import (
     effective_cognitive_tokens_max,
     effective_repairs_max,
 )
+from eglk_harness.domain.kernel.obligation_compile import compile_root_obligations
 from eglk_harness.domain.kernel.scheduler import (
     assemble_work_contract,
     coverage_complete,
@@ -42,21 +43,11 @@ def compile_goal_spec(
     goal_text: str,
     done_criteria: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Mechanical GoalSpec frame (LLM compile may enrich later)."""
-    criteria = list(done_criteria or ["deliverable exists"])
-    obligations = []
-    for i, c in enumerate(criteria, start=1):
-        obligations.append(
-            {
-                "id": f"ob-{i}",
-                "requirement_id": "req-1",
-                "parent_obligation_id": None,
-                "statement": str(c),
-                "verification_type": "file_exists" if "exist" in str(c).lower() else "custom_attestation",
-                "status": "open",
-                "origin": "root",
-            }
-        )
+    """Mechanical GoalSpec frame — coarse root obligations (conservative verification_type)."""
+    criteria = list(done_criteria or [])
+    if not criteria:
+        criteria = ["Satisfy the goal intent with inspectable artifacts"]
+    obligations = compile_root_obligations(criteria, requirement_id="req-1", id_prefix="ob")
     spec = {
         "schema": P.GOAL_SPEC_SCHEMA,
         "goal_id": goal_id,

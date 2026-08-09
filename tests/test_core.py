@@ -293,5 +293,186 @@ class TestRunEngine(unittest.TestCase):
             self.assertEqual(digest_active_snapshot(workdir), digest)
             engine.close()
 
+
+class TestAttestationFloor(unittest.TestCase):
+    def test_missing_observer_rejected(self) -> None:
+        from eglk_harness.domain.kernel.attestation import attestation_structurally_valid
+
+        self.assertFalse(
+            attestation_structurally_valid(
+                {
+                    "method": "file_exists",
+                    "world_revision": 1,
+                    "digest": "x",
+                    "observer": "",
+                    "raw_ref": "a",
+                    "watch_set": [],
+                }
+            )
+        )
+
+    def test_method_must_match_verification_type(self) -> None:
+        from eglk_harness.domain.kernel.attestation import method_allowed_for_verification_type
+
+        self.assertFalse(method_allowed_for_verification_type("api_state", "file_exists"))
+        self.assertTrue(method_allowed_for_verification_type("file_exists", "file_exists"))
+        self.assertTrue(method_allowed_for_verification_type("custom_attestation", "file_exists"))
+
+    def test_gate_rejects_revision_mismatch(self) -> None:
+        g = TestGate()
+        ev = g._evidence(satisfied=True)
+        ev["verdicts"][0]["attestations"][0]["world_revision"] = 99
+        d = decide(g._contract(), g._claim(), ev)
+        self.assertEqual(d.decision, "repair")
+        self.assertEqual(d.reason, "no_attestation")
+
+
+class TestRepairFeedback(unittest.TestCase):
+    def test_extract_and_load(self) -> None:
+        from eglk_harness.domain.kernel.repair_feedback import (
+            extract_repair_feedback,
+            load_prior_repair_feedback,
+            repair_feedback_as_prior_evidence,
+        )
+
+        fb = extract_repair_feedback(
+            evidence={
+                "verdicts": [
+                    {
+                        "obligation_id": "ob-1",
+                        "status": "unsatisfied",
+                        "gaps": ["need artifact"],
+                        "attestations": [],
+                        "defect_suspected": False,
+                    }
+                ],
+                "additional_gaps": ["boundary:forbidden"],
+            },
+            decision={"decision": "repair", "reason": "no_attestation", "open_obligation_ids": ["ob-1"]},
+        )
+        self.assertIsNotNone(fb)
+        assert fb is not None
+        self.assertEqual(fb["prior_decision"], "repair")
+        self.assertIn("need artifact", fb["gaps"])
+        priors = repair_feedback_as_prior_evidence(fb)
+        self.assertTrue(any(p.get("kind") == "gap" for p in priors))
+
+        with tempfile.TemporaryDirectory() as td:
+            loop = Path(td)
+            (loop / "decisions").mkdir(parents=True)
+            (loop / "evidence").mkdir(parents=True)
+            (loop / "decisions" / "000.json").write_text(
+                json.dumps({"decision": "repair", "reason": "no_attestation", "open_obligation_ids": ["ob-1"]}),
+                encoding="utf-8",
+            )
+            (loop / "evidence" / "000.json").write_text(
+                json.dumps(
+                    {
+                        "verdicts": [
+                            {
+                                "obligation_id": "ob-1",
+                                "status": "unsatisfied",
+                                "gaps": ["x"],
+                                "attestations": [],
+                                "defect_suspected": False,
+                            }
+                        ],
+                        "additional_gaps": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            loaded = load_prior_repair_feedback(loop, current_tick=1)
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded["reason"], "no_attestation")
+
+
+class TestObligationCompile(unittest.TestCase):
+    def test_coarse_conservative(self) -> None:
+        from eglk_harness.domain.kernel.obligation_compile import (
+            choose_root_verification_type,
+            compile_root_obligations,
+        )
+
+        self.assertEqual(choose_root_verification_type("Get the total number of reviews"), "custom_attestation")
+        self.assertEqual(choose_root_verification_type("MUST_EXIST out/report.json"), "file_exists")
+        obs = compile_root_obligations(["Satisfy intent", "Leave inspectable artifacts"])
+        self.assertTrue(all(o["origin"] == "root" for o in obs))
+        self.assertTrue(all(o["verification_type"] == "custom_attestation" for o in obs))
+
+
+class TestAdvisorGuard(unittest.TestCase):
+    def test_blocks_evidence_write(self) -> None:
+        from eglk_harness.domain.kernel.advisor_guard import assert_advisor_path_allowed
+
+        with tempfile.TemporaryDirectory() as td:
+            loop = Path(td)
+            (loop / "evidence").mkdir()
+            with self.assertRaises(PermissionError):
+                assert_advisor_path_allowed(loop / "evidence" / "000.json", loop_dir=loop)
+
+
+class TestAmendment(unittest.TestCase):
+    def test_root_immutable_derived_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            workdir = Path(td)
+            (workdir / ".goal.md").write_text("# G\n\n- done\n", encoding="utf-8")
+            init_project(workdir)
+            engine = RunEngine(workdir, goal_id="g-am", goal_title="G", done_criteria=["done"])
+            engine.bootstrap()
+            # open a derived obligation under root
+            root_obs = [oid for oid, ob in engine.handler.projection().obligations.items() if ob.origin == "root"]
+            self.assertTrue(root_obs)
+            root_id = root_obs[0]
+            engine.handler._append(
+                "ObligationOpened",
+                {
+                    "obligation_id": "ob-derived-1",
+                    "requirement_id": "req-1",
+                    "parent_obligation_id": root_id,
+                    "statement": "coarse derived",
+                    "verification_type": "custom_attestation",
+                    "origin": "derived",
+                },
+            )
+            bad = engine.handler.propose_obligation_amendment(
+                obligation_id=root_id,
+                new_statement="should fail",
+            )
+            self.assertFalse(bad.ok)
+            ok = engine.handler.propose_obligation_amendment(
+                obligation_id="ob-derived-1",
+                new_statement="refined derived statement",
+                new_verification_type="file_exists",
+            )
+            self.assertTrue(ok.ok)
+            proj = engine.handler.projection()
+            self.assertEqual(proj.obligations["ob-derived-1"].statement, "refined derived statement")
+            self.assertEqual(proj.obligations["ob-derived-1"].verification_type, "file_exists")
+            engine.close()
+
+
+class TestObserve(unittest.TestCase):
+    def test_observe_read_only_bundle(self) -> None:
+        from eglk_harness.domain.environment.world_transaction import LocalFilesystemAdapter
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            workdir = root / "work"
+            world = root / "world"
+            workdir.mkdir()
+            (workdir / "hello.txt").write_text("hi", encoding="utf-8")
+            adapter = LocalFilesystemAdapter(workdir, world)
+            tx = adapter.begin(node_id="n", base_revision=0, side_effect_class="read_only")
+            tx = adapter.prepare(tx, [{"action_id": "a1", "side_effect_class": "read_only"}])
+            tx = adapter.apply(tx, claim_payload=None)
+            tx.touches = ["hello.txt"]
+            tx.candidate_revision = 1
+            obs = adapter.observe(tx)
+            self.assertEqual(obs["side_effect_class"], "read_only")
+            self.assertEqual(obs["world_revision"], 1)
+            self.assertTrue(any(f.get("path") == "hello.txt" for f in obs["files"]))
+
+
 if __name__ == "__main__":
     unittest.main()

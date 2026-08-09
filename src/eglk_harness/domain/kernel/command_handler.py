@@ -307,3 +307,94 @@ class CommandHandler:
             "repair_counts": dict(proj.repair_counts),
             "last_gate": proj.last_gate,
         }
+
+    def propose_obligation_amendment(
+        self,
+        *,
+        obligation_id: str,
+        new_statement: str,
+        new_verification_type: str | None = None,
+        coverage_proof: Mapping[str, Any] | None = None,
+        actor: str = "governor",
+    ) -> CommandResult:
+        """Propose Amendment for derived obligations only (root → rejected)."""
+        proj = self.projection()
+        ob = proj.obligations.get(obligation_id)
+        if ob is None:
+            return CommandResult(ok=False, events=[], error="unknown_obligation", rejected=True)
+        if ob.origin == "root" or ob.parent_obligation_id is None:
+            ev = self._append(
+                "ObligationAmendmentRejected",
+                {
+                    "obligation_id": obligation_id,
+                    "reason": "root_obligation_immutable",
+                },
+                actor=actor,
+            )
+            return CommandResult(ok=False, events=[ev], error="root_obligation_immutable", rejected=True)
+        old_statement = ob.statement
+        proposed = self._append(
+            "ObligationAmendmentProposed",
+            {
+                "obligation_id": obligation_id,
+                "old_statement": old_statement,
+                "new_statement": new_statement,
+                "new_verification_type": new_verification_type or ob.verification_type,
+                "coverage_proof": dict(coverage_proof or {"kind": "refinement", "parent": ob.parent_obligation_id}),
+            },
+            actor=actor,
+        )
+        # Mechanical coverage: new statement must be non-empty and parent must still exist
+        parent_id = str(ob.parent_obligation_id)
+        if not new_statement.strip() or parent_id not in proj.obligations:
+            rej = self._append(
+                "ObligationAmendmentRejected",
+                {"obligation_id": obligation_id, "reason": "coverage_proof_failed"},
+                actor=actor,
+                causation_id=proposed.event_id,
+            )
+            return CommandResult(ok=False, events=[proposed, rej], error="coverage_proof_failed", rejected=True)
+        accepted = self._append(
+            "ObligationAmended",
+            {
+                "obligation_id": obligation_id,
+                "old_statement": old_statement,
+                "new_statement": new_statement.strip(),
+                "new_verification_type": new_verification_type or ob.verification_type,
+                "parent_obligation_id": parent_id,
+            },
+            actor=actor,
+            causation_id=proposed.event_id,
+        )
+        return CommandResult(ok=True, events=[proposed, accepted])
+
+    def record_defect_suspected_amendments(
+        self,
+        evidence: Mapping[str, Any],
+        *,
+        actor: str = "governor",
+    ) -> list[CommandResult]:
+        """If Checker marks defect_suspected on derived obligations, propose conservative amendments."""
+        results: list[CommandResult] = []
+        proj = self.projection()
+        for v in evidence.get("verdicts") or []:
+            if not isinstance(v, Mapping):
+                continue
+            if v.get("defect_suspected") is not True:
+                continue
+            oid = str(v.get("obligation_id") or "")
+            ob = proj.obligations.get(oid)
+            if ob is None or ob.origin == "root":
+                continue
+            gaps = v.get("gaps") or []
+            note = "; ".join(str(g) for g in gaps[:3]) if gaps else "statement refinement"
+            new_stmt = f"{ob.statement} [refined: {note}]".strip()
+            results.append(
+                self.propose_obligation_amendment(
+                    obligation_id=oid,
+                    new_statement=new_stmt,
+                    new_verification_type="custom_attestation",
+                    actor=actor,
+                )
+            )
+        return results

@@ -15,9 +15,11 @@ from eglk_harness.domain.runtime.bypass_llm import coerce_explorer, coerce_verif
 from eglk_harness.protocol import messages, payload, topics
 
 def _write_candidate(loop_dir: Path, name: str, doc: dict[str, Any]) -> Path:
+    from eglk_harness.domain.kernel.advisor_guard import advisor_write_guard
+
     cand = loop_dir / "candidates"
     cand.mkdir(parents=True, exist_ok=True)
-    path = cand / name
+    path = advisor_write_guard(loop_dir, cand / name)
     path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 

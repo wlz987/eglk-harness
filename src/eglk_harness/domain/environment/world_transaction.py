@@ -60,11 +60,33 @@ class EnvironmentAdapter(Protocol):
 
     def observe_revision(self, tx: WorldTransaction) -> int: ...
 
+    def observe(self, tx: WorldTransaction) -> dict[str, Any]: ...
+
     def commit(self, tx: WorldTransaction) -> WorldTransaction: ...
 
     def rollback(self, tx: WorldTransaction, workdir: Path) -> WorldTransaction: ...
 
     def compensate(self, tx: WorldTransaction) -> WorldTransaction: ...
+
+
+@dataclass
+class ObservationBundle:
+    """Read-only observation at a frozen candidate_revision (Checker input material)."""
+
+    world_revision: int
+    side_effect_class: str
+    files: list[dict[str, Any]]
+    artifacts: list[dict[str, Any]]
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "world_revision": self.world_revision,
+            "side_effect_class": self.side_effect_class,
+            "files": list(self.files),
+            "artifacts": list(self.artifacts),
+            "notes": list(self.notes),
+        }
 
 
 class LocalFilesystemAdapter:
@@ -155,6 +177,46 @@ class LocalFilesystemAdapter:
     def observe_revision(self, tx: WorldTransaction) -> int:
         tx.status = "observed"
         return int(tx.candidate_revision if tx.candidate_revision is not None else tx.base_revision)
+
+    def observe(self, tx: WorldTransaction) -> dict[str, Any]:
+        """Unified read-only observe at frozen candidate_revision (no world writes)."""
+        rev = self.observe_revision(tx)
+        files: list[dict[str, Any]] = []
+        artifacts: list[dict[str, Any]] = []
+        notes: list[str] = []
+        # Touches from this transaction (relative paths)
+        for rel in tx.touches:
+            p = self.workdir / rel
+            entry = {"path": rel, "exists": p.is_file(), "kind": "file"}
+            if p.is_file():
+                entry["size"] = p.stat().st_size
+                entry["sha256"] = __import__("hashlib").sha256(p.read_bytes()).hexdigest()
+            files.append(entry)
+        # Common delivery / HAR artifacts (read-only listing)
+        for pattern in ("agent_runs/**/agent_response.json", "agent_runs/**/network.har"):
+            for hit in sorted(self.workdir.glob(pattern)):
+                if not hit.is_file():
+                    continue
+                try:
+                    rel = str(hit.relative_to(self.workdir)).replace("\\", "/")
+                except ValueError:
+                    continue
+                artifacts.append(
+                    {
+                        "path": rel,
+                        "kind": "har" if rel.endswith(".har") else "agent_response",
+                        "size": hit.stat().st_size,
+                        "sha256": __import__("hashlib").sha256(hit.read_bytes()).hexdigest(),
+                    }
+                )
+        notes.append("observe is read_only; Checker must not apply")
+        return ObservationBundle(
+            world_revision=rev,
+            side_effect_class="read_only",
+            files=files,
+            artifacts=artifacts,
+            notes=notes,
+        ).to_dict()
 
     def commit(self, tx: WorldTransaction) -> WorldTransaction:
         tx.status = "committed"

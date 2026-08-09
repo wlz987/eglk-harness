@@ -344,6 +344,9 @@ class TickJob(Job):
         goal_cons = load_goal_constraints(self.workdir)
         goal_md, goal_fmt = load_goal_excerpts(self.workdir)
         root_acc = list(self.tree.root.done_criteria) if self.tree.root else []
+        from eglk_harness.domain.kernel.repair_feedback import load_prior_repair_feedback
+
+        repair_fb = load_prior_repair_feedback(self.loop_dir, current_tick=self.tick)
         try:
             contract = assemble_leaf_contract(
                 cur,
@@ -356,6 +359,7 @@ class TickJob(Job):
                 goal_md_excerpt=goal_md,
                 goal_format_excerpt=goal_fmt,
                 root_acceptance=root_acc,
+                repair_feedback=repair_fb,
             )
         except ValueError as exc:
             await self.finish(ok=False, error=f"leaf_contract:{exc}")

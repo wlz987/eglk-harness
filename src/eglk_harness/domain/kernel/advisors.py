@@ -128,6 +128,9 @@ def write_explorer_candidate(
         ],
     }
     path = candidates_dir(loop_dir) / f"explorer_{step:03d}_{_safe(node_id)}.json"
+    from eglk_harness.domain.kernel.advisor_guard import advisor_write_guard
+
+    path = advisor_write_guard(loop_dir, path)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 
@@ -158,6 +161,9 @@ def write_verifier_candidate(
         "veto": False,
     }
     path = candidates_dir(loop_dir) / f"verifier_{step:03d}_{_safe(node_id)}.json"
+    from eglk_harness.domain.kernel.advisor_guard import advisor_write_guard
+
+    path = advisor_write_guard(loop_dir, path)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 

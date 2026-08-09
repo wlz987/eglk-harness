@@ -64,6 +64,8 @@ def assemble_work_contract(
     allowed_scope: Sequence[str] | None = None,
     forbidden_actions: Sequence[str] | None = None,
     dependencies: Sequence[str] | None = None,
+    repair_feedback: Mapping[str, Any] | None = None,
+    obligation_verification_types: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     node = state.nodes[node_id]
     deps: list[str] = []
@@ -72,7 +74,14 @@ def assemble_work_contract(
             pre = state.nodes.get(e.to_id)
             if pre is not None and pre.status == "admitted":
                 deps.append(e.to_id)
-    return {
+    # Prefer explicit type map; else derive from ledger for this node's refs
+    type_map: dict[str, str] = dict(obligation_verification_types or {})
+    if not type_map:
+        for oid in node.obligation_refs:
+            ob = state.obligations.get(oid)
+            if ob is not None:
+                type_map[oid] = str(ob.verification_type or "custom_attestation")
+    out: dict[str, Any] = {
         "schema": WORK_CONTRACT_SCHEMA,
         "contract_id": f"wc-{uuid.uuid4().hex[:12]}",
         "node_id": node_id,
@@ -92,6 +101,11 @@ def assemble_work_contract(
         "budget": {"cognitive_tokens_soft": int(cognitive_tokens_soft)},
         "prior_evidence_refs": list(prior_evidence_refs or []),
     }
+    if type_map:
+        out["obligation_verification_types"] = type_map
+    if isinstance(repair_feedback, Mapping) and repair_feedback.get("prior_decision") == "repair":
+        out["repair_feedback"] = dict(repair_feedback)
+    return out
 
 
 def advisor_plan(
