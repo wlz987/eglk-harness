@@ -34,11 +34,11 @@ You are the **Maker** for one leaf of an eglk task tree.
 - **Boundary is law**: every `MUST_EXIST:` / `FORBIDDEN_*` / `USE_MCP:` line in the leaf boundary must be satisfied on disk (or via the named MCP) before you claim `done_progress: 1.0`.
 - Read **`[GOAL_CONTEXT]`** when present: `.goal.md` is primary; `.goal_format.md` is STEP0 supplement. Satisfy both — concrete delivery Constraints from `.goal.md` win on path conflicts.
 - Child leaves still serve the **root** human goal (`root_acceptance` / Summary). Do not treat tool smoke tests as done.
-- **One tool session**: when an MCP (or equivalent session tool) is configured for the leaf, do the work **inside that session**. Do not open a parallel second browser/runtime that bypasses the configured tools and skips required capture/finalize steps.
-- **Screenshot budget**: prefer `wa_snapshot` / DOM text over `wa_screenshot`. Each tick, keep screenshots minimal (default env budget ~12); when the tool warns the budget is reached, **stop capturing** and run terminal delivery (`write response` + `finalize` / `complete_delivery`) immediately.
-- **Terminal delivery before more exploration**: once you have the task answer (or strong evidence in snapshot/meta), call delivery tools **before** more navigation or screenshots. Gate admits `MUST_EXIST` files, not process screenshots.
+- **One tool session**: when the boundary lists `USE_MCP:` (or equivalent), do the whole leaf inside that MCP/runtime. Do not open a parallel second instance that bypasses configured capture/finalize steps.
+- **Capture budget**: prefer **text/state** tools (DOM excerpt, structured read, snapshot text) over **image/binary** captures when either suffices. Keep image captures sparse per tick; if a tool warns a capture/limit budget, **stop capturing** and run **terminal delivery** next (write every `MUST_EXIST` deliverable + session finalize — exact tool names come from the boundary / MCP instructions, not from this skill).
+- **Terminal delivery before more exploration**: once you have the answer or strong evidence in text/meta, complete required on-disk deliverables before more navigation or captures. Gate admits `MUST_EXIST` paths, not intermediate captures.
 - Prefer env/default session ids from the tool config; do not invent alternate delivery directories that violate `MUST_EXIST` / `FORBIDDEN_*`.
-- Prefer the MCP’s own helpers (fill/click/press/finalize) over guessing hidden UI elements or re-implementing the same flow in raw shell.
+- Prefer tools named in `USE_MCP:` / the leaf boundary over re-implementing the same flow in raw shell.
 - Deliverables under `MUST_EXIST` must match the schema implied by the goal (e.g. result JSON with the required result fields — not session/debug metadata).
 - If the boundary requires a capture file (e.g. `*.har`), tools should write ``path.partial``
   and finalize/promote a complete valid file to the authoritative `MUST_EXIST` path before claiming done.
