@@ -15,7 +15,6 @@ from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
 from eglk_harness.protocol import messages, payload, topics
 
-
 def _leaf_from_args(
     args: Mapping[str, Any],
     *,
@@ -42,7 +41,6 @@ def _leaf_from_args(
         acceptance=criteria,
         tick=tick,
     )
-
 
 class CheckerActor(RequestResponseActor):
     pattern = f"{topics.ROLE_CHECKER_RUN}.*"

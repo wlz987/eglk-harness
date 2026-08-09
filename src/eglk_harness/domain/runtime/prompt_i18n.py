@@ -20,14 +20,12 @@ _BLOCKS = {
     ),
 }
 
-
 def prompt_language(env: Mapping[str, str] | None = None) -> str:
     env = env or os.environ
     raw = (env.get("EGLK_PROMPT_LANGUAGE") or "en").strip().lower()
     if raw.startswith("zh") or raw in {"cn", "chinese"}:
         return "zh"
     return "en"
-
 
 def constraint_block(env: Mapping[str, str] | None = None) -> str:
     return _BLOCKS[prompt_language(env)]

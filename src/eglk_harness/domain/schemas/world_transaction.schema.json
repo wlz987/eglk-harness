@@ -1,0 +1,31 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/world_transaction.schema.json",
+ "title": "WorldTransaction",
+ "description": "A candidate world change lifecycle object. Replaces legacy WorldRef. See ../environment_protocol.md.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+ "schema", "transaction_id", "node_id", "base_revision", "candidate_revision",
+ "side_effect_class", "action_intents", "status"
+ ],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.world_transaction" },
+ "transaction_id": { "type": "string", "minLength": 1 },
+ "node_id": { "type": "string", "minLength": 1 },
+ "base_revision": { "type": "integer", "minimum": 0 },
+ "candidate_revision": { "type": ["integer", "null"], "minimum": 0 },
+ "side_effect_class": { "type": "string", "enum": ["read_only", "reversible", "compensatable", "irreversible"] },
+ "action_intents": {
+ "type": "array",
+ "items": { "type": "string", "minLength": 1 },
+ "description": "action_id refs from the originating ActionClaim."
+ },
+ "status": {
+ "type": "string",
+ "enum": ["prepared", "applied", "observed", "committed", "rolled_back", "compensated", "faulted"]
+ },
+ "idempotency_keys": { "type": "array", "items": { "type": "string" } },
+ "compensation_ref": { "type": ["string", "null"], "description": "Set when status=compensated: reference to the compensating action record." }
+ }
+}

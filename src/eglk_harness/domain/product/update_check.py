@@ -12,7 +12,6 @@ from eglk_harness import __version__
 _PYPI_JSON = "https://pypi.org/pypi/eglk-harness/json"
 _PACKAGE = "eglk-harness"
 
-
 @dataclass(frozen=True)
 class UpdateCheckResult:
     package: str
@@ -31,7 +30,6 @@ class UpdateCheckResult:
             "auto_upgrade": False,
             "read_only": True,
         }
-
 
 def check_update(*, timeout_s: float = 10.0) -> UpdateCheckResult:
     """Compare installed version to PyPI latest. Network failure → soft warn."""
@@ -65,7 +63,6 @@ def check_update(*, timeout_s: float = 10.0) -> UpdateCheckResult:
         return UpdateCheckResult(_PACKAGE, current, None, False, f"HTTP {exc.code}")
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
         return UpdateCheckResult(_PACKAGE, current, None, False, f"check failed: {exc}")
-
 
 def _is_newer(latest: str, current: str) -> bool:
     def parts(v: str) -> tuple:

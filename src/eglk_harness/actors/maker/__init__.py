@@ -15,7 +15,6 @@ from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
 from eglk_harness.protocol import messages, payload, topics
 
-
 def _leaf_from_args(args: Mapping[str, Any], *, tick: int, subgoal_id: str, criteria: list[str], title: str) -> LeafContract:
     lc = args.get("leaf_contract")
     if isinstance(lc, dict):
@@ -35,7 +34,6 @@ def _leaf_from_args(args: Mapping[str, Any], *, tick: int, subgoal_id: str, crit
         acceptance=criteria,
         tick=tick,
     )
-
 
 class MakerActor(RequestResponseActor):
     pattern = f"{topics.ROLE_MAKER_RUN}.*"

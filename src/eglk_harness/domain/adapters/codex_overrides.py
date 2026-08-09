@@ -21,7 +21,7 @@ def provider_overrides(
 
     Only emits overrides when an explicit base URL is set (arg / ``EGLK_BASE_URL`` /
     ``OPENAI_BASE_URL``). A lone API key must **not** redirect Codex away from
-    ``~/.codex/config.toml`` (e.g. local vLLM on :28000).
+    ``~/.codex/config.toml`` (e.g. local vLLM on :18000).
     """
     base_url = base_url or os.environ.get("EGLK_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
     api_key = api_key or os.environ.get("EGLK_API_KEY") or os.environ.get("OPENAI_API_KEY")

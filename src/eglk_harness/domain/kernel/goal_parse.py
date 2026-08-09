@@ -8,7 +8,6 @@ from pathlib import Path
 
 from eglk_harness.domain.kernel import paths
 
-
 def read_goal_text(workdir: Path, goal: str | None = None) -> str:
     if goal:
         p = Path(goal)
@@ -17,11 +16,9 @@ def read_goal_text(workdir: Path, goal: str | None = None) -> str:
         return goal
     return paths.goal_path(workdir).read_text(encoding="utf-8")
 
-
 def goal_id(text: str) -> str:
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
     return f"g-{digest}"
-
 
 def title_from_goal(text: str) -> str:
     for line in text.splitlines():
@@ -29,7 +26,6 @@ def title_from_goal(text: str) -> str:
         if s.startswith("#"):
             return s.lstrip("#").strip() or "goal"
     return "goal"
-
 
 def done_criteria(text: str, *, default: str = "hello.txt exists") -> list[str]:
     items: list[str] = []

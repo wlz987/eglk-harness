@@ -1,0 +1,36 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/event.schema.json",
+ "title": "EventEnvelope",
+ "description": "Single append-only EventStore record. Sole runtime authority; all other JSON (state, tree, manifest) is a rebuildable projection. See ../event_store.md.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["schema", "event_id", "sequence", "prev_hash", "hash", "type", "occurred_at", "payload"],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.event" },
+ "event_id": { "type": "string", "minLength": 1 },
+ "sequence": { "type": "integer", "minimum": 0, "description": "Monotonic per-run sequence; CommandHandler appends via expected-sequence CAS." },
+ "prev_hash": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$", "description": "null only for sequence=0 (RunCreated)." },
+ "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "sha256(prev_hash || sequence || type || payload_digest)." },
+ "type": {
+ "type": "string",
+ "enum": [
+ "RunCreated", "GoalCompiled", "ObligationOpened", "ObligationAmendmentProposed",
+ "ObligationAmended", "ObligationAmendmentRejected", "SplitProposed", "SplitCommitted",
+ "MergeProposed", "MergeCommitted", "NodeReady", "ContractAssembled",
+ "TransactionPrepared", "ActionDispatched", "TransactionObserved",
+ "EvidenceRecorded", "GateDecided", "ObligationSatisfied", "ObligationInvalidated",
+ "TransactionCommitted", "TransactionRolledBack", "TransactionCompensated",
+ "QuotaUpdated", "MemoryCandidateWritten", "MemoryPromoted", "MemoryDeprecated",
+ "CapabilityDenied", "RunSucceeded", "RunAborted", "RunInvalid", "RunFaulted",
+ "RunRecoveryStarted", "RunRecoveryCompleted"
+ ]
+ },
+ "occurred_at": { "type": "string", "format": "date-time" },
+ "actor": { "type": ["string", "null"], "description": "role/session_id that produced the underlying command, null for kernel-internal events." },
+ "payload": { "type": "object", "description": "Shape discriminated by sibling `type`; each event type's payload schema is defined per-type in ../event_store.md §2 and is intentionally not inlined here (would require one $defs entry per enum value in `type`). Deliberate exception to the family-wide additionalProperties:false convention." },
+ "payload_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "causation_id": { "type": ["string", "null"], "description": "event_id of the event this one is a direct reaction to." },
+ "correlation_id": { "type": "string", "minLength": 1, "description": "Groups events belonging to the same command/tick round-trip." }
+ }
+}

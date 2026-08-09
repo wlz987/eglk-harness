@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-
 def tokens_from_codex_jsonl(text: str) -> int:
     """Sum input+output tokens from Codex ``exec --json`` turn.completed events."""
     if not text:
@@ -33,7 +32,6 @@ def tokens_from_codex_jsonl(text: str) -> int:
             total += int(usage.get("output_tokens") or 0)
     return total
 
-
 def add_tokens(quota: dict[str, Any], delta: int) -> dict[str, Any]:
     out = dict(quota)
     cur = int(out.get("cognitive_tokens") or 0)
@@ -43,7 +41,6 @@ def add_tokens(quota: dict[str, Any], delta: int) -> dict[str, Any]:
 
         out["cognitive_tokens_max"] = P.COGNITIVE_TOKENS_MAX
     return out
-
 
 def update_focus_uncertainty(
     *,

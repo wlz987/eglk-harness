@@ -6,11 +6,9 @@ import os
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-
 @dataclass(frozen=True)
 class EpisodeBudget:
     max_duration_seconds: float = 600.0
-
 
 @dataclass(frozen=True)
 class RoleBudgets:
@@ -25,7 +23,6 @@ class RoleBudgets:
     def for_role(self, role: str) -> EpisodeBudget:
         return getattr(self, role, EpisodeBudget(120.0))
 
-
 _ENV_KEYS = {
     "maker": "EGLK_TIMEOUT_MAKER",
     "checker": "EGLK_TIMEOUT_CHECKER",
@@ -35,7 +32,6 @@ _ENV_KEYS = {
     "refiner": "EGLK_TIMEOUT_REFINER",
     "compile": "EGLK_TIMEOUT_COMPILE",
 }
-
 
 def resolve_role_budgets(
     args_ns: Any | None = None,
@@ -81,7 +77,6 @@ def resolve_role_budgets(
         refiner=EpisodeBudget(values["refiner"]),
         compile=EpisodeBudget(values["compile"]),
     )
-
 
 def timeout_for_role(role: str, env: Mapping[str, str] | None = None) -> float:
     """Resolve one role's episode timeout from env/defaults (for bypass actors)."""

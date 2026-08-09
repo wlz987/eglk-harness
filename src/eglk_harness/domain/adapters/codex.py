@@ -7,7 +7,7 @@ from pathlib import Path
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
 from eglk_harness.domain.adapters import mcp as mcp_mod
-from eglk_harness.domain.adapters.codex_overrides import provider_overrides
+from eglk_harness.domain.adapters.codex_overrides import mcp_config_overrides, provider_overrides
 from eglk_harness.domain.adapters.parse import episode_from_text
 from eglk_harness.domain.adapters.process import require_binary, run_cli
 
@@ -59,6 +59,14 @@ class CodexAdapter:
                 role=request.role,
             )
         )
+        if mcp_path and request.tools_allowed:
+            for override in mcp_config_overrides(mcp_path):
+                if ["-c", override] not in [argv[i : i + 2] for i in range(len(argv) - 1)]:
+                    argv.extend(["-c", override])
+
+        for add_dir in add_dirs:
+            if add_dir:
+                argv.extend(["--add-dir", str(add_dir)])
 
         argv.append("-")  # prompt on stdin
         return argv
@@ -66,7 +74,7 @@ class CodexAdapter:
     async def run_episode(self, request: EpisodeRequest) -> EpisodeResult:
         try:
             argv = self.build_argv(request)
-        except (FileNotFoundError, AssertionError, OSError, ValueError, TypeError) as exc:
+        except (FileNotFoundError, AssertionError) as exc:
             return EpisodeResult(ok=False, error=str(exc), backend=self.name)
 
         env: dict[str, str] | None = None
@@ -81,7 +89,6 @@ class CodexAdapter:
                 stdin_text=request.prompt,
                 timeout_s=request.timeout_s,
                 env=env,
-                tee_path=request.tee_path,
             )
         except TimeoutError:
             return EpisodeResult(ok=False, error="codex_timeout", backend=self.name)
@@ -94,7 +101,4 @@ class CodexAdapter:
                 error=f"codex_exit_{proc.returncode}: {proc.stderr[:500]}",
                 backend=self.name,
             )
-        from eglk_harness.domain.adapters.agent_logs import write_trajectory_sidecars
-
-        write_trajectory_sidecars(request.tee_path, text)
         return episode_from_text(request, text, backend=self.name)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from eglk_harness.domain.adapters.base import AgentAdapter
 from eglk_harness.domain.adapters.claude_code import ClaudeCodeAdapter

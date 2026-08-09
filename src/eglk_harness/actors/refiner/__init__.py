@@ -14,7 +14,6 @@ from eglk_harness.domain.runtime.budgets import timeout_for_role
 from eglk_harness.domain.runtime.bypass_llm import coerce_refiner, run_bypass_json
 from eglk_harness.protocol import messages, payload, topics
 
-
 def _step_bits(claim: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(claim, Mapping):
         return {}
@@ -27,7 +26,6 @@ def _step_bits(claim: Mapping[str, Any] | None) -> dict[str, Any]:
         if isinstance(val, list) and val:
             out[key] = [str(x) for x in val[:4]]
     return out
-
 
 def _gap_bits(evidence: Mapping[str, Any] | None) -> list[str]:
     if not isinstance(evidence, Mapping):
@@ -42,7 +40,6 @@ def _gap_bits(evidence: Mapping[str, Any] | None) -> list[str]:
         else:
             texts.append(str(g))
     return texts
-
 
 class RefinerActor(RequestResponseActor):
     pattern = f"{topics.ROLE_REFINER_RUN}.*"

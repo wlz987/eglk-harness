@@ -6,9 +6,7 @@ import json
 import re
 from typing import Any
 
-
 _FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
-
 
 def agent_message_bodies(text: str) -> list[str]:
     if not text or not text.strip():
@@ -32,7 +30,6 @@ def agent_message_bodies(text: str) -> list[str]:
         if obj.get("type") in {"agent_message", "message"} and isinstance(obj.get("text"), str):
             messages.append(obj["text"])
     return messages
-
 
 def command_output_bodies(text: str) -> list[str]:
     """Collect Codex ``command_execution`` stdout that looks like Claim/Evidence JSON.
@@ -65,7 +62,6 @@ def command_output_bodies(text: str) -> list[str]:
             outs.append(agg)
     return outs
 
-
 def unwrap_agent_jsonl(text: str) -> str:
     """If stdout is a Codex/Claude NDJSON event stream, return parseable bodies.
 
@@ -77,7 +73,6 @@ def unwrap_agent_jsonl(text: str) -> str:
     if parts:
         return "\n".join(parts)
     return text
-
 
 def _scan_balanced(stripped: str, opener: str, closer: str) -> list[Any]:
     out: list[Any] = []
@@ -118,7 +113,6 @@ def _scan_balanced(stripped: str, opener: str, closer: str) -> list[Any]:
             break
     return out
 
-
 _PROTOCOL_KEYS = frozenset({"thread_id", "session_id"})
 _PROTOCOL_TYPES = frozenset(
     {
@@ -131,7 +125,6 @@ _PROTOCOL_TYPES = frozenset(
     }
 )
 
-
 def _unwrap_list(val: Any) -> Any:
     """Unwrap single-element lists; prefer domain objects inside lists."""
     if not isinstance(val, list):
@@ -142,7 +135,6 @@ def _unwrap_list(val: Any) -> Any:
     if len(val) == 1 and isinstance(val[0], dict):
         return val[0]
     return val
-
 
 def _prefer_domain_object(candidates: list[Any]) -> Any | None:
     """Prefer Claim/Evidence objects over bare arrays or protocol envelopes."""
@@ -182,7 +174,6 @@ def _prefer_domain_object(candidates: list[Any]) -> Any | None:
         return None
     return _unwrap_list(candidates[best_i])
 
-
 def _candidates_from_text(text: str) -> list[Any]:
     candidates: list[Any] = []
     for m in _FENCE.finditer(text):
@@ -199,7 +190,6 @@ def _candidates_from_text(text: str) -> list[Any]:
     candidates.extend(_scan_balanced(stripped, "{", "}"))
     candidates.extend(_scan_balanced(stripped, "[", "]"))
     return candidates
-
 
 def extract_json(text: str) -> Any:
     """Best-effort JSON extraction from LLM stdout.

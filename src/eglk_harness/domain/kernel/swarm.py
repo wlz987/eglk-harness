@@ -1,9 +1,13 @@
-"""SWARM enablement (Phase 0 / Phase 2) — thresholds never abort."""
+"""Advisor enablement — event-trigger thresholds never abort.
+
+Replaces 0.2.x uncertainty/focus_score authority with observable candidate backlog
+and budget floor. LLM Pruner → mechanical CandidateSelector.
+"""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from eglk_harness.domain.kernel import projections as P
 
@@ -12,30 +16,39 @@ from eglk_harness.domain.kernel import projections as P
 class SwarmPlan:
     explorer: bool
     verifier: bool
-    pruner: bool
+    candidate_selector: bool
     reasons: tuple[str, ...] = ()
 
+    # Back-compat alias used by older tick code
+    @property
+    def pruner(self) -> bool:
+        return self.candidate_selector
+
     def any_enabled(self) -> bool:
-        return self.explorer or self.verifier or self.pruner
+        return self.explorer or self.verifier or self.candidate_selector
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["pruner"] = self.candidate_selector
+        return d
 
 
 def decide_swarm(
     *,
-    focus_score: float = 1.0,
-    uncertainty: float = 0.0,
+    focus_score: float = 1.0,  # ignored (diagnostic only; kept for call-site compat)
+    uncertainty: float = 0.0,  # ignored (diagnostic only)
     candidate_count: int = 0,
     cognitive_tokens: int = 0,
     cognitive_tokens_max: int = P.COGNITIVE_TOKENS_MAX,
     soft: str | None = None,
+    last_repair_reason: str | None = None,
 ) -> SwarmPlan:
-    """Phase 0 Explorer/Verifier/Pruner enablement (no Governor/Refiner).
+    """Explorer/Verifier/CandidateSelector enablement.
 
     ``soft``: ``\"0\"`` force off · ``\"1\"`` force at least Explorer · else auto.
-    ``τ_focus`` / budget floor throttle only — never abort the run.
+    Budget floor throttles only — never aborts the run.
     """
+    _ = (focus_score, uncertainty)  # explicitly non-authoritative
     reasons: list[str] = []
     if soft == "0":
         return SwarmPlan(False, False, False, ("soft_off",))
@@ -47,56 +60,42 @@ def decide_swarm(
     if remaining < P.SWARM_BUDGET_FLOOR:
         return SwarmPlan(False, False, False, ("budget_floor",))
 
-    if focus_score < P.TAU_FOCUS and soft != "1":
-        return SwarmPlan(False, False, False, ("focus_throttled",))
-
     explorer = True
     reasons.append("default_explorer")
     verifier = False
-    pruner = False
+    selector = False
 
-    if uncertainty > P.TAU_UNC_HIGH:
+    repair_reason = (last_repair_reason or "").strip()
+    if repair_reason in {
+        "no_attestation",
+        "boundary_unmet",
+        "integrity_violation",
+        "missing_alternatives",
+        "capability_ceiling_exceeded",
+    }:
         verifier = True
-        reasons.append("uncertainty_high")
+        reasons.append(f"repair_{repair_reason}")
     if candidate_count > P.CANDIDATES_MAX:
-        pruner = True
+        selector = True
+        verifier = True
         reasons.append("candidates_overflow")
     if soft == "1":
         reasons.append("soft_on")
 
-    return SwarmPlan(explorer, verifier, pruner, tuple(reasons))
+    return SwarmPlan(explorer, verifier, selector, tuple(reasons))
 
 
 def decide_refiner(
     *,
-    decision: str,
-    active_len: int = 0,
-    focus_score: float = 1.0,
+    sigma_staging_count: int = 0,
+    force: bool = False,
 ) -> bool:
-    """Whether Phase 2 Refiner should run (not part of run_swarm)."""
-    if decision == "repair":
+    """Refiner is run-end batch only; enable when staging exceeds M_max or forced."""
+    if force:
         return True
-    if decision == "abort":
-        return True
-    if active_len > P.SIGMA_ACTIVE_MAX:
-        return True
-    if decision == "admit" and focus_score < P.TAU_FOCUS:
-        return False
-    return decision in {"admit", "repair", "abort"}
+    return sigma_staging_count > P.SIGMA_STAGING_MAX
 
 
-def should_veto_after_admit(evidence: Mapping[str, Any] | None) -> bool:
-    """Fix B: skip reopen when audit complete with ≥1 artifact."""
-    if not evidence:
-        return True
-    try:
-        audit = float(evidence.get("audit_progress", 0) or 0)
-    except (TypeError, ValueError):
-        audit = 0.0
-    arts = evidence.get("artifacts") or []
-    if not isinstance(arts, list):
-        arts = []
-    grounded = [a for a in arts if isinstance(a, str) and a.strip()]
-    if audit >= P.TAU_DONE and len(grounded) >= 1:
-        return False
-    return True
+def should_veto_after_admit(*_args: Any, **_kwargs: Any) -> bool:
+    """Removed in — post-admit veto deleted; always False."""
+    return False

@@ -10,7 +10,6 @@ from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.kernel.swarm import SwarmPlan
 
-
 _ARCHIVE_GLOBS = (
     "explorer_*.json",
     "verifier_*.json",
@@ -19,7 +18,6 @@ _ARCHIVE_GLOBS = (
     "leaf_contract_*.json",
 )
 # Note: merge_suggest_*.json survives Phase-3 for next-tick apply (then deleted).
-
 
 def archive_candidates(loop_dir: Path, *, tick: int) -> list[str]:
     """Append Phase-0/2 bypass artifacts to reasoning_log; clear them.
@@ -48,7 +46,6 @@ def archive_candidates(loop_dir: Path, *, tick: int) -> list[str]:
             archived.append(path.name)
             path.unlink(missing_ok=True)
     return archived
-
 
 def run_phase3(
     workdir: Path,

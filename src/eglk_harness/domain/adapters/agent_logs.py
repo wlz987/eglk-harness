@@ -52,52 +52,33 @@ def detect_format(raw: str) -> str:
 
 
 def visible_output(raw: str) -> str:
-    """Best-effort readable text from Adapter stdout (NDJSON or plain).
-
-    When assistant prose omits Claim/Evidence but a shell ``cat`` carried it,
-    append those tool stdout bodies so operators/sidecars can still see them.
-    """
+    """Best-effort readable text from Adapter stdout (NDJSON or plain)."""
     if not raw or not raw.strip():
         return ""
     log_format = detect_format(raw)
-    primary = ""
     if log_format == CODEX_EXEC_JSON:
         texts = _codex_assistant_texts(raw)
         if texts:
-            primary = "\n".join(texts).strip()
+            return "\n".join(texts).strip()
     elif log_format == CLAUDE_STREAM_JSON:
         result_text, assistant_texts = _claude_texts(raw)
         if result_text.strip():
-            primary = result_text.strip()
-        elif assistant_texts:
-            primary = "\n\n".join(assistant_texts).strip()
+            return result_text.strip()
+        if assistant_texts:
+            return "\n\n".join(assistant_texts).strip()
     elif log_format == CHAT_JSONL:
         texts = _chat_assistant_texts(raw)
         if texts:
-            primary = texts[-1].strip()
-    if not primary:
-        # Legacy fallback: scan all known event shapes
-        chunks: list[str] = []
-        for record in _json_records(raw):
-            text = _from_codex_event(record) or _from_claude_event(record)
-            if text:
-                chunks.append(text)
-        if chunks:
-            primary = "\n".join(chunks).strip()
-        else:
-            primary = raw.strip()
-
-    try:
-        from eglk_harness.domain.runtime.json_extract import command_output_bodies
-
-        tools = command_output_bodies(raw)
-    except Exception:  # noqa: BLE001 — visible sidecar must never crash
-        tools = []
-    if tools and ("claim_id" not in primary and "evidence_id" not in primary):
-        extra = "\n\n".join(tools)
-        primary = f"{primary}\n\n--- tool stdout (claim/evidence) ---\n{extra}".strip()
-    return primary
-
+            return texts[-1].strip()
+    # Legacy fallback: scan all known event shapes
+    chunks: list[str] = []
+    for record in _json_records(raw):
+        text = _from_codex_event(record) or _from_claude_event(record)
+        if text:
+            chunks.append(text)
+    if chunks:
+        return "\n".join(chunks)
+    return raw.strip()
 
 
 def iter_steps(raw: str) -> list[dict[str, Any]]:
@@ -147,11 +128,42 @@ def runtime_signal_labels(raw: str) -> list[str]:
     return out
 
 
+def tool_output_view(raw: str) -> str:
+    """Tool/command output plus non-JSON lines, for crash detection."""
+    log_format = detect_format(raw)
+    parts: list[str] = []
+    for line in str(raw or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("{"):
+            parts.append(line)
+            continue
+        try:
+            record = json.loads(stripped)
+        except json.JSONDecodeError:
+            parts.append(line)
+            continue
+        if not isinstance(record, dict):
+            continue
+        if log_format == CODEX_EXEC_JSON:
+            parts.extend(_codex_tool_output(record))
+        elif log_format == CLAUDE_STREAM_JSON:
+            parts.extend(_claude_tool_output(record))
+    return "\n".join(part for part in parts if part)
+
+
+def write_visible_sidecar(tee_path: str | None, raw: str) -> str | None:
+    """Write ``*.visible.txt`` next to a tee trajectory; return path or None."""
+    paths = write_trajectory_sidecars(tee_path, raw)
+    return paths.get("visible")
+
+
 def write_trajectory_sidecars(tee_path: str | None, raw: str) -> dict[str, str]:
     """Write visible.txt and steps.json beside a tee file; return written paths."""
     if not tee_path:
         return {}
-    from eglk_harness.domain.runtime.redact import redact_secrets
+    from eglk_harness.domain.redact import redact_secrets
 
     src = Path(tee_path)
     if src.name.endswith(".jsonl"):
@@ -193,6 +205,33 @@ def _codex_assistant_texts(raw: str) -> list[str]:
         if isinstance(text, str) and text.strip():
             texts.append(text)
     return texts
+
+
+def _codex_tool_output(record: dict[str, Any]) -> list[str]:
+    record_type = record.get("type")
+    if record_type == "turn.failed":
+        error = record.get("error")
+        message = error.get("message") if isinstance(error, dict) else None
+        return [f"{TURN_FAILED_SIGNAL}: {message or 'codex turn failed'}"]
+    if record_type == "error":
+        message = record.get("message")
+        return [str(message)] if message else []
+    if record_type not in {"item.completed", "item.updated"}:
+        return []
+    item = record.get("item")
+    if not isinstance(item, dict):
+        return []
+    item_type = item.get("type")
+    if item_type == "command_execution":
+        output = item.get("aggregated_output")
+        return [str(output)] if output else []
+    if item_type == "mcp_tool_call":
+        text, _ = _content_blocks_to_text(_codex_mcp_content(item))
+        return [text] if text else []
+    if item_type == "error":
+        message = item.get("message")
+        return [str(message)] if message else []
+    return []
 
 
 def _codex_trajectory(raw: str) -> list[dict[str, Any]]:
@@ -358,6 +397,21 @@ def _claude_texts(raw: str) -> tuple[str, list[str]]:
                 if isinstance(text, str) and text.strip():
                     texts.append(text)
     return result_text, texts
+
+
+def _claude_tool_output(record: dict[str, Any]) -> list[str]:
+    if record.get("type") != "user":
+        return []
+    message = record.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), list):
+        return []
+    parts: list[str] = []
+    for block in message["content"]:
+        if isinstance(block, dict) and block.get("type") == "tool_result":
+            text, _ = _content_blocks_to_text(block.get("content"))
+            if text:
+                parts.append(text)
+    return parts
 
 
 def _claude_trajectory(raw: str) -> list[dict[str, Any]]:

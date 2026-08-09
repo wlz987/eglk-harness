@@ -34,7 +34,6 @@ StatusCallback = Callable[[str, str], None]
 AGENT_CODEX = "codex"
 AGENT_CLAUDE_CODE = "claude_code"
 
-
 @dataclass(frozen=True)
 class CommunityPlugin:
     plugin_id: str
@@ -70,7 +69,6 @@ class CommunityPlugin:
 
     def supports_platform(self, platform_name: str) -> bool:
         return platform_name in self.platforms
-
 
 OPEN_COMPUTER_USE = CommunityPlugin(
     plugin_id="open-computer-use",
@@ -128,10 +126,8 @@ CLAWDCURSOR = CommunityPlugin(
 COMMUNITY_PLUGINS: tuple[CommunityPlugin, ...] = (OPEN_COMPUTER_USE, CLAWDCURSOR)
 _BY_ID = {plugin.plugin_id: plugin for plugin in COMMUNITY_PLUGINS}
 
-
 def community_plugin_ids() -> tuple[str, ...]:
     return tuple(plugin.plugin_id for plugin in COMMUNITY_PLUGINS)
-
 
 def get_community_plugin(plugin_id: str) -> CommunityPlugin:
     plugin = _BY_ID.get(plugin_id)
@@ -141,10 +137,8 @@ def get_community_plugin(plugin_id: str) -> CommunityPlugin:
         )
     return plugin
 
-
 def community_plugin_state(plugin: CommunityPlugin) -> NpmPackageState:
     return global_package_state(plugin.package)
-
 
 def community_plugin_activation(plugin: CommunityPlugin) -> tuple[bool | None, str]:
     """Ask the vendor whether its consent and OS permissions are in place.
@@ -165,7 +159,6 @@ def community_plugin_activation(plugin: CommunityPlugin) -> tuple[bool | None, s
     detail = ((result.stdout or "") + (result.stderr or "")).strip()
     summary = detail.splitlines()[-1][:160] if detail else f"exit {result.returncode}"
     return result.returncode == 0, summary
-
 
 def install_community_plugin(
     plugin: CommunityPlugin,
@@ -229,7 +222,6 @@ def install_community_plugin(
         _notify(on_status, "note", note)
     return state
 
-
 def _activate(plugin: CommunityPlugin, *, on_status: StatusCallback | None) -> None:
     """Run the vendor's consent / OS-permission commands, then verify them."""
     for template in plugin.activation.get(sys.platform, ()):
@@ -250,7 +242,6 @@ def _activate(plugin: CommunityPlugin, *, on_status: StatusCallback | None) -> N
             )
     _verify_activation(plugin, on_status=on_status)
 
-
 def _verify_activation(plugin: CommunityPlugin, *, on_status: StatusCallback | None) -> None:
     """Confirm the grants actually took, instead of trusting the exit code."""
     ready, detail = community_plugin_activation(plugin)
@@ -265,7 +256,6 @@ def _verify_activation(plugin: CommunityPlugin, *, on_status: StatusCallback | N
         f"The plugin reports it is not ready ({detail}). "
         "GUI control will fail until consent and the OS permissions are granted.",
     )
-
 
 def uninstall_community_plugin(
     plugin: CommunityPlugin,
@@ -291,7 +281,6 @@ def uninstall_community_plugin(
     _warn_about_global_registration(plugin, on_status=on_status)
     return state
 
-
 def global_registrations(plugin: CommunityPlugin) -> list[str]:
     """Find leftovers in the agents' own configs, e.g. from a vendor installer.
 
@@ -309,7 +298,6 @@ def global_registrations(plugin: CommunityPlugin) -> list[str]:
             found.append(str(path))
     return found
 
-
 def _global_config_probes(name: str) -> tuple[tuple[Path, str], ...]:
     codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
     return (
@@ -317,7 +305,6 @@ def _global_config_probes(name: str) -> tuple[tuple[Path, str], ...]:
         (codex_home / "config.toml", f'[mcp_servers."{name}"]'),
         (Path.home() / ".claude.json", f'"{name}"'),
     )
-
 
 def _warn_about_global_registration(
     plugin: CommunityPlugin, *, on_status: StatusCallback | None
@@ -334,7 +321,6 @@ def _warn_about_global_registration(
         f"[mcp_servers.{plugin.mcp_server_name}] block) to keep GUI control out of unrelated sessions",
     )
 
-
 def _resolve_argv(plugin: CommunityPlugin, template: tuple[str, ...]) -> list[str]:
     argv: list[str] = []
     for index, item in enumerate(template):
@@ -350,7 +336,6 @@ def _resolve_argv(plugin: CommunityPlugin, template: tuple[str, ...]) -> list[st
         # A leading {binary} is the executable; later ones are arguments.
         argv.append(resolved if index == 0 else plugin.command_name)
     return argv
-
 
 def _notify(callback: StatusCallback | None, status: str, message: str) -> None:
     if callback is not None:

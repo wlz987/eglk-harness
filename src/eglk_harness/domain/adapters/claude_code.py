@@ -58,7 +58,6 @@ class ClaudeCodeAdapter:
                 argv,
                 cwd=request.workdir,
                 timeout_s=request.timeout_s,
-                tee_path=request.tee_path,
             )
         except TimeoutError:
             return EpisodeResult(ok=False, error="claude_timeout", backend=self.name)
@@ -71,7 +70,4 @@ class ClaudeCodeAdapter:
                 error=f"claude_exit_{proc.returncode}: {proc.stderr[:500]}",
                 backend=self.name,
             )
-        from eglk_harness.domain.adapters.agent_logs import write_trajectory_sidecars
-
-        write_trajectory_sidecars(request.tee_path, text)
         return episode_from_text(request, text, backend=self.name)

@@ -11,13 +11,11 @@ from typing import Any
 
 GOAL_FORMAT_NAME = ".goal_format.md"
 
-
 @dataclass
 class CompileResult:
     path: Path | None
     action: str  # reused | wrote | skipped | error
     detail: str = ""
-
 
 def resolve_compile_mode(cli: str | None = None, *, env: dict[str, str] | None = None) -> str:
     env = env or os.environ
@@ -26,14 +24,12 @@ def resolve_compile_mode(cli: str | None = None, *, env: dict[str, str] | None =
         raise ValueError(f"invalid compile mode: {raw!r}")
     return raw
 
-
 def _first_heading(goal_text: str) -> str:
     for line in goal_text.splitlines():
         s = line.strip()
         if s.startswith("#"):
             return s.lstrip("#").strip() or "Goal"
     return "Goal"
-
 
 def _section_bullets(goal_text: str, *headers: str) -> list[str]:
     want = {h.lower() for h in headers}
@@ -52,14 +48,12 @@ def _section_bullets(goal_text: str, *headers: str) -> list[str]:
             out.append(m.group(1).strip())
     return out
 
-
 def _loose_bullets(goal_text: str) -> list[str]:
     return [
         m.group(1).strip()
         for line in goal_text.splitlines()
         if (m := re.match(r"^\s*(?:[-*]|\d+[.)])\s+(.+)$", line))
     ]
-
 
 def format_goal_frame(goal_text: str) -> str:
     """Build a structured abstract frame from human ``.goal.md`` (no LLM)."""
@@ -108,7 +102,6 @@ def format_goal_frame(goal_text: str) -> str:
         f"```\n{body_preview}\n```\n"
     )
 
-
 def frame_from_compile_json(doc: dict[str, Any], *, source_excerpt: str = "") -> str:
     title = str(doc.get("title") or "Goal")
     direction = str(doc.get("direction") or f"Pursue: {title}")
@@ -137,7 +130,6 @@ def frame_from_compile_json(doc: dict[str, Any], *, source_excerpt: str = "") ->
         f"```\n{excerpt}\n```\n"
     )
 
-
 async def _compile_via_adapter(workdir: Path, goal_text: str, backend: str) -> str | None:
     from eglk_harness.domain.adapters.factory import create_adapter
     from eglk_harness.domain.runtime.budgets import timeout_for_role
@@ -158,7 +150,6 @@ async def _compile_via_adapter(workdir: Path, goal_text: str, backend: str) -> s
     if not raw:
         return None
     return frame_from_compile_json(raw, source_excerpt=goal_text)
-
 
 def _run_compile_coro(factory: Any) -> str | None:
     """Run Adapter compile from sync code; safe under a running event loop.
@@ -183,7 +174,6 @@ def _run_compile_coro(factory: Any) -> str | None:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(_in_thread).result(timeout=200)
-
 
 def compile_goal(
     workdir: Path,
@@ -261,7 +251,6 @@ def compile_goal(
     out.write_text(text, encoding="utf-8")
     return CompileResult(out, "wrote", f"mode={mode_s} backend={backend} source={source}")
 
-
 def load_goal_constraints(workdir: Path) -> list[str]:
     """Merge constraint bullets from ``.goal.md`` and ``.goal_format.md`` for leaf boundary.
 
@@ -300,18 +289,15 @@ def load_goal_constraints(workdir: Path) -> list[str]:
         _extend(_section_bullets(gf.read_text(encoding="utf-8"), *headers_format))
     return merged
 
-
 _GOAL_EXCERPT_MAX = 8000
 # Stored in `.goal_format.md` — align with prompt excerpts; eval goals can be long.
 _COMPILE_SOURCE_EXCERPT_MAX = _GOAL_EXCERPT_MAX
-
 
 def _excerpt_text(text: str, *, limit: int = _GOAL_EXCERPT_MAX) -> str:
     text = text.strip()
     if len(text) <= limit:
         return text
     return text[: limit - 20].rstrip() + "\n\n…[truncated]…"
-
 
 def load_goal_excerpts(workdir: Path) -> tuple[str, str]:
     """Return (``.goal.md`` excerpt, ``.goal_format.md`` excerpt).
@@ -329,7 +315,6 @@ def load_goal_excerpts(workdir: Path) -> tuple[str, str]:
     if gf.is_file():
         fmt_txt = _excerpt_text(gf.read_text(encoding="utf-8"))
     return goal_txt, fmt_txt
-
 
 def render_goal_dual_block(goal_md: str, goal_format: str) -> str:
     """Markdown block injecting both goal documents into role prompts."""

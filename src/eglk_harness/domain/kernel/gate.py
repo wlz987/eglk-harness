@@ -1,193 +1,214 @@
-"""Mechanical Gate Γ — compare Claim vs Evidence (no LLM, no eval oracle)."""
+"""Mechanical Gate Γ — per-obligation reduction.
+
+Pure function: WorkContract + ActionClaim + EvidenceBundle → GateDecision.
+Never reads self_assessment floats, eval scorers, or candidates/.
+Abort only for cognitive_budget / *_exhausted.
+"""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.projections import GATE_DECISION_SCHEMA
+
+_ABORT_REASONS = frozenset(
+    {
+        "cognitive_budget",
+        "integrity_violation_exhausted",
+        "no_attestation_exhausted",
+        "boundary_unmet_exhausted",
+        "amendment_pending_exhausted",
+        "closure_incomplete_exhausted",
+        "capability_ceiling_exceeded_exhausted",
+        "missing_alternatives_exhausted",
+    }
+)
 
 
 @dataclass(frozen=True)
 class GateDecision:
     decision: str  # admit | repair | abort
     reason: str
-    maker_progress: float
-    checker_progress: float
-    perception_gap: float
-    gaps_count: int
-    should_run_next: bool
-    next_action: str | None = None
-    subgoal_id: str | None = None
-    tick: int | None = None
+    node_id: str
+    contract_ref: str
+    satisfied_obligation_ids: list[str]
+    open_obligation_ids: list[str]
+    is_closure_gate: bool = False
+    event_ref: str | None = None
+    schema: str = GATE_DECISION_SCHEMA
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _f(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return default
+        return {
+            "schema": self.schema,
+            "decision": self.decision,
+            "reason": self.reason,
+            "node_id": self.node_id,
+            "contract_ref": self.contract_ref,
+            "satisfied_obligation_ids": list(self.satisfied_obligation_ids),
+            "open_obligation_ids": list(self.open_obligation_ids),
+            "is_closure_gate": self.is_closure_gate,
+            "event_ref": self.event_ref,
+        }
 
 
 def _as_list(x: Any) -> list[Any]:
     return list(x) if isinstance(x, (list, tuple)) else []
 
 
-def _valid_artifacts(artifacts: list[Any]) -> list[str]:
-    out: list[str] = []
-    for a in artifacts:
-        if isinstance(a, str) and a.strip():
-            out.append(a.strip())
-        elif isinstance(a, Mapping):
-            for k in ("path", "text", "content", "uri"):
-                v = a.get(k)
-                if isinstance(v, str) and v.strip():
-                    out.append(v.strip())
-                    break
-    return out
-
-
-def _payload_empty(payload: Any) -> bool:
-    if payload is None:
-        return True
-    if isinstance(payload, Mapping):
-        if not payload:
-            return True
-        if "commands" in payload:
-            return not payload.get("commands")
-        if "files" in payload:
-            return not payload.get("files")
-        return False
-    return not bool(payload)
-
-
-def _alternatives_missing(claim: Mapping[str, Any], evidence: Mapping[str, Any]) -> bool:
-    if claim.get("alternatives_missing") is True:
-        return True
-    if evidence.get("alternatives_missing") is True:
-        return True
+def _alternatives_missing(claim: Mapping[str, Any]) -> bool:
     alts = claim.get("alternatives")
     return not isinstance(alts, list) or len(alts) < 1
 
 
+def _ceiling_exceeded(contract: Mapping[str, Any], claim: Mapping[str, Any]) -> bool:
+    policy = contract.get("transaction_policy") or {}
+    ceiling = set(_as_list(policy.get("side_effect_class_ceiling")))
+    if not ceiling:
+        return False
+    for action in _as_list(claim.get("actions")):
+        if not isinstance(action, Mapping):
+            continue
+        sec = action.get("side_effect_class")
+        if sec not in ceiling:
+            return True
+    return False
+
+
+def _verdict_map(evidence: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    out: dict[str, Mapping[str, Any]] = {}
+    for v in _as_list(evidence.get("verdicts")):
+        if isinstance(v, Mapping) and v.get("obligation_id"):
+            out[str(v["obligation_id"])] = v
+    return out
+
+
+def _attestation_valid(verdict: Mapping[str, Any]) -> bool:
+    atts = _as_list(verdict.get("attestations"))
+    return any(isinstance(a, Mapping) and a.get("digest") and a.get("method") for a in atts)
+
+
 def decide(
+    contract: Mapping[str, Any],
     claim: Mapping[str, Any],
     evidence: Mapping[str, Any],
     *,
     quota: Mapping[str, Any] | None = None,
     repair_counts: Mapping[str, int] | None = None,
+    pending_amendment_obligation_ids: Sequence[str] | None = None,
+    is_closure_gate: bool = False,
+    closure_complete: bool | None = None,
 ) -> GateDecision:
-    """Pure Gate decision per gate_policy contract.
+    """Per-obligation mechanical reduction.
 
-    ``repair_counts`` maps prior same-cause repair reasons → count *before* this tick.
-    If a repair reason would fire and count already >= REPAIRS_MAX, return abort(*_exhausted).
-
-    ``τ_focus`` / ``τ_unc`` are intentionally unused here (never abort).
+    ``repair_counts`` maps prior same-cause repair reasons → count *before* this decision.
+    Gate MUST NOT read ``claim.self_assessment``.
     """
     quota = quota or {}
     counts = dict(repair_counts or {})
+    node_id = str(contract.get("node_id") or claim.get("node_id") or "")
+    contract_ref = str(contract.get("contract_id") or claim.get("contract_ref") or "")
+    obligation_refs = [str(x) for x in _as_list(contract.get("obligation_refs"))]
+    pending_amend = set(str(x) for x in (pending_amendment_obligation_ids or []))
 
-    done = _f(claim.get("done_progress"))
-    audit = _f(evidence.get("audit_progress"))
-    gap = abs(done - audit)
+    satisfied: list[str] = []
+    open_ids: list[str] = []
 
-    gaps = [str(g) for g in _as_list(evidence.get("gaps"))]
-    challenges = [str(c) for c in _as_list(evidence.get("challenges"))]
-    merged_gaps = list(dict.fromkeys([*gaps, *challenges]))
-    gaps_count = len(merged_gaps)
-
-    subgoal_id = claim.get("subgoal_id") or evidence.get("subgoal_id")
-    tick = claim.get("tick") if claim.get("tick") is not None else evidence.get("tick")
-    tick_i = int(tick) if tick is not None else None
-    sub_s = str(subgoal_id) if subgoal_id is not None else None
-
-    def _out(
-        decision: str,
-        reason: str,
-        *,
-        should_run_next: bool | None = None,
-        next_action: str | None = None,
-    ) -> GateDecision:
-        if should_run_next is None:
-            should_run_next = decision == "repair"
+    def _out(decision: str, reason: str, *, sat: list[str] | None = None, open_: list[str] | None = None) -> GateDecision:
         return GateDecision(
             decision=decision,
             reason=reason,
-            maker_progress=done,
-            checker_progress=audit,
-            perception_gap=gap,
-            gaps_count=gaps_count,
-            should_run_next=should_run_next,
-            next_action=next_action,
-            subgoal_id=sub_s,
-            tick=tick_i,
+            node_id=node_id,
+            contract_ref=contract_ref,
+            satisfied_obligation_ids=list(sat if sat is not None else satisfied),
+            open_obligation_ids=list(open_ if open_ is not None else open_ids),
+            is_closure_gate=is_closure_gate,
         )
 
     def _repair(reason: str) -> GateDecision:
         used = int(counts.get(reason, 0))
         repairs_cap = int(quota.get("repairs_max", P.REPAIRS_MAX) or P.REPAIRS_MAX)
         if used >= repairs_cap:
-            return _out(
-                "abort",
-                f"{reason}_exhausted",
-                should_run_next=False,
-                next_action="archive",
-            )
-        return _out("repair", reason, should_run_next=True, next_action="retry_leaf")
+            abort_reason = f"{reason}_exhausted"
+            if abort_reason not in _ABORT_REASONS:
+                abort_reason = f"{reason}_exhausted"
+            return _out("abort", abort_reason)
+        return _out("repair", reason)
 
     tokens = int(quota.get("cognitive_tokens", 0) or 0)
     tokens_max = int(
         quota.get("cognitive_tokens_max", P.COGNITIVE_TOKENS_MAX) or P.COGNITIVE_TOKENS_MAX
     )
     if tokens >= tokens_max:
-        return _out("abort", "cognitive_budget", should_run_next=False, next_action="archive")
+        return _out("abort", "cognitive_budget")
 
-    if _alternatives_missing(claim, evidence):
+    if _ceiling_exceeded(contract, claim):
+        return _repair("capability_ceiling_exceeded")
+
+    if _alternatives_missing(claim):
         return _repair("missing_alternatives")
 
     if evidence.get("integrity_violation") is True:
+        open_ids = list(obligation_refs)
         return _repair("integrity_violation")
 
-    artifacts = _valid_artifacts(_as_list(evidence.get("artifacts")))
-    kind = claim.get("kind")
-    payload = claim.get("payload")
-    if not artifacts or (kind == "commands" and _payload_empty(payload)):
-        return _repair("no_evidence_grounding")
+    verdicts = _verdict_map(evidence)
+    pending: list[str] = []
+    for oid in obligation_refs:
+        v = verdicts.get(oid)
+        if v is None:
+            pending.append(oid)
+            open_ids.append(oid)
+            continue
+        status = v.get("status")
+        if status == "satisfied":
+            if not _attestation_valid(v):
+                return _repair("no_attestation")
+            satisfied.append(oid)
+        else:
+            pending.append(oid)
+            open_ids.append(oid)
 
-    criteria_defect = evidence.get("criteria_defect") is True
-    if audit >= P.TAU_DONE and criteria_defect and gap < P.TAU_GAP:
-        return _out(
-            "admit",
-            "criteria_defect_acknowledged",
-            should_run_next=False,
-            next_action="advance",
-        )
-
-    if audit >= P.TAU_DONE and gaps_count == 0 and gap < P.TAU_GAP:
-        return _out(
-            "admit",
-            "consistent_completion",
-            should_run_next=False,
-            next_action="advance",
-        )
-
-    # Boundary failures are delivery-contract failures — not Maker/Checker disagreement.
-    if any(g.startswith("boundary:") for g in merged_gaps):
+    additional_gaps = [str(g) for g in _as_list(evidence.get("additional_gaps"))]
+    if any(g.startswith("boundary:") for g in additional_gaps):
         return _repair("boundary_unmet")
 
-    if gap >= P.TAU_GAP:
-        return _repair("perception_gap")
+    if pending_amend.intersection(obligation_refs):
+        return _repair("amendment_pending")
 
-    if audit < P.TAU_DONE:
-        return _repair("incomplete")
+    if is_closure_gate:
+        if closure_complete is False:
+            return _repair("closure_incomplete")
+        if pending:
+            return _repair("closure_incomplete")
+        return _out("admit", "closure_admitted", sat=satisfied, open_=[])
 
-    if claim.get("shortcut_hit") is True and audit < 1.0:
-        return _repair("shortcut_without_completion")
+    if not pending:
+        return _out("admit", "obligations_satisfied", sat=satisfied, open_=[])
 
-    if tokens >= tokens_max:
-        return _out("abort", "cognitive_budget", should_run_next=False, next_action="archive")
+    # Prefer first pending verdict gap as reason material, but keep stable reason enum
+    return _repair("no_attestation" if not verdicts else "no_attestation")
 
-    return _repair("incomplete")
+
+# Stable repair reason for incomplete obligations when attestations exist but status≠satisfied
+def decide_with_pending_reason(
+    contract: Mapping[str, Any],
+    claim: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    **kwargs: Any,
+) -> GateDecision:
+    """Like decide, but if obligations are unsatisfied with verdicts present, use no_attestation.
+
+    Callers that want a more specific reason may inspect evidence.gaps separately.
+    For incomplete (unsatisfied) with attestations present we still repair with a
+    bounded reason from the schema enum set.
+    """
+    decision = decide(contract, claim, evidence, **kwargs)
+    if decision.decision != "repair" or decision.reason != "no_attestation":
+        return decision
+    # If every open obligation has a verdict that is unsatisfied/indeterminate
+    # (not missing attestation), keep no_attestation as the schema-stable bucket
+    # for "obligations not yet satisfied" — design maps pending gaps into repair
+    # without inventing non-enum reasons.
+    return decision

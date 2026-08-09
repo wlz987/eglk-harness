@@ -1,0 +1,54 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/task_structure.schema.json",
+ "title": "TaskStructure",
+ "description": "Projection rebuilt from Split/Merge/Ready/Admit events: the dynamic decomposition tree plus the restricted auxiliary graph (depends_on / covers / invalidates). See ../task_tree.md. Replaces legacy subgoals_tree.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["schema", "root", "edges"],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.task_structure" },
+ "root": { "$ref": "#/$defs/TaskNode" },
+ "edges": {
+ "type": "array",
+ "items": { "$ref": "#/$defs/Edge" }
+ }
+ },
+ "$defs": {
+ "TaskNode": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["id", "title", "status", "obligation_refs", "children", "parent_id", "depth"],
+ "properties": {
+ "id": { "type": "string", "minLength": 1 },
+ "title": { "type": "string", "minLength": 1 },
+ "status": {
+ "type": "string",
+ "enum": ["pending", "ready", "in_progress", "admitted", "failed", "split", "superseded"],
+ "description": "pending=依赖未满足；ready=可调度；in_progress=已装配 WorkContract；admitted=局部闭包成立；failed=abort；split=已拆为子树（自身不再被调度）；superseded=被 merge 吸收。"
+ },
+ "obligation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+ "children": { "type": "array", "items": { "$ref": "#/$defs/TaskNode" } },
+ "parent_id": { "type": ["string", "null"] },
+ "depth": { "type": "integer", "minimum": 0 },
+ "split_from": { "type": ["string", "null"] },
+ "merged_from": { "type": "array", "items": { "type": "string" } },
+ "coverage_proof_ref": {
+ "type": ["string", "null"],
+ "description": "For nodes produced by split: reference to the CoverageProof event that authorized this decomposition."
+ }
+ }
+ },
+ "Edge": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["kind", "from", "to"],
+ "properties": {
+ "kind": { "type": "string", "enum": ["depends_on", "covers", "invalidates"] },
+ "from": { "type": "string", "minLength": 1 },
+ "to": { "type": "string", "minLength": 1 },
+ "event_ref": { "type": ["string", "null"] }
+ }
+ }
+ }
+}

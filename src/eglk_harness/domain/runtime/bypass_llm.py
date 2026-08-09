@@ -18,7 +18,6 @@ from eglk_harness.domain.runtime.json_extract import extract_json
 from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
 
-
 def bypass_llm_enabled(
     adapter: AgentAdapter | None = None,
     *,
@@ -37,7 +36,6 @@ def bypass_llm_enabled(
     name = getattr(adapter, "name", "") or ""
     return name not in {"mock", "fake"}
 
-
 def _parse_bypass_result(result: Any) -> dict[str, Any] | None:
     if isinstance(getattr(result, "parsed", None), dict):
         return result.parsed
@@ -49,7 +47,6 @@ def _parse_bypass_result(result: Any) -> dict[str, Any] | None:
     except ValueError:
         return None
     return doc if isinstance(doc, dict) else None
-
 
 def _episode_tool_kwargs(
     adapter: AgentAdapter,
@@ -67,7 +64,6 @@ def _episode_tool_kwargs(
         "mcp_config": filtered,
         "add_dirs": add_dirs,
     }
-
 
 async def run_bypass_json(
     adapter: AgentAdapter | None,
@@ -155,7 +151,6 @@ async def run_bypass_json(
     )
     return _parse_bypass_result(result2)
 
-
 def coerce_governor_proposal(
     raw: Mapping[str, Any] | None,
     *,
@@ -188,7 +183,6 @@ def coerce_governor_proposal(
         "source": "llm",
     }
 
-
 def _safe_unit_float(val: Any, default: float = 0.5) -> float:
     """Best-effort [0,1]-ish float from LLM drift (numbers or qualitative strings)."""
     if isinstance(val, bool):
@@ -209,7 +203,6 @@ def _safe_unit_float(val: Any, default: float = 0.5) -> float:
         if any(k in s for k in ("low", "minor", "weak", "decoy")):
             return 0.2
     return default
-
 
 def coerce_explorer(raw: Mapping[str, Any] | None, *, tick: int, leaf: str, fallback: list) -> dict[str, Any]:
     if not raw:
@@ -242,7 +235,6 @@ def coerce_explorer(raw: Mapping[str, Any] | None, *, tick: int, leaf: str, fall
         "alternatives": clean,
         "source": "llm",
     }
-
 
 def coerce_verifier(
     raw: Mapping[str, Any] | None,
@@ -279,7 +271,6 @@ def coerce_verifier(
         "veto": bool(raw.get("veto", False)),
         "source": "llm",
     }
-
 
 def coerce_refiner(raw: Mapping[str, Any] | None, *, fallback: Mapping[str, Any]) -> dict[str, Any]:
     if not raw or not raw.get("id"):

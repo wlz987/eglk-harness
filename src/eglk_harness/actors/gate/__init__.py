@@ -9,7 +9,6 @@ from eba import RequestResponseActor
 from eglk_harness.domain.kernel.gate import decide
 from eglk_harness.protocol import messages, payload, topics
 
-
 class GateActor(RequestResponseActor):
     pattern = f"{topics.GATE_DECIDE}.*"
     result_prefix = topics.GATE_RESULT

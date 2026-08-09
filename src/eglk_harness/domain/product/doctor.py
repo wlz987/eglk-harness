@@ -17,13 +17,11 @@ from eglk_harness.domain.adapters.mcp import resolve_mcp_config
 from eglk_harness.domain.kernel.paths import STATE_SCHEMA
 from eglk_harness.domain.memory.skills import load_skill
 
-
 @dataclass
 class DoctorCheck:
     name: str
     ok: bool
     detail: str
-
 
 @dataclass
 class DoctorReport:
@@ -40,7 +38,6 @@ class DoctorReport:
             "read_only": True,
             "hitl": False,
         }
-
 
 def run_doctor(workdir: Path | None = None) -> DoctorReport:
     """Inspect environment only — never install plugins or mutate GUI state."""

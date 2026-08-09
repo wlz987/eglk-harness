@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eglk_harness.domain.environment.local import LocalEnvironment, default_environment
-from eglk_harness.domain.runtime.redact import redact_secrets
+from eglk_harness.domain.redact import redact_secrets
 
 
 @dataclass

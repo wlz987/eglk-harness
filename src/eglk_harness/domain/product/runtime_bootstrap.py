@@ -13,7 +13,6 @@ from typing import Any, Mapping
 
 from eglk_harness.domain.product.config_resolve import load_config_toml
 
-
 def load_dotenv_file(path: Path) -> dict[str, str]:
     """Parse a simple KEY=VALUE ``.env`` (no export, no nested quotes expansion)."""
     if not path.is_file():
@@ -34,7 +33,6 @@ def load_dotenv_file(path: Path) -> dict[str, str]:
             out[key] = val
     return out
 
-
 def apply_dotenv(workdir: Path, *, environ: dict[str, str] | None = None) -> list[str]:
     """Fill missing keys from ``workdir/.env`` (does not override existing)."""
     env = environ if environ is not None else os.environ  # type: ignore[assignment]
@@ -44,7 +42,6 @@ def apply_dotenv(workdir: Path, *, environ: dict[str, str] | None = None) -> lis
             env[key] = val
             applied.append(key)
     return applied
-
 
 def apply_config_toml(workdir: Path, *, environ: dict[str, str] | None = None) -> list[str]:
     """Project config overrides env for non-secret run settings (config > env)."""
@@ -123,7 +120,6 @@ def apply_config_toml(workdir: Path, *, environ: dict[str, str] | None = None) -
 
     return applied
 
-
 def bootstrap_workdir(workdir: Path, *, cli_env: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Apply dotenv then config.toml; finally CLI env overrides. Mutates ``os.environ``."""
     dotenv_keys = apply_dotenv(workdir)
@@ -140,7 +136,6 @@ def bootstrap_workdir(workdir: Path, *, cli_env: Mapping[str, str] | None = None
         "cli": cli_applied,
     }
 
-
 def want_dashboard(*, cli_flag: bool | None = None, env: Mapping[str, str] | None = None) -> bool:
     """Whether to open the read-only dashboard after (or with) a run."""
     if cli_flag is True:
@@ -150,7 +145,6 @@ def want_dashboard(*, cli_flag: bool | None = None, env: Mapping[str, str] | Non
     env = env or os.environ
     raw = (env.get("EGLK_DASHBOARD") or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
-
 
 def soft_max_ticks(cli: int | None = None, *, env: Mapping[str, str] | None = None) -> int | None:
     if cli is not None:

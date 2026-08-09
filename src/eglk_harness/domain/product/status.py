@@ -12,7 +12,6 @@ from eglk_harness.domain.kernel import paths
 from eglk_harness.domain.memory import sigma
 from eglk_harness.domain.kernel import projections as P
 
-
 @dataclass
 class StatusReport:
     workdir: Path
@@ -129,7 +128,6 @@ class StatusReport:
             "hitl": False,
         }
 
-
 def _latest_json(dir_path: Path) -> dict[str, Any] | None:
     if not dir_path.is_dir():
         return None
@@ -141,7 +139,6 @@ def _latest_json(dir_path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
-
 
 def _last_jsonl(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
@@ -158,7 +155,6 @@ def _last_jsonl(path: Path) -> dict[str, Any] | None:
         if isinstance(obj, dict):
             last = obj
     return last
-
 
 def _leaf_from_reasoning(loop_dir: Path) -> dict[str, Any] | None:
     log = loop_dir / "reasoning_log.jsonl"
@@ -178,7 +174,6 @@ def _leaf_from_reasoning(loop_dir: Path) -> dict[str, Any] | None:
                 found = payload
     return found
 
-
 def _pick_run(loop_root: Path, prefer: str | None) -> str | None:
     if not loop_root.is_dir():
         return None
@@ -189,7 +184,6 @@ def _pick_run(loop_root: Path, prefer: str | None) -> str | None:
         return prefer
     runs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return runs[0].name
-
 
 def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
     """Assemble a read-only snapshot. Never mutates harness state."""

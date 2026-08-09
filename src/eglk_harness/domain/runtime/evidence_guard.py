@@ -18,24 +18,34 @@ def normalize_evidence(
     workdir: Path | None = None,
     boundary: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Strip oracle/scorer keys; ensure gaps; hint artifacts vs written."""
+    """Strip oracle/scorer keys; ensure verdicts / additional_gaps shape."""
     written = written or []
     mutations = mutations or []
     out = {k: v for k, v in doc.items() if k not in _FORBIDDEN_EVIDENCE_KEYS}
+
+    # Preserve 0.2.x keys long enough for coerce_document to lift them.
     if "gaps" not in out or out["gaps"] is None:
         out["gaps"] = []
     if not isinstance(out["gaps"], list):
         out["gaps"] = [str(out["gaps"])]
+
+    if "additional_gaps" not in out or out["additional_gaps"] is None:
+        # Lift boundary:* gaps early when already present
+        out["additional_gaps"] = [
+            str(g) for g in out["gaps"] if str(g).startswith("boundary:")
+        ]
+    elif not isinstance(out["additional_gaps"], list):
+        out["additional_gaps"] = [str(out["additional_gaps"])]
+
     artifacts = out.get("artifacts")
-    if artifacts is None:
+    if artifacts is None and written:
         out["artifacts"] = list(written)
     elif isinstance(artifacts, list) and not artifacts and written:
-        # Soft align: empty artifacts with known writes → use written paths
         out["artifacts"] = list(written)
-    # Preserve integrity_violation if fingerprint layer already set it
+
     if mutations and out.get("integrity_violation") is None:
-        # Do not invent integrity_violation; Gate/fingerprint owns that.
         pass
+
     if workdir is not None and boundary:
         from eglk_harness.domain.runtime.boundary_verify import (
             apply_boundary_to_evidence,
@@ -45,18 +55,16 @@ def normalize_evidence(
         out = apply_boundary_to_evidence(out, workdir=workdir, boundary=boundary)
         violations = verify_boundary(workdir, boundary)
         if violations:
-            # Boundary failed — keep mechanical clamp from apply_boundary_to_evidence;
-            # never lift audit_progress when MUST_EXIST / FORBIDDEN are unmet.
             return out
         gaps = [str(g) for g in (out.get("gaps") or []) if str(g).strip()]
         challenges = [str(c) for c in (out.get("challenges") or []) if str(c).strip()]
         if challenges and not gaps:
-            artifacts = list(out.get("artifacts") or [])
+            arts = list(out.get("artifacts") or [])
             for c in challenges:
                 tag = f"[methodology] {c}"
-                if tag not in artifacts:
-                    artifacts.append(tag)
-            out["artifacts"] = artifacts
+                if tag not in arts:
+                    arts.append(tag)
+            out["artifacts"] = arts
             out["challenges"] = []
     return out
 
@@ -67,11 +75,9 @@ def align_claim_delivery_progress(
     workdir: Path,
     boundary: list[str] | None,
 ) -> dict[str, Any]:
-    """Mechanically align Maker done_progress with on-disk delivery boundary.
+    """Mechanically align Maker self_assessment telemetry with on-disk boundary.
 
-    - Boundary satisfied → allow/lift ``done_progress`` to 1.0
-    - Boundary unmet → clamp ``done_progress`` to ≤0.45 so Gate sees ``incomplete`` /
-      ``boundary_unmet`` instead of a false ``perception_gap``
+    Diagnostic only — Gate never reads self_assessment / done_progress.
     """
     out = dict(claim)
     if not boundary:
@@ -79,13 +85,21 @@ def align_claim_delivery_progress(
     from eglk_harness.domain.runtime.boundary_verify import verify_boundary
 
     violations = verify_boundary(workdir, boundary)
+    sa = out.get("self_assessment") if isinstance(out.get("self_assessment"), dict) else {}
     try:
-        done = float(out.get("done_progress", 0))
+        done = float(sa.get("done_progress", out.get("done_progress", 0)) or 0)
     except (TypeError, ValueError):
         done = 0.0
     if violations:
-        out["done_progress"] = min(done, 0.45)
-        return out
-    if done < 1.0:
-        out["done_progress"] = 1.0
+        done = min(done, 0.45)
+    elif done < 1.0:
+        done = 1.0
+    conf = 0.0
+    try:
+        conf = float(sa.get("confidence", out.get("confidence", 0)) or 0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    out["self_assessment"] = {"done_progress": done, "confidence": max(0.0, min(1.0, conf))}
+    out.pop("done_progress", None)
+    out.pop("confidence", None)
     return out

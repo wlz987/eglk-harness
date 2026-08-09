@@ -24,7 +24,6 @@ from eglk_harness.domain.memory.tokens import add_tokens
 from eglk_harness.domain.kernel.tree import TaskTree, make_root
 from eglk_harness.protocol import topics
 
-
 def _unwrap_stage_body(body: Any) -> tuple[Any | None, str | None]:
     """Unwrap eba ``ResultBody`` to actor ``ok_body`` / ``err_body`` payload."""
     if is_result_ok(body):
@@ -33,14 +32,12 @@ def _unwrap_stage_body(body: Any) -> tuple[Any | None, str | None]:
         return None, str(result_error(body))
     return body, None
 
-
 def _stage_err(body: Any) -> str | None:
     if not isinstance(body, dict):
         return "non_dict_result"
     if body.get("ok") is False:
         return str(body.get("error") or "stage_failed")
     return None
-
 
 class TickJob(Job):
     """One tick = Phase 0→1→2→3. Gate never reads candidates/ or refined Σ."""

@@ -3,7 +3,7 @@
 Plugins are installed or removed only through explicit ``eglk-harness doctor``
 or ``eglk-harness plugin`` opt-in; ``eglk-harness run`` never changes them.
 
-Codex helpers live in ``.codex_computer_use`` and are re-exported lazily here
+Codex helpers live in ``domain.codex_plugins`` and are re-exported lazily here
 to avoid import cycles with that module.
 """
 
@@ -51,7 +51,7 @@ _CODEX_EXPORTS = frozenset(
 
 def __getattr__(name: str) -> Any:
     if name in _CODEX_EXPORTS:
-        from . import codex_computer_use as _codex
+        from eglk_harness.domain import codex_plugins as _codex
 
         return getattr(_codex, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

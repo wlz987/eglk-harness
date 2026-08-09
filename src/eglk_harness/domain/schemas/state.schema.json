@@ -19,7 +19,7 @@
   "properties": {
     "schema": {
       "type": "string",
-      "pattern": "^eglk.state/0.2.2$"
+      "pattern": "^eglk.state$"
     },
     "goal_ref": {
       "type": "string"

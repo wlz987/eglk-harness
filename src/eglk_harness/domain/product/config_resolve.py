@@ -14,7 +14,6 @@ from typing import Any, Mapping
 
 from eglk_harness.domain.kernel import paths
 
-
 def load_config_toml(workdir: Path) -> dict[str, Any]:
     cfg = paths.config_path(workdir)
     if not cfg.is_file():
@@ -22,7 +21,6 @@ def load_config_toml(workdir: Path) -> dict[str, Any]:
     with cfg.open("rb") as f:
         data = tomllib.load(f)
     return data if isinstance(data, dict) else {}
-
 
 def resolve_agent(
     cli: str | None, workdir: Path, *, env: Mapping[str, str] | None = None
@@ -37,7 +35,6 @@ def resolve_agent(
     run = cfg.get("run") if isinstance(cfg.get("run"), dict) else {}
     default = str(run.get("default_agent") or "").strip()
     return default or "mock"
-
 
 def resolve_swarm(
     cli: str | None,
@@ -56,7 +53,6 @@ def resolve_swarm(
         if run.get("swarm") is not None and str(run.get("swarm")).strip() != "":
             return str(run["swarm"]).strip()
     return None
-
 
 def resolve_compile(
     cli: str | None, workdir: Path, *, env: Mapping[str, str] | None = None

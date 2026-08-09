@@ -17,7 +17,6 @@ _FORBIDDEN_SEGMENTS = frozenset(
     {"approve", "inject", "continue", "stop", "ask", "instruction", "human_hook"}
 )
 
-
 def list_routes() -> list[str]:
     return [
         "GET /",
@@ -28,14 +27,12 @@ def list_routes() -> list[str]:
         "GET /health",
     ]
 
-
 def assert_read_only_routes() -> None:
     for route in list_routes():
         method, _, path = route.partition(" ")
         assert method == "GET", route
         for bad in _FORBIDDEN_SEGMENTS:
             assert bad not in path.lower(), route
-
 
 class _Handler(BaseHTTPRequestHandler):
     workdir: Path
@@ -151,7 +148,6 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-
 _INDEX_HTML = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -183,7 +179,6 @@ _INDEX_HTML = """<!DOCTYPE html>
 </body>
 </html>
 """
-
 
 def serve_dashboard(
     workdir: Path,

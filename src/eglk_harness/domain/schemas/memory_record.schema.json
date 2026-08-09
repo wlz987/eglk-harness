@@ -1,0 +1,41 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/memory_record.schema.json",
+ "title": "MemoryRecord",
+ "description": "A single Σ (soft experience) or K (distilled skill) unit with an explicit isolation lifecycle. See ../context.md §3. Replaces legacy sigma_item (which had no isolation stages).",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["schema", "id", "kind", "cond", "wrong", "correct", "conf", "verifications", "lifecycle_status", "namespace", "provenance", "last_used"],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.memory_record" },
+ "id": { "type": "string", "minLength": 1 },
+ "kind": { "type": "string", "enum": ["sigma", "skill"] },
+ "cond": { "type": "string", "minLength": 1 },
+ "wrong": { "type": "string" },
+ "correct": { "type": "string", "minLength": 1 },
+ "conf": { "type": "number", "minimum": 0, "maximum": 1 },
+ "verifications": { "type": "integer", "minimum": 0 },
+ "lifecycle_status": {
+ "type": "string",
+ "enum": ["candidate", "quarantined", "verified", "active", "deprecated"],
+ "description": "candidate=本 run 产出待检；quarantined=跨 run 沙盘复核中；verified=已被多个独立 run 复核；active=可被新 run 读取；deprecated=冷冻/被合并/被证伪。"
+ },
+ "namespace": { "type": "string", "minLength": 1, "description": "Isolation scope, e.g. project id or benchmark suite id; prevents cross-task leakage." },
+ "ttl_at": { "type": ["string", "null"], "format": "date-time" },
+ "provenance": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["origin_goal_id", "origin_run_id"],
+ "properties": {
+ "origin_goal_id": { "type": "string", "minLength": 1 },
+ "origin_run_id": { "type": "string", "minLength": 1 },
+ "promoted_by_run_ids": { "type": "array", "items": { "type": "string" } }
+ }
+ },
+ "last_used": { "type": "integer", "minimum": 0 },
+ "merged_from": { "type": "array", "items": { "type": "string" } },
+ "sensitive": { "type": "boolean", "description": "If true, record must never be exported to eval Manifest or cross-namespace promotion." }
+ },
+ "if": { "properties": { "lifecycle_status": { "const": "active" } } },
+ "then": { "properties": { "verifications": { "minimum": 2 } } }
+}

@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 def repair_counts_from_decisions(loop_dir: Path, *, subgoal_id: str | None = None) -> dict[str, int]:
     """Count prior ``repair`` decisions by reason (optionally filtered by leaf)."""
     dec = loop_dir / "decisions"
@@ -29,7 +28,6 @@ def repair_counts_from_decisions(loop_dir: Path, *, subgoal_id: str | None = Non
         reason = str(data.get("reason") or "incomplete")
         counts[reason] = int(counts.get(reason, 0)) + 1
     return counts
-
 
 def load_runtime_state(loop_dir: Path) -> dict[str, Any]:
     path = loop_dir / "state.json"

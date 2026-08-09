@@ -22,9 +22,7 @@ from eglk_harness.domain.runtime.bypass_llm import (
 )
 from eglk_harness.domain.kernel.governor_split import proposal_document
 
-
 SOAK_ROLES: tuple[str, ...] = ("governor", "explorer", "verifier", "refiner", "compile")
-
 
 @dataclass
 class SoakRoleResult:
@@ -37,7 +35,6 @@ class SoakRoleResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
 
 @dataclass
 class SoakReport:
@@ -54,14 +51,12 @@ class SoakReport:
             "roles": [r.to_dict() for r in self.roles],
         }
 
-
 def _leaf_block(*, leaf_id: str = "root", title: str = "soak leaf") -> str:
     return (
         f"[LEAF]\nid: {leaf_id}\ntitle: {title}\n"
         "acceptance:\n  - hello.txt exists with non-empty content\n"
         "  - evidence is inspectable\n"
     )
-
 
 async def soak_bypass_roles(
     adapter: AgentAdapter,

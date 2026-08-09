@@ -16,7 +16,6 @@ from eglk_harness.domain.kernel.governor_split import proposal_document
 from eglk_harness.domain.kernel.loop_store import load_tree
 from eglk_harness.protocol import messages, payload, topics
 
-
 class GovernorActor(RequestResponseActor):
     pattern = f"{topics.ROLE_GOVERNOR_RUN}.*"
     result_prefix = topics.ROLE_GOVERNOR_RESULT

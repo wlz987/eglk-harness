@@ -1,0 +1,72 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/goal_spec.schema.json",
+ "title": "GoalSpec",
+ "description": "Read-only projection of .goal.md. See ../semantic_core.md §2. Never a second source of truth; source_digest must match sha256(.goal.md) at every replay.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["schema", "goal_id", "source_digest", "compiled_at", "compiler_mode", "requirements", "quota_defaults"],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.goal_spec" },
+ "goal_id": { "type": "string", "minLength": 1 },
+ "source_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "compiled_at": { "type": "string", "format": "date-time" },
+ "compiler_mode": { "type": "string", "enum": ["auto", "force", "off"] },
+ "requirements": {
+ "type": "array",
+ "minItems": 1,
+ "items": { "$ref": "#/$defs/Requirement" }
+ },
+ "quota_defaults": { "$ref": "quota.schema.json#/$defs/Limits" }
+ },
+ "$defs": {
+ "Requirement": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["id", "text", "source_span", "obligations"],
+ "properties": {
+ "id": { "type": "string", "minLength": 1 },
+ "text": { "type": "string", "minLength": 1 },
+ "source_span": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["start_line", "end_line"],
+ "properties": {
+ "start_line": { "type": "integer", "minimum": 1 },
+ "end_line": { "type": "integer", "minimum": 1 }
+ }
+ },
+ "obligations": {
+ "type": "array",
+ "minItems": 1,
+ "items": { "$ref": "#/$defs/Obligation" }
+ }
+ }
+ },
+ "Obligation": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["id", "requirement_id", "parent_obligation_id", "statement", "verification_type", "status", "origin"],
+ "properties": {
+ "id": { "type": "string", "minLength": 1 },
+ "requirement_id": { "type": "string", "minLength": 1 },
+ "parent_obligation_id": { "type": ["string", "null"] },
+ "statement": { "type": "string", "minLength": 1 },
+ "verification_type": {
+ "type": "string",
+ "enum": ["file_exists", "file_content_match", "command_exit", "api_state", "structured_diff", "custom_attestation"]
+ },
+ "verification_params": { "type": "object", "description": "Shape discriminated by sibling `verification_type`; deliberate exception to the family-wide additionalProperties:false convention, same rationale as event.schema.json#/properties/payload." },
+ "status": {
+ "type": "string",
+ "enum": ["open", "satisfied", "invalidated"],
+ "description": "open=never yet satisfied; satisfied=has a currently-valid Attestation; invalidated=was satisfied, then mechanically reopened by ObligationInvalidated (see semantic_core.md §7). open and invalidated are scheduler-equivalent (both re-enter the ready pool); invalidated is not a terminal state and carries no separate exit rule beyond re-attesting to satisfied."
+ },
+ "origin": { "type": "string", "enum": ["root", "derived"] },
+ "derivation_ref": { "type": ["string", "null"] }
+ },
+ "if": { "properties": { "origin": { "const": "root" } } },
+ "then": { "properties": { "parent_obligation_id": { "const": null } } }
+ }
+ }
+}

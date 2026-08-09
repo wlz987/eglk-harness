@@ -7,10 +7,8 @@ from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.kernel.tree import TaskTree
 
-
 def _tokens(text: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9_]{3,}", str(text).lower()) if t}
-
 
 def text_similarity(a: str, b: str) -> float:
     ta, tb = _tokens(a), _tokens(b)
@@ -18,12 +16,10 @@ def text_similarity(a: str, b: str) -> float:
         return 0.0
     return len(ta & tb) / len(ta | tb)
 
-
 def sigma_pair_similarity(a: Mapping[str, Any], b: Mapping[str, Any]) -> float:
     parts_a = " ".join(str(a.get(k) or "") for k in ("cond", "text", "wrong", "correct"))
     parts_b = " ".join(str(b.get(k) or "") for k in ("cond", "text", "wrong", "correct"))
     return text_similarity(parts_a, parts_b)
-
 
 def suggest_sibling_merges(
     tree: TaskTree,

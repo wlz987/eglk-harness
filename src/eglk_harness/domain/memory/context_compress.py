@@ -8,7 +8,6 @@ from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_swarm
 from eglk_harness.domain.memory.tokens import update_focus_uncertainty
 
-
 def compress_tick_signals(
     *,
     decision: str,

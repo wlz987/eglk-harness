@@ -35,7 +35,6 @@ _LIVE_TIMEOUT_S = 600.0
 # Soft safety only — never replaces cognitive_tokens / repairs_max as abort authority.
 _DEFAULT_MAX_TICKS_SOFT = 32
 
-
 def _env_float(name: str, default: float) -> float:
     raw = os.environ.get(name)
     if raw is None or not str(raw).strip():
@@ -44,7 +43,6 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
-
 
 @dataclass
 class RunRequest:
@@ -63,7 +61,6 @@ class RunRequest:
     maker_timeout_s: float | None = None
     checker_timeout_s: float | None = None
 
-
 def _request_timeout(agent: str) -> float:
     """Per-tick host await bound. Override with ``EGLK_TICK_TIMEOUT`` (seconds).
 
@@ -72,7 +69,6 @@ def _request_timeout(agent: str) -> float:
     if agent in {"mock", "fake"}:
         return _env_float("EGLK_TICK_TIMEOUT", _MOCK_TIMEOUT_S)
     return _env_float("EGLK_TICK_TIMEOUT", _LIVE_TIMEOUT_S)
-
 
 def resolve_start_tick(workdir: Path, goal_id_str: str, explicit: int | None) -> int:
     """Resume after the last completed tick when ``state.json`` exists.
@@ -102,7 +98,6 @@ def resolve_start_tick(workdir: Path, goal_id_str: str, explicit: int | None) ->
         return last
     return last + 1
 
-
 def _should_continue(job: TickJob) -> bool:
     """Continue when work remains after admit, or Gate asked for repair retry."""
     decision = job.decision or {}
@@ -125,7 +120,6 @@ def _should_continue(job: TickJob) -> bool:
     if job.outcome and job.outcome.get("ok") is False:
         return False
     return False
-
 
 def _assemble_actors(
     request: RunRequest, workdir: Path
@@ -211,7 +205,6 @@ def _assemble_actors(
     actors.append(host)
     return bus, actors, host, gid, title, criteria
 
-
 async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
     async with asyncio.timeout(timeout_s):
         while True:
@@ -223,7 +216,6 @@ async def _await_job(host: RunHost, *, index: int, timeout_s: float) -> TickJob:
     job = host.jobs[index]
     assert isinstance(job, TickJob)
     return job
-
 
 async def _run_loop(request: RunRequest) -> dict[str, Any]:
     workdir = request.workdir.resolve()
@@ -338,7 +330,6 @@ async def _run_loop(request: RunRequest) -> dict[str, Any]:
         }
 
     return await run_actors(actors, work, grace=1.0)
-
 
 def run(request: RunRequest) -> int:
     """STEP 0 compile → multi-tick four-phase loop → Manifest."""

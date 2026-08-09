@@ -1,0 +1,31 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/run_projection.schema.json",
+ "title": "RunProjection",
+ "description": "Rebuildable projection of run-level state, replacing legacy state.json. Authority is the EventStore (see ../event_store.md); this object MUST be derivable by replaying events from sequence 0 and MUST NOT be hand-edited.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+ "schema", "goal_id", "run_status", "last_sequence", "last_hash",
+ "goal_spec_ref", "world_revision", "quota", "memory_digest"
+ ],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.run_projection" },
+ "goal_id": { "type": "string", "minLength": 1 },
+ "run_status": {
+ "type": "string",
+ "enum": ["created", "validating", "running", "recovering", "succeeded", "aborted", "invalid", "faulted"]
+ },
+ "run_status_reason": { "type": ["string", "null"] },
+ "last_sequence": { "type": "integer", "minimum": 0 },
+ "last_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "goal_spec_ref": { "type": "string", "minLength": 1 },
+ "world_revision": { "type": "integer", "minimum": 0 },
+ "quota": { "$ref": "quota.schema.json" },
+ "memory_digest": {
+ "type": "string",
+ "description": "Frozen Σ/K snapshot digest bound at RunCreated; see ../context.md §3."
+ },
+ "capability_manifest_ref": { "type": ["string", "null"] }
+ }
+}

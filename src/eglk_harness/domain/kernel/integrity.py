@@ -19,7 +19,7 @@ _SKIP_NAMES = {
 
 # Browser MCP may flush screenshots / partial HAR while Checker audits (Maker session).
 _ASYNC_INTEGRITY_RE = re.compile(
-    r"^agent_runs/[^/]+/(screenshot.*\.(png|meta\.json)|network\.har\.partial)$",
+    r"^agent_runs/[^/]+/(screenshot[^/]*\.(png|meta\.json)|network\.har\.partial)$",
     re.IGNORECASE,
 )
 

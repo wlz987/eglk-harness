@@ -1,0 +1,38 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/run_manifest.schema.json",
+ "title": "RunManifest",
+ "description": "Final run receipt exported after a run reaches a terminal lifecycle status. This is what an external scorer (see ../adapters.md §2, ../../eval/reproducibility.md) may read; it MUST NOT be writable by anything outside the kernel, and the kernel MUST NOT read scorer output back into the EventStore.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+ "schema", "run_id", "goal_id", "run_status", "digests", "quota", "created_at", "finished_at"
+ ],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.run_manifest" },
+ "run_id": { "type": "string", "minLength": 1 },
+ "goal_id": { "type": "string", "minLength": 1 },
+ "run_status": { "type": "string", "enum": ["succeeded", "aborted", "invalid", "faulted"] },
+ "run_status_reason": { "type": ["string", "null"] },
+ "digests": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["goal", "schema_family", "model", "prompt", "tool", "adapter", "capability_manifest", "memory", "environment"],
+ "properties": {
+ "goal": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "schema_family": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "model": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "prompt": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "tool": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "adapter": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "capability_manifest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "memory": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+ "environment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+ }
+ },
+ "quota": { "$ref": "quota.schema.json" },
+ "created_at": { "type": "string", "format": "date-time" },
+ "finished_at": { "type": "string", "format": "date-time" },
+ "event_log_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "Hash of the final event (tip of the hash-chain); allows an external verifier to confirm the receipt matches a specific event log state without reading the log." }
+ }
+}

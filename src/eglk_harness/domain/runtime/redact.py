@@ -12,7 +12,6 @@ _SECRET_PATTERNS = (
     re.compile(rf'(["\']?(?:api[_-]?key|token|password|secret)["\']?\s*:\s*)(["\'][^"\']+["\'])', re.I),
 )
 
-
 def redact_secrets(text: str) -> str:
     """Mask credential values in text before it is logged or shown to a role."""
     if not text:

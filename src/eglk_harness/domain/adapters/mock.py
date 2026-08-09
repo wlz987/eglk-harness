@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from eglk_harness.domain.adapters.base import EpisodeRequest, EpisodeResult
+from eglk_harness.domain.kernel import projections as P
 
 
 class MockAdapter:
@@ -20,14 +21,26 @@ class MockAdapter:
         tick = int(request.meta.get("tick", 0))
         subgoal_id = str(request.meta.get("subgoal_id") or "root")
         written = list(request.meta.get("written") or [])
+        contract_ref = str(request.meta.get("contract_ref") or f"wc-{tick:03d}")
+        world_rev = int(request.meta.get("world_revision") or 0)
+        obligation_ids = [
+            str(x) for x in (request.meta.get("obligation_refs") or ["ob-1"]) if str(x).strip()
+        ] or ["ob-1"]
 
         if request.role == "maker" or request.expect == "claim":
-            claim = self._claim(tick, subgoal_id)
+            claim = self._claim(tick, subgoal_id, contract_ref=contract_ref, world_rev=world_rev)
             text = json.dumps(claim, ensure_ascii=False)
             return EpisodeResult(ok=True, text=text, parsed=claim, backend=self.name)
 
         if request.role == "checker" or request.expect == "evidence":
-            evidence = self._evidence(tick, subgoal_id, written)
+            evidence = self._evidence(
+                tick,
+                subgoal_id,
+                written,
+                contract_ref=contract_ref,
+                world_rev=world_rev,
+                obligation_ids=obligation_ids,
+            )
             text = json.dumps(evidence, ensure_ascii=False)
             return EpisodeResult(ok=True, text=text, parsed=evidence, backend=self.name)
 
@@ -93,96 +106,127 @@ class MockAdapter:
             backend=self.name,
         )
 
-    def _claim(self, tick: int, subgoal_id: str) -> dict[str, Any]:
+    def _claim(
+        self,
+        tick: int,
+        subgoal_id: str,
+        *,
+        contract_ref: str,
+        world_rev: int,
+    ) -> dict[str, Any]:
         if self.mode == "repair_empty":
             return {
+                "schema": P.ACTION_CLAIM_SCHEMA,
                 "claim_id": f"claim-{tick:03d}",
-                "tick": tick,
+                "contract_ref": contract_ref,
                 "maker_session_id": "mock-maker",
-                "kind": "files",
-                "done_progress": 1.0,
-                "confidence": 0.9,
+                "intent": f"noop for {subgoal_id}",
+                "actions": [],
                 "alternatives": [{"text": "noop", "status": "reject", "reason": "worse"}],
-                "payload": {"files": {}},
-                "step_review": {
-                    "gains": ["empty payload for repair path"],
-                    "losses": ["no durable artifact"],
-                    "benefits": ["exercises no_evidence_grounding"],
-                    "risks": ["should not admit"],
-                },
-                "shortcut_hit": False,
-                "subgoal_id": subgoal_id,
+                "self_assessment": {"done_progress": 1.0, "confidence": 0.9},
+                "world_revision_base": world_rev,
+                "note": "empty actions for repair path",
             }
         content = "tampered\n" if self.mode == "repair_integrity" else "hello from mock maker\n"
         return {
+            "schema": P.ACTION_CLAIM_SCHEMA,
             "claim_id": f"claim-{tick:03d}",
-            "tick": tick,
+            "contract_ref": contract_ref,
             "maker_session_id": "mock-maker",
-            "kind": "files",
-            "done_progress": 1.0,
-            "confidence": 0.95,
+            "intent": f"write hello.txt for {subgoal_id}",
+            "actions": [
+                {
+                    "action_id": f"write-hello-{tick:03d}",
+                    "kind": "file_write",
+                    "side_effect_class": "reversible",
+                    "target": "workdir/hello.txt",
+                    "payload": {"path": "hello.txt", "content": content},
+                }
+            ],
             "alternatives": [
                 {"text": "leave file unchanged", "status": "reject", "reason": "incomplete"},
             ],
-            "payload": {"files": {"hello.txt": content}},
-            "step_review": {
-                "gains": ["wrote hello.txt via payload.files"],
-                "losses": ["skipped broader packaging"],
-                "benefits": ["leaf can be audited by file presence"],
-                "risks": ["content may be wrong relative to acceptance"],
-            },
-            "shortcut_hit": False,
-            "subgoal_id": subgoal_id,
+            "self_assessment": {"done_progress": 1.0, "confidence": 0.95},
+            "world_revision_base": world_rev,
         }
 
-    def _evidence(self, tick: int, subgoal_id: str, written: list[str]) -> dict[str, Any]:
+    def _evidence(
+        self,
+        tick: int,
+        subgoal_id: str,
+        written: list[str],
+        *,
+        contract_ref: str,
+        world_rev: int,
+        obligation_ids: list[str],
+    ) -> dict[str, Any]:
+        paths = list(written) or (["hello.txt"] if self.mode == "admit" else [])
         if self.mode == "repair_integrity":
             return {
+                "schema": P.EVIDENCE_BUNDLE_SCHEMA,
                 "evidence_id": f"ev-{tick:03d}",
-                "tick": tick,
+                "contract_ref": contract_ref,
                 "checker_session_id": "mock-checker",
-                "audit_progress": 1.0,
-                "audit_confidence": 0.9,
-                "gaps": [],
-                "alternatives": [],
-                "alternatives_missing": False,
-                "challenges": [],
-                "cost_usd": 0.0,
-                "artifacts": [f"observed:{p}" for p in written] or ["observed:hello.txt"],
+                "world_revision": world_rev,
+                "verdicts": [
+                    {
+                        "obligation_id": oid,
+                        "status": "unsatisfied",
+                        "attestations": [],
+                        "gaps": ["integrity_violation"],
+                        "defect_suspected": False,
+                    }
+                    for oid in obligation_ids
+                ],
                 "integrity_violation": True,
-                "criteria_defect": False,
-                "subgoal_id": subgoal_id,
+                "additional_gaps": [],
             }
-        if self.mode == "repair_empty" or not written:
+        if self.mode == "repair_empty" or not paths:
             return {
+                "schema": P.EVIDENCE_BUNDLE_SCHEMA,
                 "evidence_id": f"ev-{tick:03d}",
-                "tick": tick,
+                "contract_ref": contract_ref,
                 "checker_session_id": "mock-checker",
-                "audit_progress": 0.0,
-                "audit_confidence": 0.5,
-                "gaps": ["no artifacts on disk"],
-                "alternatives": [],
-                "alternatives_missing": False,
-                "challenges": [],
-                "cost_usd": 0.0,
-                "artifacts": [],
+                "world_revision": world_rev,
+                "verdicts": [
+                    {
+                        "obligation_id": oid,
+                        "status": "unsatisfied",
+                        "attestations": [],
+                        "gaps": ["no artifacts on disk"],
+                        "defect_suspected": False,
+                    }
+                    for oid in obligation_ids
+                ],
                 "integrity_violation": False,
-                "criteria_defect": False,
-                "subgoal_id": subgoal_id,
+                "additional_gaps": [],
             }
         return {
+            "schema": P.EVIDENCE_BUNDLE_SCHEMA,
             "evidence_id": f"ev-{tick:03d}",
-            "tick": tick,
+            "contract_ref": contract_ref,
             "checker_session_id": "mock-checker",
-            "audit_progress": 1.0,
-            "audit_confidence": 0.95,
-            "gaps": [],
-            "alternatives": [],
-            "alternatives_missing": False,
-            "challenges": [],
-            "cost_usd": 0.0,
-            "artifacts": [f"observed:{p}" for p in written],
+            "world_revision": world_rev,
+            "verdicts": [
+                {
+                    "obligation_id": oid,
+                    "status": "satisfied",
+                    "attestations": [
+                        {
+                            "method": "file_exists",
+                            "world_revision": world_rev,
+                            "digest": f"observed:{p}",
+                            "observer": "mock-checker",
+                            "raw_ref": p,
+                            "watch_set": [p],
+                        }
+                        for p in paths
+                    ],
+                    "gaps": [],
+                    "defect_suspected": False,
+                }
+                for oid in obligation_ids
+            ],
             "integrity_violation": False,
-            "criteria_defect": False,
-            "subgoal_id": subgoal_id,
+            "additional_gaps": [],
         }

@@ -109,7 +109,7 @@ def join_sections(
     sections: dict[str, str],
     wanted_titles: tuple[str, ...],
 ) -> str:
-    """Join skill sections whose headings match ``wanted_titles`` (fuzzy)."""
+  """Join skill sections whose headings match ``wanted_titles`` (fuzzy)."""
     parts: list[str] = []
     for want in wanted_titles:
         for title, content in sections.items():

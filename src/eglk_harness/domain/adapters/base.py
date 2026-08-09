@@ -6,11 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from eglk_harness.domain.adapters.tool_policy import (
-    SESSION_ROLES,
-    TOOL_ROLES,
-    resolve_role_tool_profile,
-)
+# Roles allowed to receive MCP / tool surface (multi_agent.md §8).
+TOOL_ROLES: frozenset[str] = frozenset({"maker", "checker"})
 
 RoleName = Literal[
     "maker",
@@ -21,15 +18,6 @@ RoleName = Literal[
     "pruner",
     "refiner",
     "compile",
-]
-
-__all__ = [
-    "TOOL_ROLES",
-    "SESSION_ROLES",
-    "EpisodeRequest",
-    "EpisodeResult",
-    "AgentAdapter",
-    "RoleName",
 ]
 
 
@@ -47,17 +35,14 @@ class EpisodeRequest:
     timeout_s: float = 600.0
     expect: Literal["claim", "evidence", "text"] = "text"
     meta: dict[str, Any] = field(default_factory=dict)
-    tee_path: str | None = None
 
     def __post_init__(self) -> None:
         # Frozen dataclass: validate after init
-        if self.tools_allowed:
-            profile = resolve_role_tool_profile(self.role)
-            if not profile.tools_allowed:
-                raise AssertionError(
-                    f"tools_allowed=True illegal for role={self.role!r}; "
-                    f"profile denies tools (session_roles={sorted(SESSION_ROLES)})"
-                )
+        if self.tools_allowed and self.role not in TOOL_ROLES:
+            raise AssertionError(
+                f"tools_allowed=True illegal for role={self.role!r}; "
+                f"only {sorted(TOOL_ROLES)} may hold MCP/tools"
+            )
         if not self.tools_allowed and (self.mcp_config is not None or self.add_dirs):
             raise AssertionError(
                 f"MCP/add_dirs supplied for role={self.role!r} with tools_allowed=False"

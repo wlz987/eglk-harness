@@ -32,10 +32,8 @@ from eglk_harness.domain.product.status import collect_status
 from eglk_harness.domain.product.update_check import check_update
 from eglk_harness.domain.eval.loader import eval_suite_choices, load_suite_module
 
-
 def _suite_mod(suite: str, eval_root: Path):
     return load_suite_module(suite, eval_root)
-
 
 def _cmd_init(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
@@ -48,14 +46,11 @@ def _cmd_init(args: argparse.Namespace) -> int:
         print("(nothing written; pass --force to overwrite files)")
     return 0
 
-
 def _doctor_line(level: str, name: str, detail: str) -> None:
     print(f"{level:4}  {name}: {detail}", flush=True)
 
-
 _CODEX_GUI_PLUGIN = "codex-computer-use"
 _PLUGIN_CHOICES = (_CODEX_GUI_PLUGIN, "open-computer-use", "clawdcursor")
-
 
 def _cmd_plugin(args: argparse.Namespace) -> int:
     """Install/list/uninstall computer-use plugins (never invoked by ``run``)."""
@@ -176,7 +171,6 @@ def _cmd_plugin(args: argparse.Namespace) -> int:
         _doctor_line("FAIL", name, str(exc))
         return 1
 
-
 def _cmd_doctor(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     code = 0
@@ -251,7 +245,6 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             code = 1
     return code
 
-
 def _cmd_run(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     from eglk_harness.domain.product.runtime_bootstrap import (
@@ -321,7 +314,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
         serve_dashboard(workdir, host="127.0.0.1", port=port, blocking=True)
     return code
 
-
 def _cmd_status(args: argparse.Namespace) -> int:
     report = collect_status(Path(args.workdir).resolve(), run_id=args.run)
     if getattr(args, "json", False):
@@ -329,7 +321,6 @@ def _cmd_status(args: argparse.Namespace) -> int:
     else:
         print(report.render())
     return 0
-
 
 def _cmd_check_projections(args: argparse.Namespace) -> int:
     report = check_projections()
@@ -340,7 +331,6 @@ def _cmd_check_projections(args: argparse.Namespace) -> int:
         mark = "ok  " if c.ok else "FAIL"
         print(f"{mark}  {c.name}: {c.detail}")
     return 0 if report.ok else 1
-
 
 def _cmd_soak_bypass(args: argparse.Namespace) -> int:
     import asyncio
@@ -386,7 +376,6 @@ def _cmd_soak_bypass(args: argparse.Namespace) -> int:
         return 1
     return 0 if report.ok else 1
 
-
 def _cmd_check_update(args: argparse.Namespace) -> int:
     result = check_update()
     if getattr(args, "json", False):
@@ -394,7 +383,6 @@ def _cmd_check_update(args: argparse.Namespace) -> int:
     else:
         print(f"{result.package}: {result.detail}")
     return 0
-
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     serve_dashboard(
@@ -404,7 +392,6 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
         blocking=True,
     )
     return 0
-
 
 def _emit_eval_scores(
     *,
@@ -434,7 +421,6 @@ def _emit_eval_scores(
     print(json.dumps({"eval": scores, "ok": ok, "detail": detail, "manifest": str(path)}, indent=2))
     print("note: offline scores are Manifest-only — never Gate inputs")
     return 0 if ok else 1
-
 
 def _cmd_eval(args: argparse.Namespace) -> int:
     eval_root = Path(args.eval_root).resolve() if args.eval_root else default_eval_root()
@@ -748,7 +734,6 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     )
     return rc if rc else eval_rc
 
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="eglk-harness",
@@ -958,13 +943,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     return p
 
-
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
     code = args.func(args)
     raise SystemExit(code)
-
 
 if __name__ == "__main__":
     main()

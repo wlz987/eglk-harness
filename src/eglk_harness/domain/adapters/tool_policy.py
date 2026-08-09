@@ -25,7 +25,7 @@ SESSION_ROLES: frozenset[str] = frozenset(
     }
 )
 
-# Roles that may receive MCP / tool surface (see tool_policy; alias of SESSION_ROLES).
+# Backward-compat alias: historically only Maker/Checker; now all session roles.
 TOOL_ROLES: frozenset[str] = SESSION_ROLES
 
 

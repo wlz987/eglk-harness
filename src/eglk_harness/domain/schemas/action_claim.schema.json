@@ -1,0 +1,66 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://eglk.local/schemas/action_claim.schema.json",
+ "title": "ActionClaim",
+ "description": "Maker output for one WorkContract. self_assessment is diagnostic telemetry ONLY; Gate MUST NOT read it (see ../gate_policy.md §2, ../semantic_core.md §5). Replaces legacy Claim.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+ "schema", "claim_id", "contract_ref", "maker_session_id",
+ "intent", "actions", "alternatives", "self_assessment", "world_revision_base"
+ ],
+ "properties": {
+ "schema": { "type": "string", "const": "eglk.action_claim" },
+ "claim_id": { "type": "string", "minLength": 1 },
+ "contract_ref": { "type": "string", "minLength": 1 },
+ "maker_session_id": { "type": "string", "minLength": 1 },
+ "intent": { "type": "string", "minLength": 1 },
+ "actions": {
+ "type": "array",
+ "items": { "$ref": "#/$defs/ActionIntent" }
+ },
+ "alternatives": {
+ "type": "array",
+ "minItems": 1,
+ "items": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["text", "status"],
+ "properties": {
+ "text": { "type": "string", "minLength": 1 },
+ "status": { "type": "string", "enum": ["adopt", "reject"] },
+ "reason": { "type": "string" }
+ }
+ }
+ },
+ "self_assessment": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["done_progress", "confidence"],
+ "description": "Diagnostic telemetry only; no Gate semantics.",
+ "properties": {
+ "done_progress": { "type": "number", "minimum": 0, "maximum": 1 },
+ "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+ }
+ },
+ "world_revision_base": { "type": "integer", "minimum": 0 },
+ "note": { "type": "string" }
+ },
+ "$defs": {
+ "ActionIntent": {
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["action_id", "kind", "side_effect_class", "target"],
+ "properties": {
+ "action_id": { "type": "string", "minLength": 1 },
+ "kind": { "type": "string", "minLength": 1, "description": "Adapter-defined action kind (e.g. file_write, http_call, ui_click)." },
+ "side_effect_class": { "type": "string", "enum": ["read_only", "reversible", "compensatable", "irreversible"] },
+ "target": { "type": "string", "minLength": 1, "description": "Resource reference the action affects." },
+ "idempotency_key": { "type": ["string", "null"], "description": "Required (non-null) when side_effect_class == irreversible." },
+ "payload": { "type": "object", "description": "Shape discriminated by sibling `kind` (adapter-defined); deliberate exception to the family-wide additionalProperties:false convention, same rationale as event.schema.json#/properties/payload." }
+ },
+ "if": { "properties": { "side_effect_class": { "const": "irreversible" } } },
+ "then": { "required": ["idempotency_key"], "properties": { "idempotency_key": { "type": "string", "minLength": 1 } } }
+ }
+ }
+}

@@ -14,14 +14,12 @@ from eglk_harness.domain.runtime.budgets import timeout_for_role
 from eglk_harness.domain.runtime.bypass_llm import coerce_explorer, coerce_verifier, run_bypass_json
 from eglk_harness.protocol import messages, payload, topics
 
-
 def _write_candidate(loop_dir: Path, name: str, doc: dict[str, Any]) -> Path:
     cand = loop_dir / "candidates"
     cand.mkdir(parents=True, exist_ok=True)
     path = cand / name
     path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
-
 
 def _leaf_ctx(args: Mapping[str, Any]) -> tuple[str, str, list[str], LeafContract | None]:
     leaf = str(args.get("subgoal_id") or "root")
@@ -36,7 +34,6 @@ def _leaf_ctx(args: Mapping[str, Any]) -> tuple[str, str, list[str], LeafContrac
         if not contract.acceptance:
             contract.acceptance = criteria
     return leaf, title, criteria, contract
-
 
 def _leaf_block(
     leaf: str,
@@ -55,7 +52,6 @@ def _leaf_block(
     if audit:
         block = f"{block}\naudit: true"
     return block
-
 
 def explore_alternatives(title: str, criteria: Sequence[str]) -> list[dict[str, Any]]:
     """Leaf-aware mechanical alternatives (no LLM; Gate never reads these)."""
@@ -103,7 +99,6 @@ def explore_alternatives(title: str, criteria: Sequence[str]) -> list[dict[str, 
     )
     return alts
 
-
 def verifier_challenges(title: str, criteria: Sequence[str], *, audit: bool) -> list[dict[str, Any]]:
     challenges: list[dict[str, Any]] = []
     for i, c in enumerate(criteria[:4], start=1):
@@ -131,7 +126,6 @@ def verifier_challenges(title: str, criteria: Sequence[str], *, audit: bool) -> 
             }
         )
     return challenges
-
 
 class ExplorerActor(RequestResponseActor):
     pattern = f"{topics.ROLE_EXPLORER_RUN}.*"
@@ -170,7 +164,6 @@ class ExplorerActor(RequestResponseActor):
         _write_candidate(loop_dir, f"explorer_{tick:03d}.json", doc)
         return messages.ok_body(artifact=doc)
 
-
 class VerifierActor(RequestResponseActor):
     pattern = f"{topics.ROLE_VERIFIER_RUN}.*"
     result_prefix = topics.ROLE_VERIFIER_RESULT
@@ -208,7 +201,6 @@ class VerifierActor(RequestResponseActor):
         name = f"verifier_audit_{tick:03d}.json" if is_audit else f"verifier_{tick:03d}.json"
         _write_candidate(loop_dir, name, doc)
         return messages.ok_body(artifact=doc)
-
 
 class PrunerActor(RequestResponseActor):
     pattern = f"{topics.ROLE_PRUNER_RUN}.*"

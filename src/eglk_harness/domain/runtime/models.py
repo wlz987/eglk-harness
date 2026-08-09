@@ -27,7 +27,6 @@ DOWNGRADE_ENV: dict[str, str] = {
 # Process-local plan written by Phase-3 context-compress; Gate never reads this.
 _ACTIVE_DOWNGRADE: dict[str, str] = {}
 
-
 def set_active_downgrade(roles: Mapping[str, str] | None) -> None:
     """Install (or clear) Verifier/Refiner downgrade overrides for this process."""
     global _ACTIVE_DOWNGRADE
@@ -41,10 +40,8 @@ def set_active_downgrade(roles: Mapping[str, str] | None) -> None:
             clean[r] = m
     _ACTIVE_DOWNGRADE = clean
 
-
 def get_active_downgrade() -> dict[str, str]:
     return dict(_ACTIVE_DOWNGRADE)
-
 
 def resolve_model(role: str, *, env: Mapping[str, str] | None = None) -> str | None:
     """Return model id for role: downgrade (if allowed) → per-role env → EGLK_MODEL → None."""
@@ -58,10 +55,8 @@ def resolve_model(role: str, *, env: Mapping[str, str] | None = None) -> str | N
     shared = env.get("EGLK_MODEL", "").strip()
     return shared or None
 
-
 def may_downgrade(role: str) -> bool:
     return role.lower() not in NEVER_DOWNGRADE_ROLES
-
 
 def plan_model_downgrade(
     *,

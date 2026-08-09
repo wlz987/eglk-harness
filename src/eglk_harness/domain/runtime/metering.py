@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-
 def tokens_and_cost_from_codex_jsonl(raw: str) -> tuple[int, float]:
     """Sum usage from Codex turn.completed events; return (tokens, cost_usd)."""
     tokens = 0
@@ -39,11 +38,9 @@ def tokens_and_cost_from_codex_jsonl(raw: str) -> tuple[int, float]:
             tokens += _usage_tokens(usage)
     return tokens, cost
 
-
 def tokens_and_cost_from_raw(raw: str) -> tuple[int, float]:
     """Detect format lightly and meter; (0, 0.0) if absent."""
     return tokens_and_cost_from_codex_jsonl(raw)
-
 
 def _usage_tokens(usage: dict[str, Any]) -> int:
     """Count billable turn tokens without double-counting cache fields.

@@ -10,7 +10,6 @@ from eglk_harness.domain.kernel import projections as P
 
 NodeStatus = str  # pending|in_progress|admitted|failed|split|merged
 
-
 @dataclass
 class TreeNode:
     id: str
@@ -57,7 +56,6 @@ class TreeNode:
             verifier_challenges=[str(x) for x in data.get("verifier_challenges") or []],
             repair_streak=int(data.get("repair_streak") or 0),
         )
-
 
 @dataclass
 class TaskTree:
@@ -340,10 +338,8 @@ class TaskTree:
     def clone(self) -> TaskTree:
         return TaskTree.from_document(deepcopy(self.to_document()))
 
-
 def _norm_crit(text: str) -> str:
     return " ".join(str(text).lower().split())
-
 
 def make_root(title: str, done_criteria: list[str], *, leaf: bool = True) -> TaskTree:
     """Create a minimal tree: root as single in_progress leaf, or root with no work yet."""

@@ -7,16 +7,13 @@ from typing import Any, Sequence
 
 from eglk_harness.domain.kernel import projections as P
 
-# Tool-API / type-assert micro-leaves that derail goal-level work (reject → fallback).
+# Tool-API / assert micro-leaves that derail goal-level work (reject → fallback).
 _TOOL_MICRO_RE = re.compile(
     r"(?:"
-    r"session_id|isinstance\s*\(|"
+    r"session_id|isinstance\s*\(|wa_start_session\s*\(|wa_navigate\s*\(|"
     r"returns a JSON response|non-empty string\s*\(length|"
-    r"len\s*\(\s*response|"
-    r"assert\s+response|"
-    r"invoke\s+\w+_|\bcall\s+\w+_|"  # invoke/call tool_xyz style
-    r"\bstart_session\b|\bfinalize_session\b|"
-    r"tool smoke|smoke test the (?:mcp|tool)"
+    r"len\s*\(\s*response|PHPSESSID|"
+    r"assert\s+response|invoke wa_|call wa_"
     r")",
     re.IGNORECASE,
 )

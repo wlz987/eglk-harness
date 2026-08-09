@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-
 @dataclass
 class WorldRef:
     """Pointer to an immutable pre-tick snapshot directory."""
@@ -32,7 +31,6 @@ class WorldRef:
             meta=dict(data.get("meta") or {}),
         )
 
-
 def _copytree(src: Path, dst: Path) -> None:
     if dst.exists():
         shutil.rmtree(dst)
@@ -52,7 +50,6 @@ def _copytree(src: Path, dst: Path) -> None:
         ),
         dirs_exist_ok=False,
     )
-
 
 def snapshot_workdir(
     workdir: Path,
@@ -78,12 +75,10 @@ def snapshot_workdir(
     )
     return WorldRef(snapshot=snapshot_dir, revision=revision, meta=meta_out)
 
-
 _RESTORE_CORE_SKIP = frozenset({".eglk-harness", ".git", ".venv"})
 # Generic delivery roots only — suite-specific tops (e.g. agent_runs) come from
 # MUST_EXIST first-segment parsing or EGLK_RESTORE_PRESERVE_DIRS.
 _DEFAULT_PRESERVE_TOP = ("artifacts", "deliverables", "evidence_pack", "out")
-
 
 def _preserve_top_dirs(workdir: Path) -> frozenset[str]:
     """Top-level dirs kept across repair restore (delivery / MCP captures).
@@ -113,7 +108,6 @@ def _preserve_top_dirs(workdir: Path) -> frozenset[str]:
     except Exception:  # noqa: BLE001 — restore must not fail closed on parse
         pass
     return frozenset(names)
-
 
 def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
     """Restore workdir from snapshot; returns a new WorldRef with revision+1.
@@ -151,9 +145,7 @@ def restore(world_ref: WorldRef, workdir: Path) -> WorldRef:
     meta = {**world_ref.meta, "restored_from": str(world_ref.snapshot)}
     return WorldRef(snapshot=world_ref.snapshot, revision=new_rev, meta=meta)
 
-
 _BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".wasm"}
-
 
 def _looks_like_text_placeholder_for_binary(rel: str, content: str) -> bool:
     """Reject Claim.payload.files that would clobber tool-written binaries with ASCII stubs."""
@@ -167,7 +159,6 @@ def _looks_like_text_placeholder_for_binary(rel: str, content: str) -> bool:
     if len(content) < 512 and sample.isprintable():
         return True
     return False
-
 
 def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
     """Apply Claim.payload.files mapping (relative path → content). Returns written paths.
@@ -201,7 +192,6 @@ def apply_files(workdir: Path, files: Mapping[str, str]) -> list[str]:
         written.append(rel_s)
     return written
 
-
 def _ack_or_write(
     workdir: Path,
     rel: str,
@@ -217,7 +207,6 @@ def _ack_or_write(
         return
     if (workdir / rel).is_file():
         written.append(rel)
-
 
 def apply_claim_payload(workdir: Path, payload: Mapping[str, Any] | None) -> list[str]:
     """Apply supported Claim payload kinds. Returns list of written or acknowledged paths.

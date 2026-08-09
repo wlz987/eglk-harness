@@ -13,7 +13,6 @@ from eglk_harness.protocol import topics
 
 JobFactory = Callable[..., Job]
 
-
 class RunHost(JobHost[Job]):
     """Composition-side host: only routes; no Gate / tree authority.
 

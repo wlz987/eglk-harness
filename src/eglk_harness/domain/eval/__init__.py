@@ -1,13 +1,14 @@
-"""eval domain package — kernel adjacency; suite connectors live in EGLK_EVAL_ROOT/lib/."""
+"""eval domain package."""
 
 from __future__ import annotations
 
-from eglk_harness.domain.eval.loader import (
-    DEFAULT_EVAL_SUITES,
-    discover_suites,
-    eval_suite_choices,
-    load_env_probes_module,
-    load_suite_module,
+# Keep in sync with CLI ``--suite`` choices and design/kernel/packaging.md
+EVAL_SUITES: frozenset[str] = frozenset(
+    {
+        "weave_thin",
+        "weave_lh",
+        "wa_hard",
+        "osworld_aux",
+        "scenarios",
+    }
 )
-
-EVAL_SUITES = DEFAULT_EVAL_SUITES

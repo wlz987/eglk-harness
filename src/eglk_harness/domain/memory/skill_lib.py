@@ -10,16 +10,13 @@ from typing import Any, Mapping, Sequence
 from eglk_harness.domain.kernel import paths
 from eglk_harness.domain.memory import sigma
 
-
 def skills_root(workdir: Path) -> Path:
     d = paths.memory_skills_dir(workdir)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
-
 def _index_path(workdir: Path) -> Path:
     return skills_root(workdir) / "index.json"
-
 
 def load_index(workdir: Path) -> list[dict[str, Any]]:
     p = _index_path(workdir)
@@ -28,19 +25,16 @@ def load_index(workdir: Path) -> list[dict[str, Any]]:
     raw = json.loads(p.read_text(encoding="utf-8"))
     return [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
 
-
 def save_index(workdir: Path, items: list[dict[str, Any]]) -> None:
     _index_path(workdir).write_text(
         json.dumps(items, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-
 
 def _skill_dir(workdir: Path, skill_id: str) -> Path:
     safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", skill_id)[:80]
     d = skills_root(workdir) / safe
     d.mkdir(parents=True, exist_ok=True)
     return d
-
 
 def _write_skill_files(workdir: Path, entry: Mapping[str, Any], body: str) -> Path:
     d = _skill_dir(workdir, str(entry.get("id") or "skill"))
@@ -49,7 +43,6 @@ def _write_skill_files(workdir: Path, entry: Mapping[str, Any], body: str) -> Pa
     )
     (d / "SKILL.md").write_text(body.strip() + "\n", encoding="utf-8")
     return d
-
 
 def record_admit(
     workdir: Path,
@@ -106,10 +99,8 @@ def record_admit(
     _write_skill_files(workdir, found, body)
     return found
 
-
 # Design alias (K · bump_for_leaf)
 bump_for_leaf = record_admit
-
 
 def distill_from_sigma(
     workdir: Path,
@@ -183,7 +174,6 @@ def distill_from_sigma(
         sigma.save_active(workdir, [x for x in active if isinstance(x, dict)])
     return created
 
-
 def _triggers_from_text(text: str) -> list[str]:
     words = re.findall(r"[A-Za-z0-9_]{3,}", text.lower())
     out: list[str] = []
@@ -193,7 +183,6 @@ def _triggers_from_text(text: str) -> list[str]:
         if len(out) >= 8:
             break
     return out
-
 
 def match_skills(
     workdir: Path,
@@ -224,7 +213,6 @@ def match_skills(
             break
     return matched
 
-
 def render_learned_skills_block(skills: Sequence[Mapping[str, Any]]) -> str:
     if not skills:
         return ""
@@ -238,7 +226,6 @@ def render_learned_skills_block(skills: Sequence[Mapping[str, Any]]) -> str:
                 lines.append(f"  note: {note['note']}")
     lines.append("Apply these skills when relevant; do not invent conflicting shortcuts.")
     return "\n".join(lines)
-
 
 def revise_skill(workdir: Path, skill_id: str, *, note: str) -> dict[str, Any] | None:
     items = load_index(workdir)
@@ -258,7 +245,6 @@ def revise_skill(workdir: Path, skill_id: str, *, note: str) -> dict[str, Any] |
         _write_skill_files(workdir, it, body)
         return it
     return None
-
 
 def deprecate(workdir: Path, skill_id: str, *, reason: str = "") -> dict[str, Any] | None:
     items = load_index(workdir)
@@ -281,7 +267,6 @@ def deprecate(workdir: Path, skill_id: str, *, reason: str = "") -> dict[str, An
         save_index(workdir, items)
         return it
     return None
-
 
 def deconstruct(
     workdir: Path,
@@ -320,7 +305,6 @@ def deconstruct(
     parent["history"] = hist[-20:]
     save_index(workdir, items)
     return created
-
 
 def boundary_hints(workdir: Path, *, leaf_id: str = "", title: str = "") -> list[str]:
     """Return short boundary lines from active skills related to this leaf."""
