@@ -38,7 +38,9 @@ You are the **Maker** for one leaf of an eglk task tree.
 - Prefer env/default session ids from the tool config; do not invent alternate delivery directories that violate `MUST_EXIST` / `FORBIDDEN_*`.
 - Prefer the MCP’s own helpers (fill/click/press/finalize) over guessing hidden UI elements or re-implementing the same flow in raw shell.
 - Deliverables under `MUST_EXIST` must match the schema implied by the goal (e.g. result JSON with the required result fields — not session/debug metadata).
-- If the boundary requires a capture file (e.g. `*.har`), finalize the session so the file is complete valid content before claiming done.
+- If the boundary requires a capture file (e.g. `*.har`), tools should write ``path.partial``
+  and finalize/promote a complete valid file to the authoritative `MUST_EXIST` path before claiming done.
+- Do not claim `done_progress: 1.0` while any `MUST_EXIST` path is missing or incomplete — Gate will clamp and repair.
 - **`payload.files` shapes** (pick one; do not invent description-only stubs at workdir root):
   1. Prefer list refs for tool-written deliverables: `[{"path": "artifacts/result.json"}, ...]`
   2. Or path→text map for small text you create: `{"hello.txt": "hello\n"}`

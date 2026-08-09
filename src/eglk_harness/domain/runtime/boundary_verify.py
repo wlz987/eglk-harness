@@ -55,7 +55,7 @@ def parse_boundary_rules(boundary: Sequence[str]) -> BoundaryRules:
 
 
 def _is_placeholder_har(path: Path) -> bool:
-    """True when HAR is missing, empty, text stub, or not valid Playwright HAR JSON."""
+    """True when HAR is missing, empty, text stub, or not valid capture JSON."""
     if not path.is_file():
         return True
     try:
@@ -84,6 +84,57 @@ def _is_placeholder_har(path: Path) -> bool:
     if len(entries) < 1:
         return True
     return False
+
+
+def is_valid_must_exist_file(path: Path, *, rel: str) -> bool:
+    """Whether ``path`` satisfies a MUST_EXIST entry for ``rel``."""
+    if not path.is_file():
+        return False
+    if rel.endswith(".har"):
+        return not _is_placeholder_har(path)
+    return path.stat().st_size > 0
+
+
+def _partial_path(final: Path) -> Path:
+    return final.with_name(final.name + ".partial")
+
+
+def promote_staged_deliverables(workdir: Path, boundary: Sequence[str]) -> list[str]:
+    """Atomically promote ``<must_exist>.partial`` → final when partial is valid.
+
+    Suite-agnostic staging convention: tools write ``path.partial``, finalize/heal
+    promotes only when the partial passes the same validity checks as the final.
+    Never replaces an already-valid final with a worse partial.
+    """
+    workdir = workdir.resolve()
+    promoted: list[str] = []
+    rules = parse_boundary_rules(boundary)
+    for rel, _note in rules.must_exist:
+        final = workdir / rel
+        partial = _partial_path(final)
+        if not partial.is_file():
+            continue
+        if not is_valid_must_exist_file(partial, rel=rel):
+            continue
+        if is_valid_must_exist_file(final, rel=rel):
+            # Keep good final; drop stale partial.
+            try:
+                partial.unlink()
+            except OSError:
+                pass
+            continue
+        final.parent.mkdir(parents=True, exist_ok=True)
+        if final.exists():
+            try:
+                final.unlink()
+            except OSError:
+                continue
+        try:
+            partial.replace(final)
+            promoted.append(rel)
+        except OSError:
+            continue
+    return promoted
 
 
 def _forbidden_hits(workdir: Path, prefixes: Sequence[str]) -> list[str]:
@@ -115,6 +166,8 @@ def _forbidden_hits(workdir: Path, prefixes: Sequence[str]) -> list[str]:
 
 def verify_boundary(workdir: Path, boundary: Sequence[str]) -> list[str]:
     """Return blocking gap messages for mechanical boundary violations."""
+    workdir = workdir.resolve()
+    promote_staged_deliverables(workdir, boundary)
     rules = parse_boundary_rules(boundary)
     violations: list[str] = []
 

@@ -174,6 +174,10 @@ def decide(
             next_action="advance",
         )
 
+    # Boundary failures are delivery-contract failures — not Maker/Checker disagreement.
+    if any(g.startswith("boundary:") for g in merged_gaps):
+        return _repair("boundary_unmet")
+
     if gap >= P.TAU_GAP:
         return _repair("perception_gap")
 

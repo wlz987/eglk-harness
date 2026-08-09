@@ -69,18 +69,25 @@ def align_claim_delivery_progress(
     workdir: Path,
     boundary: list[str] | None,
 ) -> dict[str, Any]:
-    """Mechanically align Maker done_progress when delivery boundary is satisfied on disk."""
+    """Mechanically align Maker done_progress with on-disk delivery boundary.
+
+    - Boundary satisfied → allow/lift ``done_progress`` to 1.0
+    - Boundary unmet → clamp ``done_progress`` to ≤0.45 so Gate sees ``incomplete`` /
+      ``boundary_unmet`` instead of a false ``perception_gap``
+    """
     out = dict(claim)
     if not boundary:
         return out
     from eglk_harness.domain.runtime.boundary_verify import verify_boundary
 
-    if verify_boundary(workdir, boundary):
-        return out
+    violations = verify_boundary(workdir, boundary)
     try:
         done = float(out.get("done_progress", 0))
     except (TypeError, ValueError):
         done = 0.0
+    if violations:
+        out["done_progress"] = min(done, 0.45)
+        return out
     if done < 1.0:
         out["done_progress"] = 1.0
     return out
