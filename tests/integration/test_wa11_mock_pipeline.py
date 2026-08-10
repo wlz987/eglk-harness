@@ -14,12 +14,11 @@ from tests.conftest import default_eval_root
 
 EVAL_ROOT = default_eval_root()
 WA_PACK = EVAL_ROOT / "wa_hard" / "pack.json"
-WA_PACK_EX = EVAL_ROOT / "wa_hard" / "pack.example.json"
 
 
 @unittest.skipUnless(
-    WA_PACK.is_file() or WA_PACK_EX.is_file(),
-    reason="experiment/eval wa_hard pack not present",
+    WA_PACK.is_file(),
+    reason="experiment/eval wa_hard/pack.json not present",
 )
 class TestWa11MockPipeline(unittest.TestCase):
     def test_materialize_mock_run_and_score(self) -> None:

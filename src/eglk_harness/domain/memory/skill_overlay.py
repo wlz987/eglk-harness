@@ -26,11 +26,16 @@ def overlay_search_dirs(workdir: Path | None = None) -> list[Path]:
                 _add(Path(p).expanduser())
 
     eval_raw = (os.environ.get("EGLK_EVAL_ROOT") or "").strip()
+    suite = (os.environ.get("EGLK_SKILL_SUITE") or "").strip()
     if eval_raw:
         er = Path(eval_raw).expanduser().resolve()
         skills = er / "skills"
         if skills.is_dir():
             _add(skills)
+        if suite:
+            suite_dir = er / "skills" / suite
+            if suite_dir.is_dir():
+                _add(suite_dir)
 
     if workdir is not None:
         od = Path(workdir).resolve() / ".eglk-harness" / "skill-overlay"

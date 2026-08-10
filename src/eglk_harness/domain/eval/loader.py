@@ -72,7 +72,7 @@ def discover_suites(eval_root: Path | None = None) -> frozenset[str]:
     if lib.is_dir():
         for path in sorted(lib.glob("*.py")):
             stem = path.stem
-            if stem in {"eval_env_probes", "__init__"}:
+            if stem in {"eval_env_probes", "__init__"} or stem.startswith("_"):
                 continue
             if stem == "osworld":
                 names.add("osworld_aux")

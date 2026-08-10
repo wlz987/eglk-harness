@@ -1,0 +1,47 @@
+[
+  {
+    "task_id": 11,
+    "sites": ["shopping_admin"],
+    "eval": [
+      {
+        "evaluator": "AgentResponseEvaluator",
+        "ordered": false,
+        "results_schema": { "type": "array", "items": { "type": "number" } },
+        "expected": {
+          "task_type": "RETRIEVE",
+          "status": "SUCCESS",
+          "retrieved_data": [6],
+          "error_details": null
+        }
+      }
+    ]
+  },
+  {
+    "task_id": 31,
+    "sites": ["shopping"],
+    "eval": [
+      {
+        "evaluator": "AgentResponseEvaluator",
+        "ordered": false,
+        "results_schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "username": { "type": "string" },
+              "review_count": { "type": "number" }
+            }
+          }
+        },
+        "expected": {
+          "task_type": "RETRIEVE",
+          "status": "SUCCESS",
+          "retrieved_data": [
+            { "username": "Proud_Idiot", "review_count": 12 }
+          ],
+          "error_details": null
+        }
+      }
+    ]
+  }
+]

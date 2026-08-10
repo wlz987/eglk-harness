@@ -12,12 +12,14 @@ from eglk_harness.domain.eval.loader import load_suite_module
 from tests.conftest import default_eval_root
 
 EVAL_ROOT = default_eval_root()
-FIXTURE = EVAL_ROOT / "wa_hard" / "fixtures" / "webarena-verified-hard.export.json"
+HARNESS_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "wa_scorer_export_minimal.json"
 
 
-@pytest.mark.skipif(not FIXTURE.is_file(), reason="experiment/eval fixtures not present")
-def test_agent_response_hint_uses_schema_placeholders_not_oracle() -> None:
+@pytest.mark.skipif(not EVAL_ROOT.is_dir(), reason="experiment/eval not present")
+def test_agent_response_hint_uses_schema_placeholders_not_oracle(monkeypatch: pytest.MonkeyPatch) -> None:
     wa = load_suite_module("wa_hard", EVAL_ROOT)
+    monkeypatch.setattr(wa, "scorer_export_path", lambda _root: HARNESS_FIXTURE)
+
     hint_31 = wa.agent_response_hint(EVAL_ROOT, "31")
     assert hint_31 is not None
     example = hint_31["example_success"]
@@ -25,12 +27,11 @@ def test_agent_response_hint_uses_schema_placeholders_not_oracle() -> None:
     data = json.dumps(example.get("retrieved_data"))
     assert "Proud_Idiot" not in data
     assert "Rishi Sunak" not in data
-    assert hint_31.get("retrieval_guidance")
+    assert "note" in hint_31
 
     hint_11 = wa.agent_response_hint(EVAL_ROOT, "11")
     assert hint_11 is not None
-    # Oracle count for task 11 should not appear in placeholder
-    oracle = wa.load_export_index(EVAL_ROOT)["11"]["eval"][0]["expected"]["retrieved_data"]
+    oracle = wa.load_scorer_export_index(EVAL_ROOT)["11"]["eval"][0]["expected"]["retrieved_data"]
     placeholder = hint_11["example_success"]["retrieved_data"]
     assert placeholder != oracle
 

@@ -62,10 +62,13 @@ def _fragment_search_roots(workdir: Path | None) -> list[Path]:
                 _add(base / rel)
 
     eval_raw = (os.environ.get("EGLK_EVAL_ROOT") or "").strip()
+    suite = (os.environ.get("EGLK_SKILL_SUITE") or "").strip()
     if eval_raw:
         er = Path(eval_raw).expanduser().resolve()
         for rel in ("fragments", "skills/fragments"):
             _add(er / rel)
+        if suite:
+            _add(er / "skills" / suite / "fragments")
 
     if workdir is not None:
         wd = Path(workdir).resolve()
