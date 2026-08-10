@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-_SUITE_DIRS = frozenset({"wa_hard", "weave_lh", "weave_thin", "osworld_aux", "tb21"})
+_SUITE_DIRS = frozenset({"wa_hard", "weave_lh", "osworld_aux", "tb21"})
 
 
 def _looks_like_eval_root(path: Path) -> bool:

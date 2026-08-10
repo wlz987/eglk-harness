@@ -17,7 +17,6 @@ _SUITE_MODULE_STEM: dict[str, str] = {
 # Argparse fallback when ``EGLK_EVAL_ROOT`` unset.
 DEFAULT_EVAL_SUITES: frozenset[str] = frozenset(
     {
-        "weave_thin",
         "weave_lh",
         "wa_hard",
         "osworld_aux",

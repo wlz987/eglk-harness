@@ -13,7 +13,7 @@
 | WorldRef restore | `EGLK_RESTORE_PRESERVE_DIRS` + `MUST_EXIST` 首段 + 通用默认目录 |
 
 内核 **不读** Oracle / 离线 scorer / external judge。  
-**全部 pack 套件**（含 `weave_thin` · `scenarios`）均已连接器化于 `experiment/eval/lib/`。
+**全部 pack 套件**（`scenarios` 等）均已连接器化于 `experiment/eval/lib/`。
 
 ## 评测注入（`experiment/eval/`）
 

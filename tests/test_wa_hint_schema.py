@@ -36,6 +36,16 @@ def test_agent_response_hint_uses_schema_placeholders_not_oracle(monkeypatch: py
     assert placeholder != oracle
 
 
+def test_results_schema_strips_enum_and_examples(monkeypatch: pytest.MonkeyPatch) -> None:
+    wa = load_suite_module("wa_hard", EVAL_ROOT)
+    monkeypatch.setattr(wa, "scorer_export_path", lambda _root: HARNESS_FIXTURE)
+    hint = wa.agent_response_hint(EVAL_ROOT, "31")
+    assert hint is not None
+    schema = json.dumps(hint.get("results_schema") or {})
+    assert "Proud_Idiot" not in schema
+    assert "enum" not in schema.lower() or "username" in schema  # property names ok
+
+
 def test_schema_placeholder_object_shape() -> None:
     wa = load_suite_module("wa_hard", EVAL_ROOT)
     out = wa.schema_placeholder_retrieved_data(

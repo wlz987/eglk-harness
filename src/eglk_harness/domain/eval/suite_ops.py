@@ -8,7 +8,7 @@ from types import ModuleType
 from typing import Any
 
 _PACK_SUITES = frozenset(
-    {"wa_hard", "osworld_aux", "weave_lh", "tb21", "weave_thin", "scenarios"}
+    {"wa_hard", "osworld_aux", "weave_lh", "tb21", "scenarios"}
 )
 
 
