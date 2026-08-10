@@ -18,27 +18,33 @@ if str(MCP_DIR) not in sys.path:
 
 from wa_browser_common import (  # noqa: E402
     extract_links,
-    grid_filter_selector,
-    grid_filter_submit_selectors,
     merge_observed_nav_payload,
+    site_env_map_from_config,
 )
 
 
 class WaBrowserCommonTests(unittest.TestCase):
     def test_extract_links_relative_and_absolute(self) -> None:
+        base = "http://example.test/app/"
         html = (
-            "<a href='/admin/review/product/index/'>Reviews</a>"
-            "<a href='http://127.0.0.1:7780/admin/catalog/'>Catalog</a>"
+            "<a href='/items/list'>Items</a>"
+            "<a href='http://other.test/catalog'>Catalog</a>"
         )
-        links = extract_links(html, "http://127.0.0.1:7780/admin/dashboard/")
+        links = extract_links(html, base)
         hrefs = {item["href"] for item in links}
-        self.assertIn("http://127.0.0.1:7780/admin/review/product/index/", hrefs)
+        self.assertIn("http://example.test/items/list", hrefs)
+        self.assertIn("http://other.test/catalog", hrefs)
 
-    def test_grid_filter_generic_pattern(self) -> None:
-        sel = grid_filter_selector("reviewGrid", "detail")
-        self.assertEqual(sel, "#reviewGrid_filter_detail")
-        submits = grid_filter_submit_selectors("reviewGrid")
-        self.assertTrue(any("reviewGrid" in s for s in submits))
+    def test_site_env_map_from_config(self) -> None:
+        cfg = {
+            "environments": {
+                "__SHOPPING_ADMIN__": {"urls": ["http://127.0.0.1:1/admin"]},
+                "__GITLAB__": {"urls": ["http://127.0.0.1:2"]},
+            }
+        }
+        m = site_env_map_from_config(cfg)
+        self.assertEqual(m.get("shopping_admin"), "__SHOPPING_ADMIN__")
+        self.assertEqual(m.get("gitlab"), "__GITLAB__")
 
     def test_merge_observed_nav_no_oracle_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -46,16 +52,16 @@ class WaBrowserCommonTests(unittest.TestCase):
             harness = root / ".eglk-harness"
             harness.mkdir(parents=True)
             (harness / "task_start_urls.json").write_text(
-                json.dumps({"start_urls": ["http://127.0.0.1:7780/admin"]}),
+                json.dumps({"start_urls": ["http://example.test/start"]}),
                 encoding="utf-8",
             )
             (harness / "wa_env_contract.json").write_text(
                 json.dumps(
                     {
-                        "site_keys": ["shopping_admin"],
+                        "site_keys": ["site_a"],
                         "environments": {
-                            "shopping_admin": {
-                                "urls": ["http://127.0.0.1:7780/admin"],
+                            "site_a": {
+                                "urls": ["http://example.test/start"],
                                 "has_credentials": True,
                             }
                         },
@@ -70,7 +76,7 @@ class WaBrowserCommonTests(unittest.TestCase):
                 encoding="utf-8",
             )
             payload = merge_observed_nav_payload(root)
-            self.assertEqual(payload["task_start_urls"], ["http://127.0.0.1:7780/admin"])
+            self.assertEqual(payload["task_start_urls"], ["http://example.test/start"])
             self.assertEqual(payload["scout_link_count"], 1)
             self.assertNotIn("known_admin_paths", payload)
             self.assertNotIn("site_navigation_hints", payload)
@@ -97,7 +103,7 @@ class WaHardEnvContractTests(unittest.TestCase):
         wa = load_suite_module("wa_hard", EVAL_ROOT)
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
-            dest = wa.materialize_task_start_urls(["http://127.0.0.1:7780/admin"], out)
+            dest = wa.materialize_task_start_urls(["http://example.test/entry"], out)
             self.assertIsNotNone(dest)
             data = json.loads(dest.read_text(encoding="utf-8"))
             self.assertEqual(data["source"], "agent-input-get")
