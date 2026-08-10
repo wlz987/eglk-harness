@@ -280,10 +280,14 @@ class RunEngine:
             # Align verdicts to contract obligations
             ev_doc = coerce_document("evidence_bundle", dict(evidence))
             ev_doc["contract_ref"] = contract["contract_id"]
-            if ev_doc.get("verdicts"):
-                # rewrite first verdict obligation if single-ob contract
-                if len(contract["obligation_refs"]) == 1:
-                    ev_doc["verdicts"][0]["obligation_id"] = contract["obligation_refs"][0]
+            from eglk_harness.domain.runtime.contract_align import align_evidence_to_contract
+
+            ev_doc = align_evidence_to_contract(
+                ev_doc,
+                contract_ref=str(contract["contract_id"]),
+                obligation_refs=list(contract["obligation_refs"]),
+                world_revision=int(ev_doc.get("world_revision") or 0),
+            )
 
             errs = validate_document("action_claim", claim_doc)
             if errs:

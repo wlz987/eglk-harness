@@ -71,7 +71,6 @@ class MakerActor(Worker):
             args, tick=tick, subgoal_id=subgoal_id, criteria=criteria, title=title
         )
         leaf_block = leaf.render_maker_block()
-        prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
         obligation_refs = [
             str(x)
             for x in (
@@ -83,6 +82,16 @@ class MakerActor(Worker):
         ]
         contract_ref = str(args.get("contract_ref") or "")
         world_revision = args.get("world_revision")
+        from eglk_harness.domain.runtime.contract_align import render_contract_binding_block
+
+        binding_block = render_contract_binding_block(
+            contract_ref,
+            obligation_refs,
+            world_revision=int(world_revision) if world_revision is not None else None,
+        )
+        if binding_block:
+            leaf_block = f"{leaf_block}\n\n{binding_block}"
+        prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
         meta = {
             "tick": tick,
             "subgoal_id": subgoal_id,
@@ -109,7 +118,19 @@ class MakerActor(Worker):
         )
         if not result.ok or not isinstance(result.parsed, dict):
             messages.work_error(result.error or "maker_episode_failed")
-        claim = dict(result.parsed)
+        from eglk_harness.domain.kernel.schema_validate import coerce_document
+        from eglk_harness.domain.runtime.contract_align import align_claim_to_contract
+
+        claim = coerce_document("claim", dict(result.parsed))
+        claim = align_claim_to_contract(
+            claim,
+            contract_ref=contract_ref,
+            obligation_refs=obligation_refs,
+            world_revision_base=int(world_revision) if world_revision is not None else None,
+            node_id=subgoal_id,
+        )
+        if not str(claim.get("intent") or "").strip() or claim.get("intent") == "(unspecified)":
+            claim["intent"] = title
         claim["tick"] = tick
         claim["subgoal_id"] = subgoal_id
         import uuid

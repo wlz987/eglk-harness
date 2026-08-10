@@ -627,6 +627,18 @@ class TickRunLoop:
                     evidence,
                     self.ctx.env.observe_revision(tx),
                 )
+            contract_obligations = list(contract.get("obligation_refs") or [])
+            from eglk_harness.domain.runtime.contract_align import align_evidence_to_contract
+            from eglk_harness.domain.kernel.schema_validate import coerce_document
+
+            evidence = align_evidence_to_contract(
+                evidence,
+                contract_ref=str(contract.get("contract_id") or ""),
+                obligation_refs=contract_obligations,
+                world_revision=int(evidence.get("world_revision") or 0),
+            )
+            evidence = coerce_document("evidence", evidence)
+            claim = coerce_document("action_claim", claim)
             self.evidence = evidence
             rec = self.ctx.record_evidence(evidence, actor=str(evidence.get("checker_session_id") or "checker"))
             if not rec.ok:

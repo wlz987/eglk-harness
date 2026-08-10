@@ -36,6 +36,21 @@ async def run_with_format_repair(
     max_repairs: int = 2,
 ) -> EpisodeResult:
     """Run episode; on unparseable claim/evidence, re-coerce then LLM-repair up to ``max_repairs``."""
+    binding_hint = ""
+    meta = request.meta or {}
+    cref = str(meta.get("contract_ref") or "").strip()
+    refs = [str(x) for x in (meta.get("obligation_refs") or []) if str(x).strip()]
+    if cref or refs:
+        from eglk_harness.domain.runtime.contract_align import render_contract_binding_block
+
+        wr = meta.get("world_revision")
+        binding_hint = render_contract_binding_block(
+            cref,
+            refs,
+            world_revision=int(wr) if wr is not None else None,
+        )
+    if binding_hint:
+        leaf_block = f"{leaf_block}\n\n{binding_hint}"
     first = await adapter.run_episode(request)
     primary_tokens = int(first.tokens or 0)
     primary_cost = float(first.cost_usd or 0.0)

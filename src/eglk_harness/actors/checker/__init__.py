@@ -81,6 +81,26 @@ class CheckerActor(Worker):
             args, tick=tick, subgoal_id=subgoal_id, criteria=criteria, title=title
         )
         leaf_block = leaf.render_checker_block()
+        contract_ref = str(args.get("contract_ref") or claim.get("contract_ref") or "")
+        obligation_refs = [
+            str(x)
+            for x in (
+                args.get("obligation_refs")
+                or (args.get("leaf_contract") or {}).get("obligation_refs")
+                or []
+            )
+            if str(x).strip()
+        ]
+        world_revision = args.get("world_revision")
+        from eglk_harness.domain.runtime.contract_align import render_contract_binding_block
+
+        binding_block = render_contract_binding_block(
+            contract_ref,
+            obligation_refs,
+            world_revision=int(world_revision) if world_revision is not None else None,
+        )
+        if binding_block:
+            leaf_block = f"{leaf_block}\n\n{binding_block}"
         observe_note = ""
         obs = args.get("observation")
         if isinstance(obs, dict) and obs.get("world_revision") is not None:
@@ -97,17 +117,6 @@ class CheckerActor(Worker):
             f"{observe_note}"
         )
         prompt = render_prompt("checker", leaf_block=leaf_block, extra=extra, workdir=workdir)
-        obligation_refs = [
-            str(x)
-            for x in (
-                args.get("obligation_refs")
-                or (args.get("leaf_contract") or {}).get("obligation_refs")
-                or []
-            )
-            if str(x).strip()
-        ]
-        contract_ref = str(args.get("contract_ref") or claim.get("contract_ref") or "")
-        world_revision = args.get("world_revision")
         request = EpisodeRequest(
             role="checker",
             prompt=prompt,
@@ -146,6 +155,17 @@ class CheckerActor(Worker):
             workdir=workdir,
             boundary=leaf.boundary,
         )
+        from eglk_harness.domain.kernel.schema_validate import coerce_document
+        from eglk_harness.domain.runtime.contract_align import align_evidence_to_contract
+
+        evidence = coerce_document("evidence", evidence)
+        wr = int(world_revision) if world_revision is not None else None
+        evidence = align_evidence_to_contract(
+            evidence,
+            contract_ref=contract_ref,
+            obligation_refs=obligation_refs,
+            world_revision=wr,
+        )
         evidence["tick"] = tick
         evidence["subgoal_id"] = subgoal_id
         import uuid
@@ -154,8 +174,8 @@ class CheckerActor(Worker):
         csid = str(evidence.get("checker_session_id") or "").strip()
         if not csid or csid == "unknown" or csid == maker_sid:
             evidence["checker_session_id"] = f"checker-{uuid.uuid4().hex[:12]}"
-        if claim.get("contract_ref"):
-            evidence.setdefault("contract_ref", claim.get("contract_ref"))
+        if contract_ref and not evidence.get("contract_ref"):
+            evidence["contract_ref"] = contract_ref
         return messages.ok_value(
             evidence=evidence,
             tokens=int(result.tokens or 0),
