@@ -13,7 +13,7 @@ eglk-harness doctor
 # when published: uv tool install eglk-harness
 ```
 
-发布前分发检查见 [`RELEASE.md`](./RELEASE.md) · 当前版本 **0.1.0b1**。
+发布前分发检查见 [`RELEASE.md`](./RELEASE.md) · 当前版本 **0.1.0rc1**。
 
 ## Quick start
 
@@ -47,8 +47,9 @@ Copy [`env.example`](./env.example) → workdir `.env` for secrets / overrides. 
 | `check-update` | PyPI version hint（不自动升级） |
 | `plugin` | `list`/`install`/`uninstall` computer-use（**run 永不自动装**） |
 | `eval` | 辅尺：`EGLK_EVAL_ROOT`（如 `experiment/eval`）动态加载 `lib/`；scorer **不进 Gate**（见 [`docs/KERNEL_VS_EVAL.md`](./docs/KERNEL_VS_EVAL.md)） |
-| `soak-bypass` | 旁路角色 LLM soak（Governor/E/V/Refiner/compile；无工具） |
-| `check-projections` | 常量钉扎 vs `domain/kernel/projections.py` |
+| `soak-bypass` | 旁路角色 LLM soak（`--agent mock` 默认；`--live` 需 Codex/Claude） |
+| `check-projections` | CI 钉死阈值；`--json` |
+| `make test-ci` / `scripts/ci.sh` | 本地全量门禁（pytest + check-projections） |
 
 `run` flags: `--goal/--task`, `--agent`, `--model`, `--maker-model`, `--checker-model`, `--maker-timeout`, `--checker-timeout`, `--workdir`, `--mcp-config`, `--mcp-add-dir`, `--swarm`, `--compile`, `--dashboard`（只读观测，非审批闸）.
 

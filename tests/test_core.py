@@ -128,14 +128,25 @@ class TestGate(unittest.TestCase):
         self.assertEqual(d.reason, "integrity_violation")
 
     def test_cognitive_budget_abort(self) -> None:
+        # Design: cognitive abort only when obligations still pending.
+        d = decide(
+            self._contract(),
+            self._claim(),
+            self._evidence(satisfied=False),
+            quota={"cognitive_tokens": 64000, "cognitive_tokens_max": 64000, "repairs_max": 8},
+        )
+        self.assertEqual(d.decision, "abort")
+        self.assertEqual(d.reason, "cognitive_budget")
+
+    def test_cognitive_budget_does_not_block_admit(self) -> None:
         d = decide(
             self._contract(),
             self._claim(),
             self._evidence(satisfied=True),
             quota={"cognitive_tokens": 64000, "cognitive_tokens_max": 64000, "repairs_max": 8},
         )
-        self.assertEqual(d.decision, "abort")
-        self.assertEqual(d.reason, "cognitive_budget")
+        self.assertEqual(d.decision, "admit")
+        self.assertEqual(d.reason, "obligations_satisfied")
 
     def test_repairs_exhausted(self) -> None:
         d = decide(

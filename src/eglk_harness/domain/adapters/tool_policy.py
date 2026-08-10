@@ -86,6 +86,9 @@ def resolve_role_tool_profile(
         # Global default allowlist applies when per-role unset.
         g = (env.get("EGLK_MCP_ALLOW_DEFAULT") or "").strip()
         allow = _parse_allowlist(g) if g else None
+    from eglk_harness.domain.plugins.computer_use import enrich_mcp_allowlist
+
+    allow = enrich_mcp_allowlist(r, allow, env=env)
     return RoleToolProfile(tools_allowed=True, mcp_server_allowlist=allow)
 
 

@@ -1,4 +1,4 @@
-"""Event-driven run engine — replaces four-phase TickJob authority."""
+"""Event-driven run engine — optional tick path; production uses TickRunLoop + CommandHandler."""
 
 from __future__ import annotations
 
@@ -113,7 +113,9 @@ class RunEngine:
         try:
             from eglk_harness.domain.kernel.recovery import reconcile_dangling_transactions
 
-            reconcile_dangling_transactions(self.handler)
+            reconcile_dangling_transactions(
+                self.handler, workdir=self.workdir, env=self.env
+            )
             self.handler.check_goal_drift(self.workdir)
             self.handler.verify_or_fault()
             proj = self.handler.projection()

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.event_store import EventEnvelope
+from eglk_harness.domain.kernel.repair_counts import repair_key_from_gate_payload
 from eglk_harness.domain.kernel.projections import (
     COGNITIVE_TOKENS_MAX,
     QUOTA_SCHEMA,
@@ -78,6 +79,7 @@ class ProjectionState:
     pending_amendments: set[str] = field(default_factory=set)
     active_contract_id: str | None = None
     last_gate: dict[str, Any] | None = None
+    transaction_states: dict[str, str] = field(default_factory=dict)
 
 
 def empty_projection() -> ProjectionState:
@@ -150,6 +152,10 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
             s.obligations[oid].status = "open"
     elif t == "ObligationAmendmentRejected":
         s.pending_amendments.discard(str(p["obligation_id"]))
+    elif t == "SplitProposed":
+        pass  # audit trail; state changes on SplitCommitted
+    elif t == "MergeProposed":
+        pass  # audit trail; state changes on MergeCommitted
     elif t == "NodeReady":
         nid = str(p["node_id"])
         if nid in s.nodes:
@@ -164,6 +170,9 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
             s.nodes[nid].repair_streak = s.nodes[nid].repair_streak  # keep
     elif t == "TransactionCommitted":
         s.world_revision = int(p.get("world_revision", s.world_revision + 1))
+        tid = str(p.get("transaction_id") or "")
+        if tid:
+            s.transaction_states[tid] = "committed"
         touches = {str(x) for x in (p.get("touches") or [])}
         if touches:
             for ob in s.obligations.values():
@@ -196,16 +205,20 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
             if oid in node.obligation_refs and node.status == "admitted":
                 node.status = "in_progress"
     elif t == "TransactionPrepared":
-        pass
+        tid = str(p.get("transaction_id") or "")
+        if tid:
+            s.transaction_states[tid] = "prepared"
     elif t == "TransactionObserved":
         if p.get("world_revision") is not None:
             s.world_revision = max(s.world_revision, int(p["world_revision"]))
     elif t == "TransactionRolledBack":
-        pass
+        tid = str(p.get("transaction_id") or "")
+        if tid:
+            s.transaction_states[tid] = "rolled_back"
     elif t == "TransactionCompensated":
-        pass
-    elif t == "CommandRejected":
-        pass
+        tid = str(p.get("transaction_id") or "")
+        if tid:
+            s.transaction_states[tid] = "compensated"
     elif t == "GateDecided":
         s.last_gate = dict(p)
         reason = str(p.get("reason") or "")
@@ -217,12 +230,14 @@ def _apply(state: ProjectionState, ev: EventEnvelope) -> ProjectionState:
         elif decision == "repair" and nid in s.nodes:
             s.nodes[nid].status = "ready"
             s.nodes[nid].repair_streak += 1
+            key = repair_key_from_gate_payload(p)
             s.repairs_used += 1
-            s.repair_counts[reason] = int(s.repair_counts.get(reason, 0)) + 1
+            s.repair_counts[key] = int(s.repair_counts.get(key, 0)) + 1
         elif decision == "abort" and nid in s.nodes:
             s.nodes[nid].status = "failed"
+            key = repair_key_from_gate_payload(p)
             s.repairs_used += 1
-            s.repair_counts[reason] = int(s.repair_counts.get(reason, 0)) + 1
+            s.repair_counts[key] = int(s.repair_counts.get(key, 0)) + 1
     elif t == "SplitCommitted":
         parent = str(p["node_id"])
         proof_ref = p.get("coverage_proof_ref") or ev.event_id
@@ -364,6 +379,9 @@ def run_projection_dict(state: ProjectionState) -> dict[str, Any]:
         },
         "memory_digest": state.memory_digest or ("sha256:" + "0" * 64),
         "capability_manifest_ref": state.capability_manifest_ref,
+        "pending_transactions": sorted(
+            tid for tid, st in state.transaction_states.items() if st == "prepared"
+        ),
     }
 
 

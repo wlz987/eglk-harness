@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -54,6 +55,12 @@ def _leaf_block(
     if audit:
         block = f"{block}\naudit: true"
     return block
+
+def explorer_mechanical_enabled() -> bool:
+    """Default mechanical Explorer (no LLM) — Gate never reads candidates."""
+    raw = os.environ.get("EGLK_EXPLORER_MECHANICAL", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
 
 def explore_alternatives(title: str, criteria: Sequence[str]) -> list[dict[str, Any]]:
     """Leaf-aware mechanical alternatives (no LLM; Gate never reads these)."""
@@ -146,21 +153,23 @@ class ExplorerActor(Worker):
         workdir = Path(args.get("workdir") or loop_dir.parent.parent.parent).resolve()
         mech = explore_alternatives(title, criteria)
         leaf_block = _leaf_block(leaf, title, criteria, contract)
-        try:
-            raw = await run_bypass_json(
-                self.adapter,
-                role="explorer",
-                workdir=workdir,
-                leaf_block=leaf_block,
-                extra='JSON: {"alternatives":[{"id","text","prob","impact"}]}',
-                tick=tick,
-                subgoal_id=leaf,
-                timeout_s=float(args.get("timeout_s") or timeout_for_role("explorer")),
-            )
-        except Exception:
-            # MCP/plugin misconfig or adapter faults must not abort the tick —
-            # fall back to mechanical alternatives (Gate never reads Explorer).
-            raw = None
+        raw: Any = None
+        if not explorer_mechanical_enabled():
+            try:
+                raw = await run_bypass_json(
+                    self.adapter,
+                    role="explorer",
+                    workdir=workdir,
+                    leaf_block=leaf_block,
+                    extra='JSON: {"alternatives":[{"id","text","prob","impact"}]}',
+                    tick=tick,
+                    subgoal_id=leaf,
+                    timeout_s=float(args.get("timeout_s") or timeout_for_role("explorer")),
+                )
+            except Exception:
+                # MCP/plugin misconfig or adapter faults must not abort the tick —
+                # fall back to mechanical alternatives (Gate never reads Explorer).
+                raw = None
         doc = coerce_explorer(raw, tick=tick, leaf=leaf, fallback=mech)
         doc["title"] = title
         _write_candidate(loop_dir, f"explorer_{tick:03d}.json", doc)

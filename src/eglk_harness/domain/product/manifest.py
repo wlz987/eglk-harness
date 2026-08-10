@@ -208,11 +208,12 @@ def build_manifest(
     decision = decision or {}
     run_status = str(extra.get("run_status") or "faulted")
     if run_status not in {"succeeded", "aborted", "invalid", "faulted"}:
-        # Soft max_ticks halt while still running → treat receipt as aborted? No —
-        # schema only allows terminal statuses. Map soft-running to faulted only if
-        # forced; prefer aborted with reason when stop was resource-like.
         stop = str(extra.get("stop_reason") or "")
-        if stop.startswith("abort"):
+        if stop == "max_ticks_soft":
+            proj_status = str(extra.get("run_status") or "")
+            run_status = proj_status if proj_status in {"succeeded", "aborted", "invalid", "faulted"} else "invalid"
+            extra.setdefault("run_status_reason", "soft_stop:max_ticks_soft")
+        elif stop.startswith("abort"):
             run_status = "aborted"
         elif stop in {"root_admitted"} or decision.get("decision") == "admit":
             run_status = "succeeded"
@@ -221,9 +222,8 @@ def build_manifest(
             if run_status not in {"succeeded", "aborted", "invalid", "faulted"}:
                 run_status = "faulted"
         else:
-            # Non-terminal soft stop: still emit a receipt marked aborted with reason
-            # so eval can read it; soft max_ticks is not Gate abort authority.
-            run_status = "aborted"
+            proj_status = str(extra.get("run_status") or "")
+            run_status = proj_status if proj_status in {"succeeded", "aborted", "invalid", "faulted"} else "invalid"
             extra.setdefault("run_status_reason", f"soft_stop:{stop or 'incomplete'}")
 
     quota = extra.get("quota") if isinstance(extra.get("quota"), Mapping) else None

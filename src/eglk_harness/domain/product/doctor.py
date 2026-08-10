@@ -208,6 +208,13 @@ def run_doctor(workdir: Path | None = None) -> DoctorReport:
         ok = False
     report.checks.append(DoctorCheck(name="plugins", ok=ok, detail=detail))
 
+    from eglk_harness.domain.plugins.computer_use import doctor_computer_use_detail
+
+    cu_ok, cu_detail = doctor_computer_use_detail()
+    report.checks.append(
+        DoctorCheck(name="computer_use", ok=cu_ok, detail=cu_detail)
+    )
+
     # Eval adjunct (only when EGLK_EVAL_ROOT points at experiment/eval or similar)
     from eglk_harness.domain.eval.paths import default_eval_root
     from eglk_harness.domain.eval.loader import load_env_probes_module

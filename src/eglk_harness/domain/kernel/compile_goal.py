@@ -287,6 +287,9 @@ def load_goal_constraints(workdir: Path) -> list[str]:
     gf = workdir / GOAL_FORMAT_NAME
     if gf.is_file():
         _extend(_section_bullets(gf.read_text(encoding="utf-8"), *headers_format))
+    from eglk_harness.domain.memory.suite_marker import boundary_lines
+
+    _extend(boundary_lines(workdir))
     return merged
 
 _GOAL_EXCERPT_MAX = 8000

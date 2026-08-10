@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: EGLK_EVAL_ROOT for monorepo eval
+        run: |
+          if [ -d ../experiment/eval ]; then
+            echo "EGLK_EVAL_ROOT=$(cd ../experiment/eval && pwd)" >> "$GITHUB_ENV"
+          fi
+      - name: Run CI gate
+        run: bash scripts/ci.sh

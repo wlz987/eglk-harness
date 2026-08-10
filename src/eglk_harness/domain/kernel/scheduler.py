@@ -13,6 +13,20 @@ from eglk_harness.domain.kernel.projections import (
 from eglk_harness.domain.kernel.reducer import ProjectionState
 
 
+def pending_ready_to_promote(state: ProjectionState) -> list[str]:
+    """Pending nodes whose ``depends_on`` prerequisites are admitted (deterministic order)."""
+    out: list[str] = []
+    for nid, node in state.nodes.items():
+        if node.status != "pending":
+            continue
+        if any(oid in state.pending_amendments for oid in node.obligation_refs):
+            continue
+        if not deps_satisfied(state, nid):
+            continue
+        out.append(nid)
+    return sorted(out)
+
+
 def deps_satisfied(state: ProjectionState, node_id: str) -> bool:
     """``depends_on`` edges: from=dependent, to=prerequisite must be admitted."""
     for e in state.edges:
@@ -146,6 +160,33 @@ def should_propose_split(state: ProjectionState, node_id: str, streak_threshold:
     ).MAX_SPLIT_DEPTH:
         return False
     return node.repair_streak >= streak_threshold
+
+
+def pick_sibling_merge_pair(
+    state: ProjectionState, *, min_criteria_sim: float = 0.5
+) -> tuple[str, list[str], float] | None:
+    """Return ``(parent_id, node_ids, score)`` for the best overlapping sibling pair."""
+    from eglk_harness.domain.memory.sigma_merge import text_similarity
+    from eglk_harness.domain.kernel.projection_view import iter_sibling_leaf_groups
+
+    best_score = 0.0
+    best: tuple[str, list[str], float] | None = None
+    for parent_id, leaves in iter_sibling_leaf_groups(state):
+        ready = [w for w in leaves if w.status == "ready"]
+        if len(ready) < 2:
+            continue
+        for i, a in enumerate(ready):
+            for b in ready[i + 1 :]:
+                sim = text_similarity(" ".join(a.done_criteria), " ".join(b.done_criteria))
+                if sim >= min_criteria_sim and sim > best_score:
+                    best_score = sim
+                    best = (parent_id, [a.id, b.id], sim)
+    return best
+
+
+def should_propose_merge(state: ProjectionState, *, min_criteria_sim: float = 0.5) -> bool:
+    """True when sibling ``ready`` leaves share overlapping acceptance (Governor merge)."""
+    return pick_sibling_merge_pair(state, min_criteria_sim=min_criteria_sim) is not None
 
 
 def coverage_complete(state: ProjectionState) -> bool:

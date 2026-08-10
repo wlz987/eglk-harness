@@ -355,6 +355,9 @@ class TestClosureGateE2E(unittest.TestCase):
             ctx = RunEventContext(workdir, "g-close")
             ctx.acquire()
             ctx.bootstrap_if_needed(goal_title="t", done_criteria=["done"])
+            # Closure Gate requires real watch_set files (no synthetic digests).
+            art = workdir / "artifact"
+            art.write_text("ok\n", encoding="utf-8")
             ctx.handler.node_ready("root")
             contract = {
                 "schema": "eglk.work_contract",

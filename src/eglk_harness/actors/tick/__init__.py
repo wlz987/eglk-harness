@@ -50,11 +50,21 @@ class TickJob(Job, TickRunLoop):
         await TickRunLoop.begin(self)
 
     async def on_stage_result(self, stage: str, body: OkBody | ErrBody) -> None:
-        await TickRunLoop.on_stage_result(self, stage, body)
+        try:
+            await TickRunLoop.on_stage_result(self, stage, body)
+        except Exception as exc:  # noqa: BLE001 — surface stage failures as tick errors
+            await self.finish(ok=False, error=f"stage_result:{type(exc).__name__}:{exc}")
 
     async def finish(
         self, *, ok: bool, error: str | None = None, answer: Any = None
     ) -> None:
+        # Always drop write lease — abort / no_ready_node / apply_failed used to leak it.
+        ctx = getattr(self, "ctx", None)
+        if ctx is not None:
+            try:
+                ctx.release()
+            except Exception:  # noqa: BLE001 — finish must not fail on lease cleanup
+                pass
         # Publish outcome before ``finished`` so run loop cannot miss ``root_done``.
         self.outcome = {"ok": ok, "error": error, "answer": answer}
         await super().finish(ok=ok, error=error, answer=answer)

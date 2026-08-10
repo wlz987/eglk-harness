@@ -1,6 +1,6 @@
 # Release checklist · eglk-harness
 
-Version: **0.1.0b1** (empirical eval wiring beta).
+Version: **0.1.0rc1** (release candidate — mock CI + WA pipeline + computer-use universal).
 
 ## 分发检查（本包）
 
@@ -8,6 +8,14 @@ Version: **0.1.0b1** (empirical eval wiring beta).
 cd eglk-harness
 make dist-check   # python -m build + twine check (no upload)
 ```
+
+## CI gate（本地 / GitHub Actions）
+
+```bash
+make test-ci          # 或: bash scripts/ci.sh
+```
+
+含：`check-projections`（91 项）+ 全量 `pytest`。 monorepo 下自动设置 `EGLK_EVAL_ROOT=../experiment/eval`。
 
 ## Install
 

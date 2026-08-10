@@ -92,17 +92,25 @@ def live_run_snapshot(workdir: Path, goal_id: str) -> dict[str, Any]:
     root_status = None
     if isinstance(ts, dict) and isinstance(ts.get("root"), dict):
         root_status = ts["root"].get("status")
+    manifest = read_manifest_diagnostics(workdir)
+    stop_reason = None
+    if isinstance(manifest, dict):
+        stop_reason = manifest.get("stop_reason")
+    harness_ok = rp.get("run_status") == "succeeded"
     return {
         "goal_id": goal_id,
         "run_status": rp.get("run_status"),
         "run_status_reason": rp.get("run_status_reason"),
+        "harness_ok": harness_ok,
+        "gate_admitted": harness_ok,
+        "stop_reason": stop_reason,
         "last_sequence": rp.get("last_sequence"),
         "world_revision": rp.get("world_revision"),
         "quota": dict(quota),
         "events": ev,
         "task_root_status": root_status,
         "projection_path": str(run_projection_path(workdir, goal_id)),
-        "manifest_diagnostics": read_manifest_diagnostics(workdir),
+        "manifest_diagnostics": manifest,
     }
 
 
@@ -172,5 +180,9 @@ def hydrate_runtime_signals(
             except (TypeError, ValueError):
                 pass
         if isinstance(tick_rec.get("quota"), dict):
-            out.update(tick_rec["quota"])
+            # ticks.jsonl quota is diagnostic only — do not override event-replay projection.
+            tick_q = tick_rec["quota"]
+            for diag_key in ("focus_score", "uncertainty"):
+                if diag_key in tick_q:
+                    out[diag_key] = tick_q[diag_key]
     return out, focus, uncertainty

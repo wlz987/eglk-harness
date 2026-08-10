@@ -166,6 +166,40 @@ def list_refined(loop_dir: Path) -> list[Path]:
     return sorted(p for p in d.glob("*.json") if p.is_file())
 
 
+def enforce_staging_cap(loop_dir: Path, *, max_items: int | None = None) -> int:
+    """Mechanically archive oldest ``sigma/refined/`` entries when over ``SIGMA_STAGING_MAX``."""
+    from eglk_harness.domain.kernel.projections import effective_sigma_staging_max
+
+    cap = int(max_items or effective_sigma_staging_max())
+    paths_list = list_refined(loop_dir)
+    if len(paths_list) <= cap:
+        return 0
+    overflow = paths_list[: len(paths_list) - cap]
+    merged_texts: list[str] = []
+    merged_ids: list[str] = []
+    for path in overflow:
+        try:
+            item = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            path.unlink(missing_ok=True)
+            continue
+        if isinstance(item, dict):
+            merged_ids.append(str(item.get("id") or path.stem))
+            merged_texts.append(str(item.get("text") or item.get("cond") or item.get("kind") or ""))
+        path.unlink(missing_ok=True)
+    archive_path = refined_dir(loop_dir) / f"archive_{overflow[0].stem}_{overflow[-1].stem}.json"
+    archive = {
+        "id": f"sigma-archive-{overflow[0].stem}-{overflow[-1].stem}",
+        "kind": "archive",
+        "text": " | ".join(t for t in merged_texts if t)[:2000],
+        "merged_from": merged_ids,
+        "staged": "mechanical_cap",
+        "conf": 0.4,
+    }
+    archive_path.write_text(json.dumps(archive, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return len(overflow)
+
+
 def merge_refined_into_active(workdir: Path, loop_dir: Path) -> int:
     """Legacy shim — run-end batch writes ``candidate`` only."""
     return flush_refined_to_candidates(

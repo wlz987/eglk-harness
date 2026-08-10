@@ -9,7 +9,9 @@ import pytest
 
 from eglk_harness.domain.eval.loader import load_suite_module
 
-EVAL_ROOT = Path(__file__).resolve().parents[2] / "experiment" / "eval"
+from tests.conftest import default_eval_root
+
+EVAL_ROOT = default_eval_root()
 FIXTURE = EVAL_ROOT / "wa_hard" / "fixtures" / "webarena-verified-hard.export.json"
 
 

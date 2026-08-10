@@ -252,10 +252,13 @@ def _notify(callback: StatusCallback | None, status: str, message: str) -> None:
 
 
 def runtime_app_path() -> Path | None:
-    """Best-effort path to the Codex Computer Use runtime app (macOS)."""
+    """Best-effort path to the Codex Computer Use runtime app."""
     candidates = [
         Path.home() / "Library/Application Support/Codex/Computer Use.app",
         Path("/Applications/Codex Computer Use.app"),
+        Path.home() / ".local/share/Codex/Computer Use",
+        Path.home() / ".local/share/codex/computer-use",
+        Path("/usr/share/codex/computer-use"),
     ]
     for path in candidates:
         if path.exists():

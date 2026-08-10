@@ -120,25 +120,22 @@ class RefinerActor(Worker):
         item = coerce_refiner(raw, fallback=fallback)
         path = sigma.write_refined(loop_dir, tick, item)
 
-        # Σ-similarity merge suggestions for next tick Governor/orchestrator (not Gate)
-        try:
-            from eglk_harness.domain.kernel.loop_store import load_tree
-            from eglk_harness.domain.memory.sigma_merge import suggest_sibling_merges
+        # Σ-similarity merge suggestions for next tick (CommandHandler.commit_merge at tick begin)
+        from eglk_harness.domain.kernel.projection_replay import projection_state_from_loop
+        from eglk_harness.domain.memory.sigma_merge import suggest_sibling_merges
 
-            tree = load_tree(loop_dir)
-            if tree is not None:
-                suggestions = suggest_sibling_merges(tree, sigma.load_active(workdir))
-                cand = loop_dir / "candidates"
-                cand.mkdir(parents=True, exist_ok=True)
-                for i, sug in enumerate(suggestions[:3]):
-                    sug_path = cand / f"merge_suggest_{tick:03d}_{i}.json"
-                    sug = dict(sug)
-                    sug["into"] = f"{sug.get('parent_id')}.ms{tick:03d}{i}"
-                    sug_path.write_text(
-                        json.dumps(sug, indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8",
-                    )
-        except Exception:
-            pass
+        state = projection_state_from_loop(loop_dir)
+        suggestions = suggest_sibling_merges(state, sigma.load_active(workdir))
+        if suggestions:
+            cand = loop_dir / "candidates"
+            cand.mkdir(parents=True, exist_ok=True)
+            for i, sug in enumerate(suggestions[:3]):
+                sug_path = cand / f"merge_suggest_{tick:03d}_{i}.json"
+                sug = dict(sug)
+                sug["into"] = f"{sug.get('parent_id')}.ms{tick:03d}{i}"
+                sug_path.write_text(
+                    json.dumps(sug, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
 
         return messages.ok_value(refined=item, path=str(path))

@@ -12,8 +12,8 @@ from eglk_harness.domain.adapters.base import AgentAdapter
 from eglk_harness.domain.runtime.budgets import timeout_for_role
 from eglk_harness.domain.runtime.bypass_llm import coerce_governor_proposal, run_bypass_json
 from eglk_harness.domain.kernel.compile_goal import load_goal_excerpts, render_goal_dual_block
+from eglk_harness.domain.kernel.projection_view import work_node_from_task_structure
 from eglk_harness.domain.kernel.governor_split import proposal_document
-from eglk_harness.domain.kernel.loop_store import load_tree
 from eglk_harness.protocol import messages, payload, topics
 
 class GovernorActor(Worker):
@@ -45,15 +45,34 @@ class GovernorActor(Worker):
         criteria = [str(x) for x in (args.get("done_criteria") or [])]
         streak = int(args.get("repair_streak") or 0)
         workdir = Path(args.get("workdir") or self.workdir).resolve()
+        action = str(args.get("action") or "split")
+
+        if action == "merge":
+            parent_id = str(args.get("merge_parent_id") or leaf_id)
+            node_ids = [str(x) for x in (args.get("merge_node_ids") or []) if str(x)]
+            into = str(args.get("merge_into") or f"{parent_id}.m{tick:03d}")
+            proposal = {
+                "into": into,
+                "node_ids": node_ids,
+                "parent_id": parent_id,
+                "title": f"merged:{'+'.join(node_ids)}",
+                "reason": "governor merge proposal",
+            }
+            if loop_dir is not None:
+                cand = loop_dir / "candidates"
+                cand.mkdir(parents=True, exist_ok=True)
+                (cand / "governor_proposal.json").write_text(
+                    json.dumps(proposal, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+            return messages.ok_value(proposal=proposal)
 
         if loop_dir is not None and (not criteria or title == leaf_id):
-            tree = load_tree(loop_dir)
-            if tree is not None:
-                node = tree.find(leaf_id)
-                if node is not None:
-                    title = node.title or title
-                    criteria = list(node.done_criteria) or criteria
-                    streak = int(node.repair_streak or streak)
+            wn = work_node_from_task_structure(loop_dir, leaf_id)
+            if wn is not None:
+                title = wn.title or title
+                criteria = list(wn.done_criteria) or criteria
+                streak = int(wn.repair_streak or streak)
 
         fallback = proposal_document(
             tick=tick,

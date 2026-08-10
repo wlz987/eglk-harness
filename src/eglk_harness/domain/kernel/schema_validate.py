@@ -64,6 +64,7 @@ def _as_list(x: Any) -> list[Any]:
 
 
 def _coerce_action_claim(doc: dict[str, Any]) -> None:
+    doc["schema"] = "eglk.action_claim"
     if not isinstance(doc.get("claim_id"), str) or not doc.get("claim_id"):
         doc["claim_id"] = "claim-unknown"
     if not isinstance(doc.get("contract_ref"), str) or not doc.get("contract_ref"):
@@ -75,9 +76,7 @@ def _coerce_action_claim(doc: dict[str, Any]) -> None:
     if not isinstance(doc.get("actions"), list):
         doc["actions"] = []
     alts = doc.get("alternatives")
-    if not isinstance(alts, list) or not alts:
-        doc["alternatives"] = [{"text": "(none)", "status": "reject"}]
-    else:
+    if isinstance(alts, list) and alts:
         fixed = []
         for item in alts:
             if isinstance(item, str):
@@ -90,7 +89,7 @@ def _coerce_action_claim(doc: dict[str, Any]) -> None:
                         **({"reason": str(item["reason"])} if item.get("reason") is not None else {}),
                     }
                 )
-        doc["alternatives"] = fixed or [{"text": "(none)", "status": "reject"}]
+        doc["alternatives"] = fixed
     sa = doc.get("self_assessment")
     if not isinstance(sa, dict):
         # migrate 0.2.x top-level floats
@@ -110,6 +109,63 @@ def _coerce_action_claim(doc: dict[str, Any]) -> None:
         doc.pop(k, None)
 
 
+def _gap_text(item: Any) -> str:
+    """Normalize gap entries that models emit as ``{gap: ...}`` objects."""
+    if isinstance(item, Mapping):
+        for key in ("gap", "text", "message", "reason"):
+            val = item.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        return json.dumps(item, ensure_ascii=False)
+    return str(item).strip()
+
+
+def _coerce_attestation(att: Mapping[str, Any], *, world_revision: int, observer: str) -> dict[str, Any]:
+    out = dict(att)
+    try:
+        wr = int(out.get("world_revision", world_revision) or world_revision)
+    except (TypeError, ValueError):
+        wr = int(world_revision)
+    out["world_revision"] = wr
+    if not str(out.get("observer") or "").strip():
+        out["observer"] = observer
+    if not str(out.get("method") or "").strip():
+        out["method"] = "custom_attestation"
+    if not str(out.get("digest") or "").strip():
+        out["digest"] = str(out.get("raw_ref") or "attestation")[:128] or "attestation"
+    if not str(out.get("raw_ref") or "").strip():
+        out["raw_ref"] = str(out.get("digest") or "attestation")
+    ws = out.get("watch_set")
+    if not isinstance(ws, list):
+        out["watch_set"] = [str(ws)] if ws else []
+    else:
+        out["watch_set"] = [str(x) for x in ws if str(x).strip()]
+    return out
+
+
+def _coerce_verdict(verdict: Mapping[str, Any], *, world_revision: int, observer: str) -> dict[str, Any]:
+    vd = dict(verdict)
+    vd["obligation_id"] = str(vd.get("obligation_id") or "ob-unknown")
+    status = str(vd.get("status") or "unsatisfied")
+    if status not in {"satisfied", "unsatisfied", "indeterminate"}:
+        status = "unsatisfied"
+    vd["status"] = status
+    vd["defect_suspected"] = bool(vd.get("defect_suspected"))
+    gaps_raw = vd.get("gaps")
+    if not isinstance(gaps_raw, list):
+        gaps_raw = [gaps_raw] if gaps_raw else []
+    vd["gaps"] = [g for g in (_gap_text(x) for x in gaps_raw) if g]
+    atts_in = vd.get("attestations")
+    if not isinstance(atts_in, list):
+        atts_in = []
+    vd["attestations"] = [
+        _coerce_attestation(a, world_revision=world_revision, observer=observer)
+        for a in atts_in
+        if isinstance(a, Mapping)
+    ]
+    return vd
+
+
 def _coerce_evidence_bundle(doc: dict[str, Any]) -> None:
     if not isinstance(doc.get("evidence_id"), str) or not doc.get("evidence_id"):
         doc["evidence_id"] = "evidence-unknown"
@@ -118,26 +174,39 @@ def _coerce_evidence_bundle(doc: dict[str, Any]) -> None:
     if not isinstance(doc.get("checker_session_id"), str) or not doc.get("checker_session_id"):
         doc["checker_session_id"] = "unknown"
     if not isinstance(doc.get("world_revision"), int):
-        doc["world_revision"] = int(doc.get("world_revision") or 0)
+        try:
+            doc["world_revision"] = int(doc.get("world_revision") or 0)
+        except (TypeError, ValueError):
+            doc["world_revision"] = 0
     if "integrity_violation" not in doc:
         doc["integrity_violation"] = False
+    observer = str(doc["checker_session_id"])
+    wr = int(doc["world_revision"])
+
+    # Normalize additional_gaps whether already a list or lifted from legacy gaps.
     if not isinstance(doc.get("additional_gaps"), list):
-        # migrate 0.2.x gaps that look like boundary
-        gaps = [str(g) for g in _as_list(doc.get("gaps"))]
+        gaps = [_gap_text(g) for g in _as_list(doc.get("gaps"))]
         doc["additional_gaps"] = [g for g in gaps if g.startswith("boundary:")]
+    else:
+        doc["additional_gaps"] = [g for g in (_gap_text(x) for x in doc["additional_gaps"]) if g]
+
     if not isinstance(doc.get("verdicts"), list) or not doc["verdicts"]:
         # migrate 0.2.x flat evidence into a single indeterminate verdict
         artifacts = _as_list(doc.get("artifacts"))
-        gaps = [str(g) for g in _as_list(doc.get("gaps")) if not str(g).startswith("boundary:")]
+        gaps = [
+            g
+            for g in (_gap_text(x) for x in _as_list(doc.get("gaps")))
+            if g and not g.startswith("boundary:")
+        ]
         atts = []
         for a in artifacts:
             if isinstance(a, str) and a.strip():
                 atts.append(
                     {
                         "method": "custom_attestation",
-                        "world_revision": doc["world_revision"],
+                        "world_revision": wr,
                         "digest": a.strip()[:128],
-                        "observer": doc["checker_session_id"],
+                        "observer": observer,
                         "raw_ref": a.strip(),
                         "watch_set": [],
                     }
@@ -148,9 +217,9 @@ def _coerce_evidence_bundle(doc: dict[str, Any]) -> None:
                     atts.append(
                         {
                             "method": "custom_attestation",
-                            "world_revision": doc["world_revision"],
+                            "world_revision": wr,
                             "digest": ref[:128],
-                            "observer": doc["checker_session_id"],
+                            "observer": observer,
                             "raw_ref": ref,
                             "watch_set": [ref] if "/" in ref or ref.endswith((".txt", ".json", ".md")) else [],
                         }
@@ -169,6 +238,12 @@ def _coerce_evidence_bundle(doc: dict[str, Any]) -> None:
         ]
         if doc["verdicts"][0]["status"] == "satisfied" and not doc["verdicts"][0]["attestations"]:
             doc["verdicts"][0]["status"] = "unsatisfied"
+    else:
+        doc["verdicts"] = [
+            _coerce_verdict(v, world_revision=wr, observer=observer)
+            for v in doc["verdicts"]
+            if isinstance(v, Mapping)
+        ]
     for k in (
         "tick",
         "gaps",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, Sequence
 
-from eglk_harness.domain.kernel.tree import TreeNode
+from eglk_harness.domain.kernel.projection_view import WorkNode
 
 
 @dataclass
@@ -108,7 +108,7 @@ class LeafContract:
 
 
 def assemble_leaf_contract(
-    leaf: TreeNode,
+    leaf: WorkNode,
     *,
     tick: int | None = None,
     boundary: Sequence[str] | None = None,
@@ -147,7 +147,7 @@ def assemble_leaf_contract(
                 bounds.append(line)
 
     priors: list[Any] = list(prior_evidence or [])
-    for ch in leaf.verifier_challenges:
+    for ch in getattr(leaf, "verifier_challenges", ()) or ():
         priors.append({"kind": "challenge", "text": ch, "ref": leaf.id})
 
     fb = dict(repair_feedback) if isinstance(repair_feedback, Mapping) else None

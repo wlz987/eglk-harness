@@ -198,6 +198,8 @@ class TestVerificationMatrix(unittest.TestCase):
             self.assertEqual(proj.nodes["root.02"].status, "superseded")
             self.assertEqual(sorted(proj.nodes["root.merged"].obligation_refs), ["ob-1", "ob-2"])
             types = [e.type for e in store.read_all()]
+            self.assertIn("SplitProposed", types)
+            self.assertIn("MergeProposed", types)
             self.assertIn("MergeCommitted", types)
             replay = rebuild_from_events(Path(td))
             from eglk_harness.domain.kernel.reducer import run_projection_dict

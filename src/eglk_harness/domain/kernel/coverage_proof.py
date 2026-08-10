@@ -62,10 +62,10 @@ def validate_merge_obligations(
     for refs in source_obligation_sets:
         union.update(str(x) for x in refs)
     merged = {str(x) for x in merged_obligation_refs}
-    if union != merged:
-        return False, "obligation_union_mismatch"
     sat = {str(x) for x in satisfied_obligation_ids}
     for oid in sat:
         if oid in union and oid not in merged:
             return False, "satisfied_obligation_dropped"
+    if union != merged:
+        return False, "obligation_union_mismatch"
     return True, "ok"

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from pathlib import Path
+
 ATTESTATION_METHODS = frozenset(
     {
         "file_exists",
@@ -84,6 +86,23 @@ def attestation_valid_for_obligation(
         return False
     method = str(att.get("method") or "")
     return method_allowed_for_verification_type(method, verification_type)
+
+
+def digest_matches_workdir(workdir: Path, att: Mapping[str, Any]) -> bool:
+    """Recompute sha256 for ``raw_ref`` when digest claims a file hash."""
+    from pathlib import Path as _Path
+
+    import hashlib as _hashlib
+
+    digest = str(att.get("digest") or "")
+    raw = str(att.get("raw_ref") or "").strip().lstrip("/")
+    if not raw or not digest.startswith("sha256:"):
+        return True
+    path = _Path(workdir) / raw
+    if not path.is_file():
+        return digest == "missing"
+    got = "sha256:" + _hashlib.sha256(path.read_bytes()).hexdigest()
+    return got == digest
 
 
 def verdict_has_valid_attestation(

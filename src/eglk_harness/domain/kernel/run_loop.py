@@ -20,11 +20,21 @@ from eglk_harness.domain.kernel.projections import effective_cognitive_tokens_ma
 from eglk_harness.domain.kernel.repair_counts import repair_counts_from_decisions
 from eglk_harness.domain.kernel.event_runtime import RunEventContext
 from eglk_harness.domain.kernel import projections as P
-from eglk_harness.domain.kernel.advisors import build_mechanical_split_candidate
-from eglk_harness.domain.kernel.scheduler import should_propose_split
+from eglk_harness.domain.kernel.reducer import ProjectionState
+from eglk_harness.domain.kernel.advisors import build_mechanical_merge_candidate, build_mechanical_split_candidate
+from eglk_harness.domain.kernel.scheduler import (
+    pick_sibling_merge_pair,
+    should_propose_merge,
+    should_propose_split,
+)
+from eglk_harness.domain.kernel.projection_view import (
+    WorkNode,
+    in_progress_node,
+    root_done_criteria,
+    work_node,
+)
 from eglk_harness.domain.kernel.swarm import SwarmPlan, decide_swarm, should_veto_after_admit
 from eglk_harness.domain.memory.tokens import add_tokens
-from eglk_harness.domain.kernel.tree import TaskTree
 from eglk_harness.protocol import topics
 
 def _unwrap_stage_body(body: OkBody | ErrBody | Any) -> tuple[Any | None, str | None]:
@@ -42,6 +52,16 @@ def _stage_err(body: Any) -> str | None:
     if body.get("ok") is False:
         return str(body.get("error") or "stage_failed")
     return None
+
+def _recoverable_worker_error(error: str | None) -> bool:
+    if not error:
+        return False
+    e = str(error).strip().lower()
+    needles = (
+        "maker_failed", "maker_episode_failed", "maker_claim_episode_failed",
+        "checker_failed", "checker_episode_failed",
+    )
+    return any(n in e for n in needles)
 
 class TickRunLoop:
     """One tick = Phase 0→1→2→3. Mixed into ``TickJob`` (EBA Job adapter)."""
@@ -85,7 +105,6 @@ class TickRunLoop:
             self.quota["repairs_max"] = effective_repairs_max()
         self.loop_dir: Path | None = None
         self.ctx: RunEventContext | None = None
-        self.tree: TaskTree | None = None
         self.world: worldref.WorldRef | None = None
         self.claim: dict[str, Any] | None = None
         self.evidence: dict[str, Any] | None = None
@@ -99,6 +118,20 @@ class TickRunLoop:
         self.gate_payload_keys: tuple[str, ...] | None = None
         self._pre_checker_fp: integrity.WorldFingerprint | None = None
         self.integrity_mutations: list[str] = []
+
+    def _proj(self) -> ProjectionState:
+        assert self.ctx is not None
+        return self.ctx.projection()
+
+    def _work_node(self, node_id: str | None = None) -> WorkNode | None:
+        proj = self._proj()
+        if node_id:
+            return work_node(proj, node_id)
+        cur = in_progress_node(proj)
+        if cur is not None:
+            return cur
+        nid = self.ctx.select_node_id() if self.ctx else None
+        return work_node(proj, nid) if nid else None
 
     def _hydrate_runtime_from_state(self) -> None:
         """Resume quota / focus from run_projection (SSOT) and ticks.jsonl."""
@@ -173,7 +206,6 @@ class TickRunLoop:
             path.unlink(missing_ok=True)
         if any_applied:
             self.ctx.export_projections(tick=self.tick)
-            self.tree = self.ctx.sync_tree()
 
     async def begin(self) -> None:
         self.loop_dir = loop_store.ensure_loop_layout(self.workdir, self.goal_id)
@@ -182,12 +214,11 @@ class TickRunLoop:
         self.ctx.acquire()
         self.ctx.bootstrap_if_needed(goal_title=self.goal_title, done_criteria=self.done_criteria)
         self._apply_pending_merge_suggestions()
-        self.tree = self.ctx.sync_tree()
 
         proj = self.ctx.projection()
         node_id = self.ctx.select_node_id()
         if node_id and should_propose_split(proj, node_id, P.SPLIT_REPAIR_STREAK):
-            cur = self.tree.in_progress() or self.tree.find(node_id)
+            cur = self._work_node(node_id)
             await self.request(
                 stage="governor",
                 request_prefix=topics.ROLE_GOVERNOR_RUN,
@@ -201,10 +232,44 @@ class TickRunLoop:
                         "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
                         "repair_streak": int(cur.repair_streak) if cur else 0,
                         "workdir": str(self.workdir),
+                        "action": "split",
                     }
                 },
             )
             return
+
+        if should_propose_merge(proj):
+            mechanical = build_mechanical_merge_candidate(proj, step=self.tick)
+            if mechanical:
+                res = self.ctx.handler.commit_merge(mechanical, actor="governor")
+                if res.ok:
+                    self.ctx.export_projections(tick=self.tick)
+                    await self._start_phase0()
+                    return
+            pair = pick_sibling_merge_pair(proj)
+            if pair is not None:
+                parent_id, node_ids, _score = pair
+                into = f"{parent_id}.m{self.tick:03d}"
+                await self.request(
+                    stage="governor",
+                    request_prefix=topics.ROLE_GOVERNOR_RUN,
+                    result_prefix=topics.ROLE_GOVERNOR_RESULT,
+                    payload={
+                        "args": {
+                            "tick": self.tick,
+                            "loop_dir": str(self.loop_dir),
+                            "subgoal_id": parent_id,
+                            "goal_title": self.goal_title,
+                            "done_criteria": list(self.done_criteria),
+                            "workdir": str(self.workdir),
+                            "action": "merge",
+                            "merge_parent_id": parent_id,
+                            "merge_node_ids": node_ids,
+                            "merge_into": into,
+                        }
+                    },
+                )
+                return
 
         await self._start_phase0()
 
@@ -250,12 +315,12 @@ class TickRunLoop:
         await self._request_next_phase0()
 
     async def _request_next_phase0(self) -> None:
-        assert self.loop_dir is not None and self.tree is not None
+        assert self.loop_dir is not None and self.ctx is not None
         if not self.phase0_queue:
             await self._start_phase1()
             return
         role = self.phase0_queue.pop(0)
-        cur = self.tree.in_progress()
+        cur = in_progress_node(self._proj())
         prefixes = {
             "explorer": (topics.ROLE_EXPLORER_RUN, topics.ROLE_EXPLORER_RESULT),
             "verifier": (topics.ROLE_VERIFIER_RUN, topics.ROLE_VERIFIER_RESULT),
@@ -264,8 +329,8 @@ class TickRunLoop:
         }
         req, res = prefixes[role]
         lc_payload = self.leaf_contract if isinstance(self.leaf_contract, dict) else None
-        if lc_payload is None and self.tree is not None:
-            cur_pre = self.tree.in_progress()
+        if lc_payload is None:
+            cur_pre = in_progress_node(self._proj())
             if cur_pre is not None:
                 try:
                     gmd, gfmt = load_goal_excerpts(self.workdir)
@@ -275,9 +340,7 @@ class TickRunLoop:
                         goal_constraints=load_goal_constraints(self.workdir),
                         goal_md_excerpt=gmd,
                         goal_format_excerpt=gfmt,
-                        root_acceptance=list(self.tree.root.done_criteria)
-                        if self.tree.root
-                        else [],
+                        root_acceptance=root_done_criteria(self._proj()),
                     )
                     lc_payload = pre.to_dict()
                 except ValueError:
@@ -327,7 +390,8 @@ class TickRunLoop:
         return priors
 
     async def _start_phase1(self) -> None:
-        assert self.loop_dir is not None and self.tree is not None and self.ctx is not None
+        assert self.loop_dir is not None and self.ctx is not None
+        self.ctx.handler.reopen_stranded_in_progress_nodes()
         if self.ctx.closure_needed():
             closure = self.ctx.run_closure_gate()
             self.ctx.export_projections(tick=self.tick)
@@ -381,10 +445,9 @@ class TickRunLoop:
                     return
             await self.finish(ok=False, error="no_ready_node")
             return
-        cur = self.tree.find(node_id) or self.tree.in_progress()
+        cur = work_node(self._proj(), node_id) or in_progress_node(self._proj())
         if cur is None:
-            self.tree = self.ctx.sync_tree()
-            cur = self.tree.find(node_id)
+            cur = work_node(self._proj(), node_id)
         if cur is None:
             await self.finish(ok=False, error="no_in_progress_leaf")
             return
@@ -399,7 +462,7 @@ class TickRunLoop:
         learned = skill_lib.render_learned_skills_block(matched)
         goal_cons = load_goal_constraints(self.workdir)
         goal_md, goal_fmt = load_goal_excerpts(self.workdir)
-        root_acc = list(self.tree.root.done_criteria) if self.tree.root else []
+        root_acc = root_done_criteria(self._proj())
         from eglk_harness.domain.kernel.repair_feedback import load_prior_repair_feedback
 
         repair_fb = load_prior_repair_feedback(self.loop_dir, current_tick=self.tick)
@@ -470,7 +533,7 @@ class TickRunLoop:
             return
 
         assert isinstance(body, dict)
-        assert self.loop_dir is not None and self.tree is not None
+        assert self.loop_dir is not None and self.ctx is not None
 
         if stage.startswith("phase0_"):
             role = stage.replace("phase0_", "")
@@ -491,6 +554,30 @@ class TickRunLoop:
                 float(body.get("cost_usd") or 0),
             )
             proposal = body.get("proposal") if isinstance(body.get("proposal"), dict) else {}
+            merge_ids = [
+                str(x)
+                for x in (proposal.get("node_ids") or proposal.get("nodes") or [])
+                if str(x)
+            ]
+            if merge_ids and proposal.get("into"):
+                mechanical = build_mechanical_merge_candidate(self.ctx.projection(), step=self.tick)
+                if mechanical is None:
+                    mechanical = {
+                        "into": str(proposal.get("into")),
+                        "node_ids": merge_ids,
+                        "parent_id": proposal.get("parent_id"),
+                        "title": proposal.get("title"),
+                        "obligation_refs": proposal.get("obligation_refs") or [],
+                        "reason": str(proposal.get("reason") or ""),
+                        "score": proposal.get("score"),
+                    }
+                res = self.ctx.handler.commit_merge(mechanical, actor="governor")
+                if not res.ok:
+                    await self.finish(ok=False, error=f"merge_failed:{res.error}")
+                    return
+                await self._start_phase0()
+                return
+
             node_id = str(proposal.get("split_node") or "")
             mechanical = build_mechanical_split_candidate(
                 self.ctx.projection(), node_id, step=self.tick
@@ -507,7 +594,6 @@ class TickRunLoop:
                 if not res.ok:
                     await self.finish(ok=False, error=f"split_failed:{res.error}")
                     return
-                self.tree = self.ctx.sync_tree()
             await self._start_phase0()
             return
 
@@ -551,11 +637,7 @@ class TickRunLoop:
                 boundary=boundary or None,
             )
             self.claim = claim
-            cur = self.tree.in_progress()
-            if cur is None and self.ctx is not None:
-                nid = self.ctx.select_node_id()
-                if nid:
-                    cur = self.tree.find(nid)
+            cur = self._work_node()
             self._pre_checker_fp = integrity.fingerprint_workdir(self.workdir)
             active_contract = self.ctx._active_contract or {}
             await self.request(
@@ -606,7 +688,7 @@ class TickRunLoop:
                 self.integrity_mutations = integrity.apply_integrity_flag(
                     evidence, before=self._pre_checker_fp, after=after_fp
                 )
-            cur = self.tree.in_progress()
+            cur = in_progress_node(self._proj())
             leaf_id = cur.id if cur else None
             claim = self.claim or {}
             contract = self.ctx._active_contract or {}
@@ -658,11 +740,9 @@ class TickRunLoop:
                 if closure.events:
                     self.decision = dict(closure.events[0].payload)
                 if self.ctx.handler.projection().run_status == "succeeded":
-                    self.tree = self.ctx.sync_tree()
                     self.ctx.export_projections(tick=self.tick)
                     await self._finish_phase3()
                     return
-            self.tree = self.ctx.sync_tree()
             self.ctx.export_projections(tick=self.tick)
             await self._start_phase2(self.decision)
             return
@@ -680,11 +760,11 @@ class TickRunLoop:
         await self.finish(ok=False, error=f"unknown_stage:{stage}")
 
     async def _apply_gate_projection(self) -> None:
-        """Sync in-memory tree view from event projection after Gate."""
+        """Record admit skills from projection after Gate."""
         assert self.loop_dir is not None and self.ctx is not None
-        self.tree = self.ctx.sync_tree()
         if self.decision and self.decision.get("decision") == "admit":
-            cur = self.tree.in_progress()
+            leaf_id = str(self.decision.get("subgoal_id") or self.decision.get("node_id") or "")
+            cur = work_node(self._proj(), leaf_id) if leaf_id else in_progress_node(self._proj())
             if cur is not None:
                 skill_lib.record_admit(
                     self.workdir,
@@ -695,10 +775,10 @@ class TickRunLoop:
                 )
 
     async def _start_phase2(self, decision: dict[str, Any]) -> None:
-        assert self.loop_dir is not None
+        assert self.loop_dir is not None and self.ctx is not None
         kind = str(decision.get("decision") or "")
         leaf_id = str(decision.get("subgoal_id") or "root")
-        cur = self.tree.find(leaf_id) if self.tree else None
+        cur = work_node(self._proj(), leaf_id)
         # Refiner is run-end batch only (multi_agent §5.4) — never per-tick.
         if kind == "admit" and should_veto_after_admit(self.evidence):
             await self.request(
@@ -743,7 +823,7 @@ class TickRunLoop:
             self.focus_score = float(self.phase3_record.get("focus_score", self.focus_score))
             self.uncertainty = float(self.phase3_record.get("uncertainty", self.uncertainty))
         kind = str(self.decision.get("decision") or "")
-        done = self.ctx.root_done() if self.ctx else bool(self.tree and self.tree.all_work_admitted())
+        done = self.ctx.root_done() if self.ctx else False
         run_status = self.ctx.handler.projection().run_status if self.ctx else None
         answer = {
             "decision": self.decision,

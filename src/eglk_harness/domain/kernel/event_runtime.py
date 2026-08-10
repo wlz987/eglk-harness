@@ -25,7 +25,7 @@ from eglk_harness.domain.kernel.projection_mirror import mirror_audit_artifacts
 from eglk_harness.domain.kernel.projection_replay import projection_diff, rebuild_from_events
 from eglk_harness.domain.kernel.run_engine import compile_goal_spec
 from eglk_harness.domain.kernel.scheduler import assemble_work_contract, select_ready_node
-from eglk_harness.domain.kernel.tree_sync import projection_root_done, tree_from_projection
+from eglk_harness.domain.kernel.projection_view import projection_root_done
 from eglk_harness.domain.kernel import worldref
 from eglk_harness.domain.memory.lifecycle import digest_active_snapshot
 from eglk_harness.domain.memory.memory_policy import bootstrap_frozen_digest, eval_freeze_memory
@@ -49,7 +49,7 @@ class RunEventContext:
 
     def acquire(self) -> None:
         self.handler.acquire()
-        reconcile_dangling_transactions(self.handler)
+        reconcile_dangling_transactions(self.handler, workdir=self.workdir, env=self.env)
         self.handler.check_goal_drift(self.workdir)
 
     def release(self) -> None:
@@ -158,14 +158,6 @@ class RunEventContext:
     def projection(self):
         return self.handler.projection()
 
-    def sync_tree(self):
-        from eglk_harness.domain.kernel.tree import make_root
-
-        tree = tree_from_projection(self.handler.projection())
-        if tree is not None:
-            return tree
-        return make_root("goal", ["goal"], leaf=True)
-
     def select_node_id(self) -> str | None:
         return select_ready_node(self.handler.projection())
 
@@ -189,11 +181,13 @@ class RunEventContext:
         return self.handler.contract_assembled(contract)
 
     def authorize_maker(self, claim: Mapping[str, Any]) -> CommandResult:
+        from eglk_harness.domain.runtime.claim_sanitize import actions_requiring_broker
+
         contract = self._active_contract or {}
         ceiling = list((contract.get("transaction_policy") or {}).get("side_effect_class_ceiling") or [])
         return self.handler.authorize_actions(
             role="maker",
-            actions=list(claim.get("actions") or []),
+            actions=actions_requiring_broker(list(claim.get("actions") or [])),
             ceiling=ceiling,
         )
 
@@ -221,18 +215,25 @@ class RunEventContext:
         *,
         payload: Mapping[str, Any] | None = None,
     ) -> WorldTransaction:
+        from eglk_harness.domain.runtime.claim_sanitize import sanitize_claim_for_apply
+
+        clean = sanitize_claim_for_apply(claim)
+        auth = self.authorize_maker(clean)
+        if not auth.ok:
+            raise PermissionError(auth.error or "capability_denied")
+
         proj = self.handler.projection()
         contract = self._active_contract or {}
         node_id = str(contract.get("node_id") or claim.get("subgoal_id") or "root")
-        sec = ceiling_class(list(claim.get("actions") or []))
+        sec = ceiling_class(list(clean.get("actions") or []))
         tx = self.env.begin(
             node_id=node_id,
             base_revision=proj.world_revision,
             side_effect_class=sec,
         )
-        tx = self.env.prepare(tx, list(claim.get("actions") or []))
+        tx = self.env.prepare(tx, list(clean.get("actions") or []))
         self.handler.transaction_prepared(tx.to_dict())
-        resolved = dict(payload) if isinstance(payload, Mapping) else worldref.resolve_claim_payload(claim)
+        resolved = dict(payload) if isinstance(payload, Mapping) else worldref.resolve_claim_payload(clean)
         tx = self.env.apply(tx, claim_payload=resolved)
         world_rev = self.env.observe_revision(tx)
         obs = self.env.observe(tx)
@@ -288,16 +289,35 @@ class RunEventContext:
                 self.handler.transaction_compensated(tx.transaction_id)
         self._active_tx = None
 
-    def quota(self, role: str, tokens: int, usd: float = 0.0) -> None:
-        self.handler.quota_updated(role=role, tokens_delta=max(1, tokens), usd_delta=usd)
+    def quota(
+        self,
+        role: str,
+        tokens: int,
+        usd: float = 0.0,
+        *,
+        estimation: bool = False,
+    ) -> None:
+        self.handler.quota_updated(
+            role=role,
+            tokens_delta=max(1, tokens),
+            usd_delta=usd,
+            estimation=estimation,
+        )
 
     def root_done(self) -> bool:
         return projection_root_done(self.handler.projection())
 
     def closure_needed(self) -> bool:
-        """True when run is still ``running`` but no ready leaf remains — run closure Gate."""
+        """True when no ready leaf remains and nothing is mid-tick ``in_progress``.
+
+        Mid-tick ``ContractAssembled`` without Gate leaves ``in_progress``; that must
+        NOT count as "ready pool empty → close". Callers should
+        ``reopen_stranded_in_progress_nodes()`` at tick start before relying on this.
+        """
         proj = self.handler.projection()
         if proj.run_status != "running":
+            return False
+        if any(n.status == "in_progress" for n in proj.nodes.values()):
             return False
         if select_ready_node(proj) is not None:
             return False
@@ -312,20 +332,45 @@ class RunEventContext:
         for oid in contract["obligation_refs"]:
             ob = proj.obligations.get(oid)
             if ob and ob.status == "satisfied":
+                attestations: list[dict[str, Any]] = []
+                for watch in ob.watch_set or []:
+                    rel = str(watch).strip().lstrip("/").replace("\\", "/")
+                    if rel.startswith("workdir/"):
+                        rel = rel[len("workdir/") :]
+                    if not rel:
+                        continue
+                    path = self.workdir / rel
+                    if path.is_file():
+                        import hashlib as _hashlib
+
+                        digest = "sha256:" + _hashlib.sha256(path.read_bytes()).hexdigest()
+                        attestations.append(
+                            {
+                                "method": ob.verification_type,
+                                "world_revision": proj.world_revision,
+                                "digest": digest,
+                                "observer": "root-closure-checker",
+                                "raw_ref": rel,
+                                "watch_set": list(ob.watch_set),
+                            }
+                        )
+                if not attestations:
+                    # Do not synthesize fake digests — missing watch files keep obligation open.
+                    verdicts.append(
+                        {
+                            "obligation_id": oid,
+                            "status": "unsatisfied",
+                            "attestations": [],
+                            "gaps": ["closure:missing_watch_files"],
+                            "defect_suspected": False,
+                        }
+                    )
+                    continue
                 verdicts.append(
                     {
                         "obligation_id": oid,
                         "status": "satisfied",
-                        "attestations": [
-                            {
-                                "method": ob.verification_type,
-                                "world_revision": proj.world_revision,
-                                "digest": f"closure:{oid}",
-                                "observer": "closure",
-                                "raw_ref": f"closure/{oid}",
-                                "watch_set": list(ob.watch_set),
-                            }
-                        ],
+                        "attestations": attestations,
                         "gaps": [],
                         "defect_suspected": False,
                     }

@@ -15,6 +15,7 @@ from eglk_harness.domain.kernel.attestation import (
     obligation_type_map,
     verdict_has_valid_attestation,
 )
+from eglk_harness.domain.kernel.repair_counts import closure_repair_key, repair_count_key
 from eglk_harness.domain.kernel.projections import GATE_DECISION_SCHEMA
 
 _ABORT_REASONS = frozenset(
@@ -26,9 +27,12 @@ _ABORT_REASONS = frozenset(
         "amendment_pending_exhausted",
         "closure_incomplete_exhausted",
         "capability_ceiling_exceeded_exhausted",
+        "capability_denied_exhausted",
         "missing_alternatives_exhausted",
     }
 )
+
+ABORT_REASONS = _ABORT_REASONS
 
 
 @dataclass(frozen=True)
@@ -125,32 +129,42 @@ def decide(
             is_closure_gate=is_closure_gate,
         )
 
-    def _repair(reason: str) -> GateDecision:
-        used = int(counts.get(reason, 0))
+    def _repair_count_used(reason: str, obligation_id: str) -> int:
+        key = repair_count_key(obligation_id, reason)
+        if reason == "closure_incomplete":
+            key = closure_repair_key()
+        legacy = int(counts.get(reason, 0))
+        return max(int(counts.get(key, 0)), legacy)
+
+    def _repair(reason: str, obligation_id: str | None = None) -> GateDecision:
+        oid = obligation_id or (pending[0] if pending else "__all__")
+        if reason == "closure_incomplete":
+            oid = "__closure__"
+        used = _repair_count_used(reason, oid)
         repairs_cap = int(quota.get("repairs_max", P.REPAIRS_MAX) or P.REPAIRS_MAX)
         if used >= repairs_cap:
             abort_reason = f"{reason}_exhausted"
             if abort_reason not in _ABORT_REASONS:
                 abort_reason = f"{reason}_exhausted"
             return _out("abort", abort_reason)
+        if oid not in open_ids and oid not in ("__all__", "__closure__"):
+            open_ids.append(oid)
         return _out("repair", reason)
 
     tokens = int(quota.get("cognitive_tokens", 0) or 0)
     tokens_max = int(
         quota.get("cognitive_tokens_max", P.COGNITIVE_TOKENS_MAX) or P.COGNITIVE_TOKENS_MAX
     )
-    if tokens >= tokens_max:
-        return _out("abort", "cognitive_budget")
 
     if _ceiling_exceeded(contract, claim):
-        return _repair("capability_ceiling_exceeded")
+        return _repair("capability_ceiling_exceeded", "__all__")
 
     if _alternatives_missing(claim):
-        return _repair("missing_alternatives")
+        return _repair("missing_alternatives", "__all__")
 
     if evidence.get("integrity_violation") is True:
         open_ids = list(obligation_refs)
-        return _repair("integrity_violation")
+        return _repair("integrity_violation", obligation_refs[0] if obligation_refs else "__all__")
 
     verdicts = _verdict_map(evidence)
     type_map = obligation_type_map(contract)
@@ -172,7 +186,7 @@ def decide(
                 verification_type=type_map.get(oid),
                 expected_world_revision=expected_rev,
             ):
-                return _repair("no_attestation")
+                return _repair("no_attestation", oid)
             satisfied.append(oid)
         else:
             pending.append(oid)
@@ -180,43 +194,32 @@ def decide(
 
     additional_gaps = [str(g) for g in _as_list(evidence.get("additional_gaps"))]
     if any(g.startswith("boundary:") for g in additional_gaps):
-        return _repair("boundary_unmet")
+        return _repair("boundary_unmet", pending[0] if pending else (obligation_refs[0] if obligation_refs else "__all__"))
 
     if pending_amend.intersection(obligation_refs):
-        return _repair("amendment_pending")
+        return _repair("amendment_pending", next(iter(pending_amend.intersection(obligation_refs))))
 
     if is_closure_gate:
         if closure_complete is False:
-            return _repair("closure_incomplete")
+            return _repair("closure_incomplete", "__closure__")
         if pending:
-            return _repair("closure_incomplete")
+            if tokens >= tokens_max:
+                return _out("abort", "cognitive_budget")
+            return _repair("closure_incomplete", "__closure__")
         return _out("admit", "closure_admitted", sat=satisfied, open_=[])
 
     if not pending:
         return _out("admit", "obligations_satisfied", sat=satisfied, open_=[])
 
-    # Prefer first pending verdict gap as reason material, but keep stable reason enum
-    return _repair("no_attestation" if not verdicts else "no_attestation")
+    # Design gate_policy: cognitive abort only when obligations still pending.
+    if tokens >= tokens_max:
+        return _out("abort", "cognitive_budget")
 
-
-# Stable repair reason for incomplete obligations when attestations exist but status≠satisfied
-def decide_with_pending_reason(
-    contract: Mapping[str, Any],
-    claim: Mapping[str, Any],
-    evidence: Mapping[str, Any],
-    **kwargs: Any,
-) -> GateDecision:
-    """Like decide, but if obligations are unsatisfied with verdicts present, use no_attestation.
-
-    Callers that want a more specific reason may inspect evidence.gaps separately.
-    For incomplete (unsatisfied) with attestations present we still repair with a
-    bounded reason from the schema enum set.
-    """
-    decision = decide(contract, claim, evidence, **kwargs)
-    if decision.decision != "repair" or decision.reason != "no_attestation":
-        return decision
-    # If every open obligation has a verdict that is unsatisfied/indeterminate
-    # (not missing attestation), keep no_attestation as the schema-stable bucket
-    # for "obligations not yet satisfied" — design maps pending gaps into repair
-    # without inventing non-enum reasons.
-    return decision
+    first = pending[0]
+    v = verdicts.get(first)
+    if v is None:
+        return _repair("no_attestation", first)
+    for g in _as_list(v.get("gaps")):
+        if str(g).startswith("boundary:"):
+            return _repair("boundary_unmet", first)
+    return _repair("no_attestation", first)

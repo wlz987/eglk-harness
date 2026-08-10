@@ -27,6 +27,7 @@ class TestAdapterSmoke(unittest.TestCase):
                 role="maker",
                 prompt="test",
                 workdir=workdir,
+                expect="claim",
                 meta={
                     "tick": 0,
                     "subgoal_id": "root",

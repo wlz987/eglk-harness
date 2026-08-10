@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eglk-harness"
-version = "0.1.0b1"
+version = "0.1.0rc1"
 description = "Evidence-Gated Loop Kernel harness (eglk) for long-horizon agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "eglk" }]
 dependencies = [
-  "eba @ git+https://github.com/wlz987/eba.git",
-  "eba-job @ git+https://github.com/wlz987/eba_job.git",
+  "eba @ git+https://github.com/wlz987/eba.git@main",
+  "eba-job @ git+https://github.com/wlz987/eba_job.git@main",
   "jsonschema>=4.0",
 ]
 
@@ -33,4 +33,6 @@ eglk_harness = [
   "domain/schemas/*.json",
   "domain/schemas/README.md",
   "domain/memory/skills/*.md",
+  "domain/memory/skills/fragments/*.md",
+  "domain/memory/episodes/*.md",
 ]

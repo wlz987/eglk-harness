@@ -97,12 +97,14 @@ def render_prompt(
     disclosure: DisclosureLevel = DisclosureLevel.CORE,
     format_repair: bool = False,
 ) -> str:
-    """Assemble role skill + leaf contract block for one Adapter episode.
+    """Assemble role skill + overlays + fragments + leaf contract for one episode.
 
-    ``workdir`` is accepted for API stability; boundaries come from ``leaf_block``
-  (assembled from human goal / leaf contract), not from benchmark-specific harness hooks.
+    Injection order (L1 → L3):
+    packaged skill → overlay → suite fragments → leaf_contract → episode extra.
     """
-    _ = workdir
+    from eglk_harness.domain.memory.skill_overlay import load_role_overlay
+    from eglk_harness.domain.memory.suite_fragments import render_fragments, _fragment_ids_for_workdir
+
     doc = load_skill_document(role)
     tool_line = doc.allowed_tools or format_tool_profile_line(role)
     header = (
@@ -111,9 +113,21 @@ def render_prompt(
         f"allowed-tools: {tool_line}"
     )
     skill_body = _render_skill_body(doc, disclosure, format_repair)
+    overlay = load_role_overlay(role, workdir)
+    fragment_ids = list(_fragment_ids_for_workdir(workdir))
+    if role in ("maker", "checker"):
+        from eglk_harness.domain.plugins.computer_use import computer_use_enabled
+
+        if computer_use_enabled() and "computer_use" not in fragment_ids:
+            fragment_ids.append("computer_use")
+    fragments = render_fragments(workdir, fragment_ids=fragment_ids)
     parts: list[str] = [header]
     if skill_body:
         parts.extend(["", skill_body.strip()])
+    if overlay.strip():
+        parts.extend(["", "[SKILL_OVERLAY]", "", overlay.strip()])
+    if fragments.strip():
+        parts.extend(["", fragments.strip()])
     block = leaf_block.strip()
     if block:
         parts.extend(["", block])

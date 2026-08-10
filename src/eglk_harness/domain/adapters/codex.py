@@ -50,24 +50,15 @@ class CodexAdapter:
 
         mcp_path = request.mcp_config or self.mcp_config
         add_dirs = list(request.add_dirs) or list(self.add_dirs)
-        # Prefer package mcp translator; also emit -c mcp_servers when path set
-        argv.extend(
-            mcp_mod.codex_mcp_argv(
-                mcp_config=mcp_path,
-                add_dirs=add_dirs,
-                tools_allowed=request.tools_allowed,
-                role=request.role,
-            )
+        # Role-filtered MCP + --add-dir only via codex_mcp_argv (do not re-append
+        # unfiltered codex_mcp_overrides — that duplicated mcp_servers.* on argv).
+        mcp_argv = mcp_mod.codex_mcp_argv(
+            mcp_config=mcp_path,
+            add_dirs=add_dirs,
+            tools_allowed=request.tools_allowed,
+            role=request.role,
         )
-        if mcp_path and request.tools_allowed:
-            for override in mcp_mod.codex_mcp_overrides(mcp_path):
-                if ["-c", override] not in [argv[i : i + 2] for i in range(len(argv) - 1)]:
-                    argv.extend(["-c", override])
-
-        for add_dir in add_dirs:
-            if add_dir:
-                argv.extend(["--add-dir", str(add_dir)])
-
+        argv.extend(mcp_argv)
         argv.append("-")  # prompt on stdin
         return argv
 
@@ -89,11 +80,16 @@ class CodexAdapter:
                 stdin_text=request.prompt,
                 timeout_s=request.timeout_s,
                 env=env,
+                tee_path=request.tee_path,
             )
         except TimeoutError:
             return EpisodeResult(ok=False, error="codex_timeout", backend=self.name)
 
         text = proc.stdout or proc.stderr
+        if request.tee_path and text:
+            from eglk_harness.domain.adapters.agent_logs import write_trajectory_sidecars
+
+            write_trajectory_sidecars(request.tee_path, text)
         if proc.returncode != 0 and not proc.stdout.strip():
             return EpisodeResult(
                 ok=False,

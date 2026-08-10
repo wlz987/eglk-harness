@@ -2,23 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://eglk.local/schemas/gate_decision.schema.json",
   "title": "GateDecision",
+  "description": "Mechanical per-obligation reduction of ActionClaim vs EvidenceBundle for one WorkContract. abort is authoritative ONLY for the two resource-exhaustion reasons; no perception_gap float. See ../gate_policy.md.",
   "type": "object",
   "additionalProperties": false,
-  "description": "Gate 比较 Maker Claim 与 Checker Evidence 后的机械判定。",
-  "required": ["decision", "reason", "maker_progress", "checker_progress", "perception_gap", "gaps_count", "should_run_next"],
+  "required": [
+    "schema", "decision", "reason", "node_id", "contract_ref",
+    "satisfied_obligation_ids", "open_obligation_ids", "is_closure_gate"
+  ],
   "properties": {
-    "decision": {
+    "schema": { "type": "string", "const": "eglk.gate_decision" },
+    "decision": { "type": "string", "enum": ["admit", "repair", "abort"] },
+    "reason": {
       "type": "string",
-      "enum": ["admit", "repair", "abort"]
+      "enum": [
+        "obligations_satisfied", "closure_admitted",
+        "capability_ceiling_exceeded", "missing_alternatives", "integrity_violation",
+        "no_attestation", "boundary_unmet", "amendment_pending", "closure_incomplete",
+        "capability_denied",
+        "cognitive_budget", "integrity_violation_exhausted", "no_attestation_exhausted",
+        "boundary_unmet_exhausted", "amendment_pending_exhausted", "closure_incomplete_exhausted",
+        "capability_denied_exhausted", "capability_ceiling_exceeded_exhausted",
+        "missing_alternatives_exhausted"
+      ]
     },
-    "reason": { "type": "string" },
-    "maker_progress": { "type": "number", "minimum": 0, "maximum": 1 },
-    "checker_progress": { "type": "number", "minimum": 0, "maximum": 1 },
-    "perception_gap": { "type": "number", "minimum": 0, "maximum": 1 },
-    "gaps_count": { "type": "integer", "minimum": 0, "description": "未满足条件的计数（evidence.gaps 长度），frontend ev.gaps 的语义" },
-    "next_action": { "type": ["string", "null"] },
-    "should_run_next": { "type": "boolean" },
-    "subgoal_id": { "type": "string" },
-    "tick": { "type": "integer", "minimum": 0 }
+    "node_id": { "type": "string", "minLength": 1 },
+    "contract_ref": { "type": "string", "minLength": 1 },
+    "satisfied_obligation_ids": { "type": "array", "items": { "type": "string" } },
+    "open_obligation_ids": { "type": "array", "items": { "type": "string" } },
+    "is_closure_gate": {
+      "type": "boolean",
+      "description": "True only for the root-node closure evaluation defined in semantic_core.md §8; false for ordinary per-contract decisions."
+    },
+    "event_ref": { "type": ["string", "null"] }
+  },
+  "if": { "properties": { "decision": { "const": "abort" } } },
+  "then": {
+    "properties": {
+      "reason": { "enum": ["cognitive_budget", "integrity_violation_exhausted", "no_attestation_exhausted", "boundary_unmet_exhausted", "amendment_pending_exhausted", "closure_incomplete_exhausted", "capability_denied_exhausted", "capability_ceiling_exceeded_exhausted", "missing_alternatives_exhausted"] }
+    }
   }
 }

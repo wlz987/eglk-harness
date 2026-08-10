@@ -22,10 +22,12 @@ from eglk_harness.actors.swarm import (
     VerifierActor,
 )
 from eglk_harness.actors.tick import TickJob
+from eglk_harness.domain.kernel.projection_view import all_work_admitted
 from eglk_harness.domain.kernel.event_runtime import finalize_run_closure_workdir
 from eglk_harness.domain.memory.refiner_batch import run_end_refiner_batch
 from eglk_harness.domain.memory.memory_policy import bootstrap_frozen_digest
 from eglk_harness.domain.kernel.run_engine import RunEngine
+from eglk_harness.domain.kernel.run_loop import _recoverable_worker_error
 from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
 from eglk_harness.domain.kernel.compile_goal import compile_goal
@@ -114,13 +116,15 @@ def _should_continue(job: TickJob) -> bool:
             return False
         if job.ctx is not None and job.ctx.handler.projection().run_status == "succeeded":
             return False
-        if job.tree is not None and job.tree.all_work_admitted():
+        if job.ctx is not None and all_work_admitted(job.ctx.handler.projection()):
             return False
         return True
     if kind == "repair":
         return bool(decision.get("should_run_next", True))
-    # stage failure / unknown
+    # stage failure / unknown — retry tick when worker episode failed but delivery may land later
     if job.outcome and job.outcome.get("ok") is False:
+        if _recoverable_worker_error(str(job.outcome.get("error") or "")):
+            return True
         return False
     return False
 

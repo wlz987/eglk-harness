@@ -31,7 +31,12 @@
       "required": ["allowed_scope", "forbidden_actions"],
       "properties": {
         "allowed_scope": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "forbidden_actions": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "forbidden_actions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "must_exist": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Relative paths that MUST exist before Gate admit (MUST_EXIST delivery contract). Checked mechanically at boundary_unmet."
+        }
       }
     },
     "capabilities": {

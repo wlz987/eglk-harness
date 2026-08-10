@@ -291,18 +291,6 @@ def collect_status(workdir: Path, *, run_id: str | None = None) -> StatusReport:
         if not report.tree_summary:
             _walk_tree(ts_doc["root"])
 
-    tree = loop_store.load_tree(loop_dir)
-    if tree is not None and not report.tree_summary:
-        for node, _depth in tree.walk():
-            report.tree_summary.append(
-                {
-                    "id": node.id,
-                    "title": node.title,
-                    "status": node.status,
-                    "repair_streak": node.repair_streak,
-                }
-            )
-
     decision = _latest_json(loop_dir / "decisions")
     if decision:
         report.latest_decision = decision

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Mapping
@@ -16,7 +18,7 @@ from eglk_harness.domain.kernel.reducer import (
     run_projection_dict,
     task_structure_dict,
 )
-from eglk_harness.domain.kernel.scheduler import coverage_complete
+from eglk_harness.domain.kernel.scheduler import coverage_complete, pending_ready_to_promote
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.coverage_proof import validate_merge_obligations, validate_split_coverage
 from eglk_harness.domain.kernel.covers import covers_closure_complete, covers_edges_from_refinement
@@ -57,6 +59,35 @@ class CommandHandler:
 
     def release(self) -> None:
         self.store.release_lease(holder=self.holder)
+
+    def _diagnostics_path(self) -> Path | None:
+        parent = getattr(self.store, "db_path", None)
+        if parent is None:
+            return None
+        return Path(parent).parent / "diagnostics.jsonl"
+
+    def _log_command_rejected(
+        self,
+        *,
+        command: str,
+        reason: str,
+        actor: str,
+        detail: str | None = None,
+    ) -> None:
+        path = self._diagnostics_path()
+        if path is None:
+            return
+        record = {
+            "schema": "eglk.command_rejected",
+            "occurred_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "command": command,
+            "reason": reason,
+            "actor": actor,
+            "detail": detail or "",
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def projection(self, *, force_rebuild: bool = False) -> ProjectionState:
         if self._projection is None or force_rebuild:
@@ -119,13 +150,23 @@ class CommandHandler:
                     "goal_drift",
                     detail=f"expected={prior} actual={digest}",
                 )
-            break
+            # Same digest: idempotent — do not append duplicate GoalCompiled (matrix §1).
+            return CommandResult(ok=True, events=[])
         ev = self._append("GoalCompiled", payload)
         return CommandResult(ok=True, events=[ev])
 
     def node_ready(self, node_id: str) -> CommandResult:
         ev = self._append("NodeReady", {"node_id": node_id})
         return CommandResult(ok=True, events=[ev])
+
+    def promote_dependency_ready_nodes(self, *, actor: str = "scheduler") -> CommandResult:
+        """Promote pending nodes whose ``depends_on`` prerequisites are admitted."""
+        proj = self.projection()
+        events: list[EventEnvelope] = []
+        for nid in pending_ready_to_promote(proj):
+            if proj.nodes.get(nid) and proj.nodes[nid].status == "pending":
+                events.append(self._append("NodeReady", {"node_id": nid}, actor=actor))
+        return CommandResult(ok=True, events=events)
 
     def contract_assembled(self, contract: Mapping[str, Any]) -> CommandResult:
         # schema-level required fields must exist
@@ -174,6 +215,67 @@ class CommandHandler:
                 )
                 events.append(ev)
                 return CommandResult(ok=False, events=events, error=decision.reason, rejected=True)
+        return CommandResult(ok=True, events=events)
+
+    def record_apply_denied(
+        self,
+        *,
+        contract: Mapping[str, Any],
+        reason: str = "capability_denied",
+    ) -> CommandResult:
+        """After CapabilityDenied / apply refusal: Gate repair (or abort) so the loop advances.
+
+        Mid-tick auth failure must not hang the actor — reopen leaf via GateDecided repair.
+        Exhaustion uses the same ``repair_key_from_gate_payload`` keys the reducer records.
+        """
+        from eglk_harness.domain.kernel.repair_counts import (
+            repair_count_key,
+            repair_key_from_gate_payload,
+        )
+
+        proj = self.projection()
+        node_id = str(contract.get("node_id") or "")
+        contract_ref = str(contract.get("contract_id") or "")
+        open_ids = [str(x) for x in (contract.get("obligation_refs") or [])]
+        reason = str(reason or "capability_denied").strip() or "capability_denied"
+        # Provisional payload so exhaustion key matches GateDecided → reducer.
+        probe = {
+            "reason": reason,
+            "open_obligation_ids": open_ids,
+        }
+        key = repair_key_from_gate_payload(probe)
+        used = max(
+            int(proj.repair_counts.get(key, 0)),
+            int(proj.repair_counts.get(repair_count_key("__all__", reason), 0)),
+            int(proj.repair_counts.get(reason, 0)),
+        )
+        repairs_cap = int(proj.repairs_max or 8)
+        if used >= repairs_cap:
+            decision, out_reason = "abort", f"{reason}_exhausted"
+        else:
+            decision, out_reason = "repair", reason
+        gd = {
+            "schema": "eglk.gate_decision",
+            "decision": decision,
+            "reason": out_reason,
+            "node_id": node_id or "root",
+            "contract_ref": contract_ref or "wc-unknown",
+            "satisfied_obligation_ids": [],
+            "open_obligation_ids": open_ids,
+            "is_closure_gate": False,
+        }
+        events: list[EventEnvelope] = []
+        ev = self._append("GateDecided", gd)
+        events.append(ev)
+        gd["event_ref"] = ev.event_id
+        if decision == "abort":
+            events.append(
+                self._append(
+                    "RunAborted",
+                    {"reason": out_reason, "gate_event_id": ev.event_id},
+                    causation_id=ev.event_id,
+                )
+            )
         return CommandResult(ok=True, events=events)
 
     def record_evidence(self, evidence: Mapping[str, Any], *, actor: str) -> CommandResult:
@@ -289,6 +391,9 @@ class CommandHandler:
                         causation_id=ev.event_id,
                     )
                 )
+            else:
+                promo = self.promote_dependency_ready_nodes(actor="scheduler")
+                events.extend(promo.events)
         elif decision.decision == "abort":
             events.append(
                 self._append(
@@ -353,6 +458,7 @@ class CommandHandler:
                 "usd_used": float(proj.usd_used) + float(usd_delta),
                 "repairs_used": proj.repairs_used,
                 "estimation": estimation,
+                "estimated": bool(estimation),  # design/model_economics.md §4
                 "role": role,
                 "tokens_delta": tokens_delta,
             },
@@ -428,12 +534,8 @@ class CommandHandler:
         actor: str = "command_handler",
         detail: str | None = None,
     ) -> CommandResult:
-        ev = self._append(
-            "CommandRejected",
-            {"command": command, "reason": reason, "detail": detail or ""},
-            actor=actor,
-        )
-        return CommandResult(ok=False, events=[ev], error=reason, rejected=True)
+        self._log_command_rejected(command=command, reason=reason, actor=actor, detail=detail)
+        return CommandResult(ok=False, events=[], error=reason, rejected=True)
 
     def check_goal_drift(self, workdir: Path) -> CommandResult:
         from eglk_harness.domain.kernel import paths as kpaths
@@ -474,6 +576,21 @@ class CommandHandler:
         ev = self._append("RunRecoveryCompleted", {"run_status": run_status})
         return CommandResult(ok=True, events=[ev])
 
+    def reopen_stranded_in_progress_nodes(self) -> list[str]:
+        """After dangling TX rollback, return stranded ``in_progress`` leaves to ``ready``.
+
+        Mid-tick Maker/Checker failures leave ContractAssembled without GateDecided;
+        without reopen, Scheduler sees an empty ready_pool and falsely runs closure Gate.
+        """
+        proj = self.projection()
+        reopened: list[str] = []
+        for nid, node in proj.nodes.items():
+            if node.status != "in_progress":
+                continue
+            self.node_ready(nid)
+            reopened.append(nid)
+        return reopened
+
     def transaction_prepared(self, tx: Mapping[str, Any]) -> CommandResult:
         ev = self._append("TransactionPrepared", dict(tx))
         return CommandResult(ok=True, events=[ev])
@@ -508,41 +625,23 @@ class CommandHandler:
         payload: Mapping[str, Any],
         *,
         actor: str = "governor",
+        emit_proposal: bool = True,
     ) -> CommandResult:
         """Validate CoverageProof and append SplitCommitted + opened obligations."""
-        proj = self.projection()
-        node_id = str(payload.get("split_node") or payload.get("node_id") or "")
-        node = proj.nodes.get(node_id)
-        if node is None:
-            return self.reject_command(command="split", reason="unknown_node", actor=actor)
-        depth = node.depth
-        if depth >= P.MAX_SPLIT_DEPTH:
-            return self.reject_command(command="split", reason="max_split_depth", actor=actor)
-
-        proof = payload.get("coverage_proof") or {}
-        parent_obs = [str(x) for x in (proof.get("parent_obligation_ids") or node.obligation_refs or [])]
-        child_map_raw = proof.get("child_obligation_map") or {}
-        child_map: dict[str, list[str]] = {}
-        if isinstance(child_map_raw, Mapping):
-            for k, v in child_map_raw.items():
-                child_map[str(k)] = [str(x) for x in (v or [])]
-
-        opened = [dict(x) for x in (payload.get("opened_obligations") or []) if isinstance(x, Mapping)]
-        proof_kind = str(proof.get("proof_kind") or "partition")
-        ok, reason = validate_split_coverage(
-            parent_obligation_ids=parent_obs,
-            child_obligation_map=child_map,
-            proof_kind=proof_kind,
-            opened_obligations=opened,
-        )
+        ok, reason, body = self._plan_split(payload, actor=actor)
         if not ok:
             return self.reject_command(command="split", reason=reason, actor=actor)
 
-        children = [dict(c) for c in (payload.get("children") or []) if isinstance(c, Mapping)]
-        if not (P.SPLIT_CHILDREN_MIN <= len(children) <= P.SPLIT_CHILDREN_MAX):
-            return self.reject_command(command="split", reason="children_count", actor=actor)
-
         events: list[EventEnvelope] = []
+        if emit_proposal:
+            events.append(self._append("SplitProposed", body, actor=actor))
+
+        node_id = body["node_id"]
+        proof = body["coverage_proof"]
+        opened = body["opened_obligations"]
+        children = body["children"]
+        depends_on = body["depends_on"]
+
         for ob in opened:
             oid = str(ob.get("id") or "")
             if not oid:
@@ -563,7 +662,6 @@ class CommandHandler:
             )
 
         obligation_covers = covers_edges_from_refinement(opened)
-        depends_on = [dict(x) for x in (payload.get("depends_on") or []) if isinstance(x, Mapping)]
 
         split_ev = self._append(
             "SplitCommitted",
@@ -580,32 +678,95 @@ class CommandHandler:
         )
         events.append(split_ev)
 
-        for child in children:
-            cid = str(child.get("id") or "")
-            if cid:
-                events.append(self._append("NodeReady", {"node_id": cid}, actor=actor))
+        promo = self.promote_dependency_ready_nodes(actor=actor)
+        events.extend(promo.events)
 
         return CommandResult(ok=True, events=events)
 
-    def commit_merge(
+    def _plan_split(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str,
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """Validate split payload; return (ok, reason, normalized proposal body)."""
+        proj = self.projection()
+        node_id = str(payload.get("split_node") or payload.get("node_id") or "")
+        node = proj.nodes.get(node_id)
+        if node is None:
+            return False, "unknown_node", {}
+        if node.depth >= P.MAX_SPLIT_DEPTH:
+            return False, "max_split_depth", {}
+
+        proof = dict(payload.get("coverage_proof") or {})
+        parent_obs = [str(x) for x in (proof.get("parent_obligation_ids") or node.obligation_refs or [])]
+        child_map_raw = proof.get("child_obligation_map") or {}
+        child_map: dict[str, list[str]] = {}
+        if isinstance(child_map_raw, Mapping):
+            for k, v in child_map_raw.items():
+                child_map[str(k)] = [str(x) for x in (v or [])]
+
+        opened = [dict(x) for x in (payload.get("opened_obligations") or []) if isinstance(x, Mapping)]
+        proof_kind = str(proof.get("proof_kind") or "partition")
+        ok, reason = validate_split_coverage(
+            parent_obligation_ids=parent_obs,
+            child_obligation_map=child_map,
+            proof_kind=proof_kind,
+            opened_obligations=opened,
+        )
+        if not ok:
+            return False, reason, {}
+
+        children = [dict(c) for c in (payload.get("children") or []) if isinstance(c, Mapping)]
+        if not (P.SPLIT_CHILDREN_MIN <= len(children) <= P.SPLIT_CHILDREN_MAX):
+            return False, "children_count", {}
+
+        depends_on = [dict(x) for x in (payload.get("depends_on") or []) if isinstance(x, Mapping)]
+        body = {
+            "node_id": node_id,
+            "split_node": node_id,
+            "coverage_proof": proof,
+            "children": children,
+            "opened_obligations": opened,
+            "depends_on": depends_on,
+        }
+        return True, "ok", body
+
+    def propose_split(
         self,
         payload: Mapping[str, Any],
         *,
         actor: str = "governor",
     ) -> CommandResult:
+        """Validate §2 split constraints and append ``SplitProposed`` (no commit)."""
+        ok, reason, body = self._plan_split(payload, actor=actor)
+        if not ok:
+            return self.reject_command(command="split", reason=reason, actor=actor)
+        ev = self._append("SplitProposed", body, actor=actor)
+        return CommandResult(ok=True, events=[ev])
+
+    def _plan_merge(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str,
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """Validate merge payload; return (ok, reason, normalized commit body)."""
         proj = self.projection()
         into = str(payload.get("into") or "")
         source_ids = [str(x) for x in (payload.get("node_ids") or payload.get("nodes") or [])]
         merged_refs = [str(x) for x in (payload.get("obligation_refs") or [])]
         if not into or not source_ids:
-            return self.reject_command(command="merge", reason="missing_into_or_sources", actor=actor)
+            return False, "missing_into_or_sources", {}
 
         source_sets: list[list[str]] = []
         satisfied: list[str] = []
         for sid in source_ids:
             n = proj.nodes.get(sid)
             if n is None:
-                return self.reject_command(command="merge", reason=f"unknown_node:{sid}", actor=actor)
+                return False, f"unknown_node:{sid}", {}
+            if n.children:
+                return False, f"not_leaf:{sid}", {}
             source_sets.append(list(n.obligation_refs))
             for oid in n.obligation_refs:
                 ob = proj.obligations.get(oid)
@@ -628,21 +789,49 @@ class CommandHandler:
             satisfied_obligation_ids=satisfied,
         )
         if not ok:
+            return False, reason, {}
+
+        body = {
+            "into": into,
+            "node_ids": source_ids,
+            "obligation_refs": merged_refs,
+            "parent_id": payload.get("parent_id"),
+            "title": payload.get("title"),
+            "reason": str(payload.get("reason") or ""),
+            "score": payload.get("score"),
+        }
+        return True, "ok", body
+
+    def propose_merge(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str = "governor",
+    ) -> CommandResult:
+        """Validate §2 merge constraints and append ``MergeProposed`` (no commit)."""
+        ok, reason, body = self._plan_merge(payload, actor=actor)
+        if not ok:
+            return self.reject_command(command="merge", reason=reason, actor=actor)
+        ev = self._append("MergeProposed", body, actor=actor)
+        return CommandResult(ok=True, events=[ev])
+
+    def commit_merge(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str = "governor",
+        emit_proposal: bool = True,
+    ) -> CommandResult:
+        ok, reason, body = self._plan_merge(payload, actor=actor)
+        if not ok:
             return self.reject_command(command="merge", reason=reason, actor=actor)
 
-        ev = self._append(
-            "MergeCommitted",
-            {
-                "into": into,
-                "node_ids": source_ids,
-                "obligation_refs": merged_refs,
-                "parent_id": payload.get("parent_id"),
-                "title": payload.get("title"),
-            },
-            actor=actor,
-        )
-        self._append("NodeReady", {"node_id": into}, actor=actor)
-        return CommandResult(ok=True, events=[ev])
+        events: list[EventEnvelope] = []
+        if emit_proposal:
+            events.append(self._append("MergeProposed", body, actor=actor))
+        events.append(self._append("MergeCommitted", body, actor=actor))
+        events.append(self._append("NodeReady", {"node_id": body["into"]}, actor=actor))
+        return CommandResult(ok=True, events=events)
 
     def propose_obligation_amendment(
         self,

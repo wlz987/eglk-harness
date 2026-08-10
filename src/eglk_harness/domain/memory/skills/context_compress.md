@@ -20,7 +20,7 @@ Mechanical Phase-3 orchestration pin. After Gate on each tick:
 - `--max-ticks` is soft (Manifest); does not replace token/repair authority.
 
 ## Gate boundary
-- Never read eval scorers, Oracle, `scenario.check`, WA/Weave/TB Manifest scores.
+- Never read eval scorers, Oracle, `scenario.check`, or external suite Manifest scores.
 - Never write `claims/`, `evidence/`, `decisions/` in Phase 3.
 - Gate decisions are inputs; Phase 3 does not reverse admit.
 

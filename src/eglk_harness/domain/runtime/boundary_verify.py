@@ -109,12 +109,81 @@ def _is_placeholder_capture(path: Path) -> bool:
     return not _har_json_valid(path)
 
 
+_DELIVERABLE_HINT_REL = (
+    ".eglk-harness/deliverable_hint.json",
+    ".deliverable_hint.json",
+)
+
+
+def _load_deliverable_hint(path: Path) -> dict | None:
+    """Walk up from deliverable toward workdir roots for optional hint sidecar."""
+    cur = path.parent
+    for _ in range(8):
+        for rel in _DELIVERABLE_HINT_REL:
+            cand = cur / rel
+            if not cand.is_file():
+                continue
+            try:
+                raw = json.loads(cand.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeError):
+                continue
+            if isinstance(raw, dict):
+                return raw
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return None
+
+
+def _matches_hint_placeholder(data: dict, hint: dict) -> bool:
+    """True when ``data`` equals hint ``example_success`` on configured keys."""
+    example = hint.get("example_success")
+    if not isinstance(example, dict):
+        return False
+    when = hint.get("placeholder_when")
+    if isinstance(when, dict):
+        for key, expected in when.items():
+            actual = data.get(key)
+            if str(actual or "").upper() != str(expected).upper():
+                return False
+    keys = hint.get("placeholder_keys")
+    if keys is None:
+        keys = [k for k in example if not str(k).startswith("_")]
+    if not isinstance(keys, list) or not keys:
+        return False
+    for key in keys:
+        key_s = str(key)
+        if key_s in example and data.get(key_s) != example.get(key_s):
+            return False
+    return True
+
+
+def _is_placeholder_structured_json(path: Path) -> bool:
+    """True when JSON deliverable is invalid or a schema-template copy from hint."""
+    if not path.is_file() or path.stat().st_size == 0:
+        return True
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        return True
+    if not isinstance(data, dict):
+        return True
+    if data.get("_placeholder") is True:
+        return True
+    hint = _load_deliverable_hint(path)
+    if hint is None:
+        return False
+    return _matches_hint_placeholder(data, hint)
+
+
 def is_valid_must_exist_file(path: Path, *, rel: str) -> bool:
     """Whether ``path`` satisfies a MUST_EXIST entry for ``rel``."""
     if not path.is_file():
         return False
     if rel.endswith(".har"):
         return not _is_placeholder_capture(path)
+    if Path(rel).suffix.lower() == ".json" and _load_deliverable_hint(path) is not None:
+        return not _is_placeholder_structured_json(path)
     return path.stat().st_size > 0
 
 
@@ -204,6 +273,14 @@ def verify_boundary(workdir: Path, boundary: Sequence[str]) -> list[str]:
             continue
         if rel.endswith(".har") and _is_placeholder_capture(path):
             violations.append(f"boundary: {rel} is not a valid HAR (placeholder or missing log)")
+            continue
+        if Path(rel).suffix.lower() == ".json" and _load_deliverable_hint(path) is not None and _is_placeholder_structured_json(
+            path
+        ):
+            msg = f"boundary: {rel} looks like a schema placeholder, not an observation-bound deliverable"
+            if note:
+                msg += f" ({note})"
+            violations.append(msg)
 
     for hit in _forbidden_hits(workdir, rules.forbidden_prefixes):
         violations.append(f"boundary: {hit}")
@@ -217,25 +294,30 @@ def apply_boundary_to_evidence(
     workdir: Path,
     boundary: Sequence[str],
 ) -> dict:
-    """Merge mechanical boundary violations into Checker Evidence gaps."""
+    """Merge mechanical boundary violations into Evidence ``additional_gaps`` / verdict gaps."""
     violations = verify_boundary(workdir, boundary)
     if not violations:
         return evidence
     out = dict(evidence)
-    gaps = list(out.get("gaps") or [])
+    extra = [str(g) for g in (out.get("additional_gaps") or [])]
     for v in violations:
-        if v not in gaps:
-            gaps.append(v)
-    out["gaps"] = gaps
-    artifacts = list(out.get("artifacts") or [])
-    for v in violations:
-        tag = f"[boundary] {v}"
-        if tag not in artifacts:
-            artifacts.append(tag)
-    out["artifacts"] = artifacts
-    try:
-        audit = float(out.get("audit_progress", 1.0))
-    except (TypeError, ValueError):
-        audit = 1.0
-    out["audit_progress"] = min(audit, 0.45)
+        if v not in extra:
+            extra.append(v)
+    out["additional_gaps"] = extra
+    verdicts = out.get("verdicts")
+    if isinstance(verdicts, list):
+        patched: list[dict] = []
+        for verdict in verdicts:
+            if not isinstance(verdict, dict):
+                continue
+            vd = dict(verdict)
+            if vd.get("status") == "satisfied":
+                vd["status"] = "unsatisfied"
+            vgaps = [str(g) for g in (vd.get("gaps") or [])]
+            for v in violations:
+                if v not in vgaps:
+                    vgaps.append(v)
+            vd["gaps"] = vgaps
+            patched.append(vd)
+        out["verdicts"] = patched
     return out

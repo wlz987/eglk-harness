@@ -10,6 +10,8 @@ from eba import Worker
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
 from eglk_harness.domain.runtime.format_repair import run_with_format_repair
+from eglk_harness.domain.runtime.maker_dual_episode import maker_dual_episode_enabled, run_maker_dual_episode
+from eglk_harness.domain.runtime.mechanical_claim import synthesize_mechanical_claim
 from eglk_harness.domain.kernel.leaf_contract import LeafContract, contract_from_dict
 from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.domain.memory.skills import render_prompt
@@ -91,7 +93,7 @@ class MakerActor(Worker):
         )
         if binding_block:
             leaf_block = f"{leaf_block}\n\n{binding_block}"
-        prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
+        boundary = list(leaf.boundary or [])
         meta = {
             "tick": tick,
             "subgoal_id": subgoal_id,
@@ -100,28 +102,95 @@ class MakerActor(Worker):
             "contract_ref": contract_ref or None,
             "world_revision": int(world_revision) if world_revision is not None else None,
         }
-        request = EpisodeRequest(
-            role="maker",
-            prompt=prompt,
-            workdir=workdir,
-            tools_allowed=self.tools_allowed,
-            mcp_config=self.mcp_config if self.tools_allowed else None,
-            add_dirs=self.add_dirs if self.tools_allowed else (),
-            expect="claim",
-            model=resolve_model("maker"),
-            timeout_s=float(args.get("timeout_s") or 600.0),
-            meta=meta,
-            tee_path=str(tee_path) if tee_path else None,
-        )
-        result = await run_with_format_repair(
-            self.adapter, request, leaf_block=leaf_block
-        )
+        model = resolve_model("maker")
+        timeout_s = float(args.get("timeout_s") or 600.0)
+
+        if maker_dual_episode_enabled(self.tools_allowed):
+            result = await run_maker_dual_episode(
+                self.adapter,
+                workdir=workdir,
+                leaf_block=leaf_block,
+                boundary=boundary,
+                title=title,
+                subgoal_id=subgoal_id,
+                tick=tick,
+                contract_ref=contract_ref,
+                obligation_refs=obligation_refs,
+                world_revision=int(world_revision) if world_revision is not None else None,
+                tools_allowed=self.tools_allowed,
+                mcp_config=self.mcp_config if self.tools_allowed else None,
+                add_dirs=self.add_dirs if self.tools_allowed else (),
+                model=model,
+                timeout_s=timeout_s,
+                tee_path=str(tee_path) if tee_path else None,
+                meta=meta,
+            )
+        else:
+            prompt = render_prompt("maker", leaf_block=leaf_block, workdir=workdir)
+            request = EpisodeRequest(
+                role="maker",
+                prompt=prompt,
+                workdir=workdir,
+                tools_allowed=self.tools_allowed,
+                mcp_config=self.mcp_config if self.tools_allowed else None,
+                add_dirs=self.add_dirs if self.tools_allowed else (),
+                expect="claim",
+                model=model,
+                timeout_s=timeout_s,
+                meta=meta,
+                tee_path=str(tee_path) if tee_path else None,
+            )
+            result = await run_with_format_repair(
+                self.adapter, request, leaf_block=leaf_block
+            )
+            if not result.ok or not isinstance(result.parsed, dict):
+                from eglk_harness.domain.runtime.claim_recovery import recover_claim_from_episode
+
+                recovered = recover_claim_from_episode(request.tee_path, result.text)
+                if recovered is not None:
+                    result.ok = True
+                    result.parsed = recovered
+                    result.error = None
+            if not result.ok or not isinstance(result.parsed, dict):
+                mech = synthesize_mechanical_claim(
+                    workdir=workdir,
+                    title=title,
+                    subgoal_id=subgoal_id,
+                    contract_ref=contract_ref,
+                    world_revision=int(world_revision) if world_revision is not None else None,
+                    obligation_refs=obligation_refs,
+                    boundary=boundary,
+                    tick=tick,
+                )
+                if mech is not None:
+                    result.ok = True
+                    result.parsed = mech
+                    result.error = None
+                else:
+                    messages.work_error(result.error or "maker_episode_failed")
+
         if not result.ok or not isinstance(result.parsed, dict):
             messages.work_error(result.error or "maker_episode_failed")
         from eglk_harness.domain.kernel.schema_validate import coerce_document
         from eglk_harness.domain.runtime.contract_align import align_claim_to_contract
 
         claim = coerce_document("claim", dict(result.parsed))
+        from eglk_harness.domain.runtime.mechanical_claim import prefer_disk_bound_claim
+
+        bound = prefer_disk_bound_claim(
+            claim,
+            workdir=workdir,
+            boundary=boundary,
+            title=title,
+            subgoal_id=subgoal_id,
+            contract_ref=contract_ref,
+            world_revision=int(world_revision) if world_revision is not None else None,
+            obligation_refs=obligation_refs,
+            tick=tick,
+            maker_session_id=str(claim.get("maker_session_id") or ""),
+        )
+        if bound is not None:
+            claim = bound
         claim = align_claim_to_contract(
             claim,
             contract_ref=contract_ref,
@@ -144,4 +213,5 @@ class MakerActor(Worker):
             cost_usd=float(result.cost_usd or 0.0),
             format_repair_tokens=int(result.format_repair_tokens or 0),
             format_repair_cost_usd=float(result.format_repair_cost_usd or 0.0),
+            maker_dual_episode=bool(maker_dual_episode_enabled(self.tools_allowed)),
         )

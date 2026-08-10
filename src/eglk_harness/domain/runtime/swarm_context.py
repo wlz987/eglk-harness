@@ -33,28 +33,21 @@ def env_probe_priors(workdir: Path) -> list[dict[str, Any]]:
         mod = load_env_probes_module(Path(eval_root))
     except Exception:
         return []
+    if not hasattr(mod, "env_probe_prior_rows"):
+        return []
+    try:
+        rows = mod.env_probe_prior_rows(Path(eval_root))
+    except Exception:
+        return []
     priors: list[dict[str, Any]] = []
-    wa_cfg = os.environ.get("WA_HARD_CONFIG") or ""
-    if hasattr(mod, "probe_wa_sites"):
-        try:
-            sites = mod.probe_wa_sites(Path(wa_cfg) if wa_cfg else None)
-            if isinstance(sites, dict):
-                for row in sites.get("sites") or []:
-                    if not isinstance(row, dict):
-                        continue
-                    name = str(row.get("name") or "")
-                    url = str(row.get("url") or "")
-                    ok = row.get("ok")
-                    priors.append(
-                        {
-                            "kind": "env_probe",
-                            "ref": f"wa_site:{name}",
-                            "text": f"site {name} {url} reachable={ok}",
-                        }
-                    )
-        except Exception:
-            pass
-    return priors[:12]
+    if isinstance(rows, list):
+        for row in rows[:12]:
+            if not isinstance(row, dict):
+                continue
+            ref = str(row.get("ref") or row.get("kind") or "env_probe")
+            text = str(row.get("text") or row.get("detail") or ref)
+            priors.append({"kind": "env_probe", "ref": ref, "text": text})
+    return priors
 
 
 def scout_observation_priors(workdir: Path, tick: int) -> list[dict[str, Any]]:

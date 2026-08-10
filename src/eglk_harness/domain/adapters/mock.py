@@ -46,6 +46,10 @@ class MockAdapter:
         ] or ["ob-1"]
         criteria = [str(x) for x in (request.meta.get("done_criteria") or [])]
 
+        if request.expect == "text" and request.role == "maker":
+            note = "mock work episode complete"
+            return EpisodeResult(ok=True, text=note, backend=self.name)
+
         if request.role == "maker" or request.expect == "claim":
             claim = self._claim(
                 tick,
@@ -71,6 +75,21 @@ class MockAdapter:
             return EpisodeResult(ok=True, text=text, parsed=evidence, backend=self.name)
 
         if request.role == "governor":
+            action = str(request.meta.get("action") or "split")
+            if action == "merge":
+                parent_id = str(request.meta.get("merge_parent_id") or subgoal_id)
+                node_ids = [
+                    str(x) for x in (request.meta.get("merge_node_ids") or []) if str(x)
+                ]
+                into = str(request.meta.get("merge_into") or f"{parent_id}.m{tick:03d}")
+                doc = {
+                    "into": into,
+                    "node_ids": node_ids,
+                    "parent_id": parent_id,
+                    "title": f"merged:{'+'.join(node_ids)}",
+                    "reason": "mock merge overlap",
+                }
+                return EpisodeResult(ok=True, text=json.dumps(doc), parsed=doc, backend=self.name)
             doc = {
                 "split_node": subgoal_id,
                 "children": [

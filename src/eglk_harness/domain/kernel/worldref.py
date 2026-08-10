@@ -208,8 +208,16 @@ def _ack_or_write(
     if (workdir / rel).is_file():
         written.append(rel)
 
+def _ack_action_path(workdir: Path, rel: str, written: list[str]) -> None:
+    rel = str(rel).strip().lstrip("/").replace("\\", "/")
+    if not rel or ".." in Path(rel).parts:
+        return
+    if (workdir / rel).is_file():
+        written.append(rel)
+
+
 def apply_claim_actions(workdir: Path, actions: list[Mapping[str, Any]] | None) -> list[str]:
-    """Apply ActionClaim.actions (e.g. file_write) to the task workdir."""
+    """Apply ActionClaim.actions to the task workdir; ack existing paths for read-only kinds."""
     if not actions:
         return []
     workdir = workdir.resolve()
@@ -217,7 +225,19 @@ def apply_claim_actions(workdir: Path, actions: list[Mapping[str, Any]] | None) 
     for action in actions:
         if not isinstance(action, Mapping):
             continue
-        if str(action.get("kind") or "") != "file_write":
+        kind = str(action.get("kind") or "")
+        if kind in {"path_ack", "mcp_delivery", "external_write"}:
+            payload = action.get("payload") if isinstance(action.get("payload"), Mapping) else {}
+            rel = str(payload.get("path") or "").strip().lstrip("/").replace("\\", "/")
+            if not rel:
+                target = str(action.get("target") or "").strip()
+                if target.startswith("workdir/"):
+                    rel = target[len("workdir/") :].lstrip("/")
+                else:
+                    rel = target.lstrip("/")
+            _ack_action_path(workdir, rel, written)
+            continue
+        if kind != "file_write":
             continue
         payload = action.get("payload") if isinstance(action.get("payload"), Mapping) else {}
         rel = str(payload.get("path") or "").strip().lstrip("/").replace("\\", "/")
@@ -304,8 +324,7 @@ def claim_payload_from_actions(actions: list[Mapping[str, Any]] | None) -> dict[
     for action in actions:
         if not isinstance(action, Mapping):
             continue
-        if str(action.get("kind") or "") != "file_write":
-            continue
+        kind = str(action.get("kind") or "")
         payload = action.get("payload") if isinstance(action.get("payload"), Mapping) else {}
         rel = str(payload.get("path") or "").strip().lstrip("/").replace("\\", "/")
         if not rel:
@@ -315,6 +334,11 @@ def claim_payload_from_actions(actions: list[Mapping[str, Any]] | None) -> dict[
             else:
                 rel = target.lstrip("/")
         if not rel or ".." in Path(rel).parts:
+            continue
+        if kind in {"path_ack", "mcp_delivery", "external_write"}:
+            files[rel] = {"path": rel, "ack": True}
+            continue
+        if kind != "file_write":
             continue
         content = payload.get("content")
         if content is None:

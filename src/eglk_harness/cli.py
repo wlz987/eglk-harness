@@ -31,6 +31,15 @@ from eglk_harness.domain.product.observe.dashboard import serve_dashboard
 from eglk_harness.domain.product.status import collect_status
 from eglk_harness.domain.product.update_check import check_update
 from eglk_harness.domain.eval.loader import eval_suite_choices, load_suite_module
+from eglk_harness.domain.eval.suite_ops import (
+    _PACK_SUITES,
+    list_task_rows,
+    materialize_task,
+    merge_agent_run_scores,
+    resolve_pack_task,
+    run_batch,
+    score_task,
+)
 
 def _suite_mod(suite: str, eval_root: Path):
     return load_suite_module(suite, eval_root)
@@ -451,40 +460,10 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         return 2
 
     if getattr(args, "list_tasks", False):
-        rows: list[dict[str, str]] = []
-        if args.suite == "wa_hard":
-            wa_hard_mod = _suite_mod("wa_hard", eval_root)
-            rows = [{"id": t.task_id, "summary": t.intent} for t in wa_hard_mod.load_pack_index(eval_root)]
-        elif args.suite == "osworld_aux":
-            osworld_mod = _suite_mod("osworld_aux", eval_root)
-            rows = [
-                {"id": t.task_id, "summary": t.instruction}
-                for t in osworld_mod.load_pack_index(eval_root)
-            ]
-        elif args.suite == "weave_lh":
-            weave_lh_mod = _suite_mod("weave_lh", eval_root)
-            rows = [
-                {"id": t.task_id, "summary": t.summary} for t in weave_lh_mod.load_pack_index(eval_root)
-            ]
-        elif args.suite == "tb21":
-            tb21_mod = _suite_mod("tb21", eval_root)
-            rows = [
-                {"id": t.task_id, "summary": t.summary} for t in tb21_mod.load_pack_index(eval_root)
-            ]
-        elif args.suite == "weave_thin":
-            tasks_path = eval_root / "weave_thin" / "tasks.example.json"
-            if tasks_path.is_file():
-                data = json.loads(tasks_path.read_text(encoding="utf-8"))
-                tasks = data.get("tasks") if isinstance(data, dict) else data
-                if isinstance(tasks, list):
-                    for t in tasks:
-                        if isinstance(t, dict) and t.get("id"):
-                            rows.append(
-                                {
-                                    "id": str(t["id"]),
-                                    "summary": str(t.get("summary") or t.get("title") or ""),
-                                }
-                            )
+        if args.suite in _PACK_SUITES:
+            rows = list_task_rows(_suite_mod(args.suite, eval_root), eval_root)
+        else:
+            rows = []
         print(json.dumps({"suite": args.suite, "count": len(rows), "tasks": rows}, indent=2))
         print("note: listing only — scorers never feed Gate")
         return 0
@@ -492,8 +471,9 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     out = Path(args.workdir).resolve()
 
     if getattr(args, "batch", False):
-        if args.suite != "wa_hard":
-            print("error: --batch currently supports --suite wa_hard only", flush=True)
+        mod = _suite_mod(args.suite, eval_root)
+        if not hasattr(mod, "run_batch"):
+            print(f"error: --batch not supported for suite {args.suite}", flush=True)
             return 2
         limit = int(args.limit) if getattr(args, "limit", None) is not None else None
         external = Path(args.external_score).resolve() if getattr(args, "external_score", None) else None
@@ -501,32 +481,26 @@ def _cmd_eval(args: argparse.Namespace) -> int:
             Path(args.score_agent_runs).resolve() if getattr(args, "score_agent_runs", None) else None
         )
         if agent_runs is not None and not args.prepare_only:
-            wa_hard_mod = _suite_mod("wa_hard", eval_root)
-            # Prefer official agent-run ingest over placeholder when scoring a batch.
-            summary = wa_hard_mod.run_batch(
+            if not hasattr(mod, "ingest_agent_runs"):
+                print("error: --score-agent-runs not supported for this suite", flush=True)
+                return 2
+            summary = run_batch(
+                mod,
                 eval_root,
-                out_root=out,
+                out,
                 limit=limit,
                 prepare_only=False,
                 external_score_dir=None,
             )
-            ingested = wa_hard_mod.ingest_agent_runs(agent_runs)
-            by_id = {r["task_id"]: r for r in ingested.get("tasks") or []}
-            for entry in summary.get("tasks") or []:
-                row = by_id.get(str(entry.get("task_id")))
-                if row:
-                    entry["scores"] = row.get("scores")
-                    entry["detail"] = row.get("detail")
-                    entry["ok"] = bool(row.get("ok"))
-            summary["agent_runs"] = ingested
-            summary["note"] = "official agent-run scores — Manifest-only; never Gate"
+            ingested = mod.ingest_agent_runs(agent_runs)
+            summary = merge_agent_run_scores(summary, ingested)
             print(json.dumps(summary, indent=2, ensure_ascii=False))
             print("note: offline scores are Manifest-only — never Gate inputs")
             return 0 if ingested.get("ok") else 1
-        wa_hard_mod = _suite_mod("wa_hard", eval_root)
-        summary = wa_hard_mod.run_batch(
+        summary = run_batch(
+            mod,
             eval_root,
-            out_root=out,
+            out,
             limit=limit,
             prepare_only=bool(args.prepare_only),
             external_score_dir=external,
@@ -539,207 +513,65 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         print("error: --task-id required unless --batch or --list-tasks", flush=True)
         return 2
 
-    wa_hard_mod = osworld_mod = weave_lh_mod = tb21_mod = None
-    if args.suite == "wa_hard":
-        wa_hard_mod = _suite_mod("wa_hard", eval_root)
-    elif args.suite == "osworld_aux":
-        osworld_mod = _suite_mod("osworld_aux", eval_root)
-    elif args.suite == "weave_lh":
-        weave_lh_mod = _suite_mod("weave_lh", eval_root)
-    elif args.suite == "tb21":
-        tb21_mod = _suite_mod("tb21", eval_root)
+    score_agent_runs = (
+        Path(args.score_agent_runs).resolve() if getattr(args, "score_agent_runs", None) else None
+    )
+    score_har = Path(args.score_har).resolve() if getattr(args, "score_har", None) else None
+    external_score = Path(args.external_score).resolve() if getattr(args, "external_score", None) else None
+    scoring_requested = bool(score_agent_runs or score_har or external_score)
 
-    if args.suite == "wa_hard":
-        tasks = {t.task_id: t for t in wa_hard_mod.load_pack_index(eval_root)}
-        task = tasks.get(args.task_id)
-        if task is None and getattr(args, "score_agent_runs", None):
-            # Official demo / external agent-run ids need not be in Hard pack.
-            task = wa_hard_mod.WaHardTask(
-                task_id=str(args.task_id),
-                intent=f"External/official agent-run score for {args.task_id}",
-                sites=[],
-                notes="score-agent-runs only — Manifest; never Gate",
-            )
+    if args.suite in _PACK_SUITES:
+        mod = _suite_mod(args.suite, eval_root)
+        allow_synthetic = bool(score_agent_runs)
+        task = resolve_pack_task(
+            mod,
+            eval_root,
+            args.task_id,
+            allow_synthetic=allow_synthetic,
+        )
         if task is None:
-            print(f"error: unknown wa_hard task_id={args.task_id}", flush=True)
+            print(f"error: unknown {args.suite} task_id={args.task_id}", flush=True)
             return 2
-        wa_hard_mod.materialize_goal(task, out)
-    elif args.suite == "osworld_aux":
-        tasks = {t.task_id: t for t in osworld_mod.load_pack_index(eval_root)}
-        task = tasks.get(args.task_id)
-        if task is None:
-            print(f"error: unknown osworld_aux task_id={args.task_id}", flush=True)
-            return 2
-        osworld_mod.materialize_goal(task, out)
-    elif args.suite == "weave_lh":
-        tasks = {t.task_id: t for t in weave_lh_mod.load_pack_index(eval_root)}
-        task = tasks.get(args.task_id)
-        if task is None:
-            print(f"error: unknown weave_lh task_id={args.task_id}", flush=True)
-            return 2
-        weave_lh_mod.materialize_goal(task, out)
-    elif args.suite == "tb21":
-        tasks = {t.task_id: t for t in tb21_mod.load_pack_index(eval_root)}
-        task = tasks.get(args.task_id)
-        if task is None:
-            print(f"error: unknown tb21 task_id={args.task_id}", flush=True)
-            return 2
-        tb21_mod.materialize_goal(task, out)
+        materialize_task(mod, task, out)
     else:
+        mod = None
         prepare_task_workdir(eval_root, suite=args.suite, task_id=args.task_id, out_dir=out)
+
     init_project(out)
     print(f"prepared eval workdir {out} suite={args.suite} task={args.task_id}")
-    if args.prepare_only:
-        if args.suite == "wa_hard" and getattr(args, "score_agent_runs", None):
-            runs = Path(args.score_agent_runs)
-            cand = runs / str(args.task_id) / "eval_result.json"
-            if not cand.is_file() and (runs / "eval_result.json").is_file():
-                cand = runs / "eval_result.json"
-            if not cand.is_file():
-                print(f"error: missing eval_result.json under {runs} for task {args.task_id}", flush=True)
-                return 2
-            scores = wa_hard_mod.score_from_eval_result(cand)
-            ok = bool(float(scores.get("success") or 0) >= 1.0)
-            return _emit_eval_scores(
-                workdir=out,
-                suite=args.suite,
-                task_id=args.task_id,
-                agent=args.agent,
-                swarm=args.swarm,
-                scores=scores,
-                ok=ok,
-                detail="official_scored",
-            )
-        if args.suite == "wa_hard" and getattr(args, "score_har", None):
-            scores = wa_hard_mod.score_har_offline(Path(args.score_har))
-            ok = bool(float(scores.get("success") or 0) >= 1.0)
-            return _emit_eval_scores(
-                workdir=out,
-                suite=args.suite,
-                task_id=args.task_id,
-                agent=args.agent,
-                swarm=args.swarm,
-                scores=scores,
-                ok=ok,
-                detail="har_offline_scored",
-            )
-        if args.suite == "weave_lh" and getattr(args, "external_score", None):
-            scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
-            ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
-                "status"
-            ) == "external_scored"
-            return _emit_eval_scores(
-                workdir=out,
-                suite=args.suite,
-                task_id=args.task_id,
-                agent=args.agent,
-                swarm=args.swarm,
-                scores=scores,
-                ok=ok,
-                detail="weave_lh_external",
-            )
-        if args.suite == "osworld_aux" and getattr(args, "external_score", None):
-            scores = osworld_mod.score_external(Path(args.external_score))
-            return _emit_eval_scores(
-                workdir=out,
-                suite=args.suite,
-                task_id=args.task_id,
-                agent=args.agent,
-                swarm=args.swarm,
-                scores=scores,
-                ok=True,
-                detail="osworld_external",
-            )
-        if args.suite == "tb21" and getattr(args, "external_score", None):
-            scores = tb21_mod.score_from_judge_result(Path(args.external_score))
-            ok = bool(float(scores.get("success") or scores.get("pass") or 0) >= 1.0) or scores.get(
-                "status"
-            ) == "external_scored"
-            return _emit_eval_scores(
-                workdir=out,
-                suite=args.suite,
-                task_id=args.task_id,
-                agent=args.agent,
-                swarm=args.swarm,
-                scores=scores,
-                ok=ok,
-                detail="tb21_external",
-            )
+
+    if args.prepare_only and not scoring_requested:
         return 0
-    rc = app_run(
-        RunRequest(
-            workdir=out,
-            agent=resolve_agent(args.agent, out),
-            swarm=resolve_swarm(args.swarm or "0"),
-            compile=resolve_compile(args.compile, out),
-            max_ticks=int(args.max_ticks or 4),
+
+    rc = 0
+    if not args.prepare_only:
+        rc = app_run(
+            RunRequest(
+                workdir=out,
+                agent=resolve_agent(args.agent, out),
+                swarm=resolve_swarm(args.swarm or "0"),
+                compile=resolve_compile(args.compile, out),
+                max_ticks=int(args.max_ticks or 4),
+            )
         )
-    )
-    if args.suite == "wa_hard":
-        if getattr(args, "score_agent_runs", None):
-            runs = Path(args.score_agent_runs)
-            cand = runs / str(args.task_id) / "eval_result.json"
-            if not cand.is_file() and (runs / "eval_result.json").is_file():
-                cand = runs / "eval_result.json"
-            if cand.is_file():
-                scores = wa_hard_mod.score_from_eval_result(cand)
-                ok = bool(float(scores.get("success") or 0) >= 1.0)
-                detail = "official_scored"
-            else:
-                scores = wa_hard_mod.score_placeholder(task_id=args.task_id, workdir=out)
-                ok = False
-                detail = "missing_eval_result"
-        elif getattr(args, "score_har", None):
-            scores = wa_hard_mod.score_har_offline(Path(args.score_har))
-            ok = bool(float(scores.get("success") or 0) >= 1.0)
-            detail = "har_offline_scored"
-        elif getattr(args, "external_score", None):
-            scores = wa_hard_mod.score_external(Path(args.external_score))
-            ok = True
-            detail = "external_scored"
-        else:
-            scores = wa_hard_mod.score_placeholder(task_id=args.task_id, workdir=out)
-            ok = True
-            detail = "recorded_only"
-    elif args.suite == "osworld_aux":
-        if getattr(args, "external_score", None):
-            scores = osworld_mod.score_external(Path(args.external_score))
-            ok = True
-            detail = "external_scored"
-        else:
-            scores = osworld_mod.score_placeholder(task_id=args.task_id, workdir=out, eval_root=eval_root)
-            ok = True
-            detail = "recorded_only"
-        hint = osworld_mod.path_hint(eval_root)
-        if hint is not None:
-            scores["vendor_hint"] = str(hint)
-    elif args.suite == "weave_lh":
-        if getattr(args, "external_score", None):
-            scores = weave_lh_mod.score_from_judge_result(Path(args.external_score))
-            ok = True
-            detail = "external_scored"
-        else:
-            scores = weave_lh_mod.score_placeholder(
-                task_id=args.task_id, workdir=out, eval_root=eval_root
-            )
-            ok = True
-            detail = scores.get("status") or "recorded_only"
-    elif args.suite == "tb21":
-        if getattr(args, "external_score", None):
-            scores = tb21_mod.score_from_judge_result(Path(args.external_score))
-            ok = True
-            detail = "external_scored"
-        else:
-            scores = tb21_mod.score_placeholder(
-                task_id=args.task_id, workdir=out, eval_root=eval_root
-            )
-            ok = True
-            detail = scores.get("status") or "recorded_only"
+
+    if mod is not None:
+        scores, ok, detail = score_task(
+            mod,
+            suite=args.suite,
+            task_id=args.task_id,
+            workdir=out,
+            eval_root=eval_root,
+            external_score=external_score,
+            score_har=score_har,
+            score_agent_runs=score_agent_runs,
+        )
     else:
         scored = score_offline(
             suite=args.suite, task_id=args.task_id, workdir=out, eval_root=eval_root
         )
         scores, ok, detail = scored.scores, scored.ok, scored.detail
+
     eval_rc = _emit_eval_scores(
         workdir=out,
         suite=args.suite,
@@ -914,13 +746,13 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument(
         "--batch",
         action="store_true",
-        help="Batch mode for wa_hard (writes batch_summary.json under --workdir)",
+        help="Batch mode when suite connector provides run_batch() (writes batch_summary.json)",
     )
     ev.add_argument("--limit", type=int, default=None, help="Max tasks in --batch")
     ev.add_argument(
         "--external-score",
         default=None,
-        help="Path to external judge JSON (wa_hard); or directory of <task_id>.json for --batch",
+        help="Path to external judge JSON; or directory of <task_id>.json for --batch",
     )
     ev.add_argument(
         "--score-har",
@@ -931,7 +763,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--score-agent-runs",
         default=None,
         help=(
-            "WA-Hard: directory of <task_id>/eval_result.json from official eval-tasks "
+            "Directory of <task_id>/eval_result.json from official eval-tasks when supported "
             "(Manifest-only — never Gate)"
         ),
     )

@@ -16,7 +16,7 @@ from typing import Any, Mapping, Sequence
 from eglk_harness.domain.kernel import projections as P
 from eglk_harness.domain.kernel.governor_split import propose_children
 from eglk_harness.domain.kernel.reducer import ProjectionState
-from eglk_harness.domain.kernel.scheduler import advisor_plan, ready_pool
+from eglk_harness.domain.kernel.scheduler import advisor_plan, pick_sibling_merge_pair, ready_pool
 from eglk_harness.domain.kernel.swarm import decide_swarm
 
 
@@ -254,6 +254,12 @@ def build_mechanical_split_candidate(
             }
         )
 
+    depends_on: list[dict[str, str]] = []
+    if proof_kind == "refinement" and len(children_raw) >= 2:
+        from eglk_harness.domain.kernel.projection_view import split_depends_on_chain
+
+        depends_on = split_depends_on_chain([ch["id"] for ch in children_raw])
+
     return {
         "role": "governor",
         "step": step,
@@ -262,12 +268,52 @@ def build_mechanical_split_candidate(
         "repair_streak": node.repair_streak,
         "children": children,
         "opened_obligations": opened,
+        "depends_on": depends_on,
         "coverage_proof": {
             "parent_obligation_ids": parent_obs,
             "child_obligation_map": child_obligation_map,
             "proof_kind": proof_kind,
         },
     }
+
+
+def build_mechanical_merge_candidate(
+    state: ProjectionState,
+    *,
+    step: int = 0,
+    min_criteria_sim: float = 0.5,
+) -> dict[str, Any] | None:
+    """Build merge payload for CommandHandler when sibling criteria overlap."""
+    pair = pick_sibling_merge_pair(state, min_criteria_sim=min_criteria_sim)
+    if pair is None:
+        return None
+    parent_id, node_ids, score = pair
+    merged_refs: list[str] = []
+    for nid in node_ids:
+        node = state.nodes.get(nid)
+        if node is not None:
+            merged_refs.extend(node.obligation_refs)
+    merged_refs = list(dict.fromkeys(merged_refs))
+    into = f"{parent_id}.m{step:03d}"
+    return {
+        "role": "governor",
+        "step": step,
+        "source": "mechanical",
+        "into": into,
+        "node_ids": node_ids,
+        "parent_id": parent_id,
+        "title": f"merged:{'+'.join(node_ids)}",
+        "obligation_refs": merged_refs,
+        "reason": f"criteria_overlap {score:.2f}",
+        "score": score,
+    }
+
+
+def write_governor_merge_candidate(loop_dir: Path, candidate: Mapping[str, Any], *, step: int) -> Path:
+    into = str(candidate.get("into") or "merged")
+    path = candidates_dir(loop_dir) / f"governor_merge_{step:03d}_{_safe(into)}.json"
+    path.write_text(json.dumps(dict(candidate), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
 
 
 def write_governor_split_candidate(loop_dir: Path, candidate: Mapping[str, Any], *, step: int) -> Path:

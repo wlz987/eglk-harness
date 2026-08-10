@@ -72,6 +72,8 @@ __all__ = [
     "PluginError",
     "active_plugin_for_agent",
     "codex_gui_grants",
+    "computer_use_enabled",
+    "doctor_computer_use_detail",
     "community_plugin_activation",
     "community_plugin_ids",
     "community_plugin_state",

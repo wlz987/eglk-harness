@@ -9,6 +9,7 @@ from typing import Any
 from eglk_harness.domain.event_store import open_store
 from eglk_harness.domain.kernel import paths
 from eglk_harness.domain.kernel.reducer import (
+    ProjectionState,
     obligation_ledger_dict,
     reduce_events,
     run_projection_dict,
@@ -86,3 +87,12 @@ def projection_diff(a: Any, b: Any) -> list[str]:
             diffs.extend(f"[{i}].{s}" for s in sub)
         return diffs
     return [f"value:{a!r}!={b!r}"]
+
+
+def projection_state_from_loop(loop_dir: Path) -> ProjectionState:
+    """Replay events.db → ProjectionState (read-only; for sidecar advisors)."""
+    store = open_store(loop_dir)
+    try:
+        return reduce_events(store.read_all())
+    finally:
+        store.close()

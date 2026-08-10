@@ -10,13 +10,6 @@ from eglk_harness.domain.kernel import paths
 
 SUITE_MARKER_NAME = "suite.json"
 
-_DEFAULT_FRAGMENTS: dict[str, tuple[str, ...]] = {
-    "wa_hard": ("wa-browser",),
-    "weave_lh": ("computer-use",),
-    "osworld_aux": ("computer-use",),
-    "tb21": ("terminal-bench",),
-}
-
 
 def marker_path(workdir: Path) -> Path:
     return paths.harness_root(workdir) / SUITE_MARKER_NAME
@@ -44,11 +37,10 @@ def write_marker(
 ) -> Path:
     """Write ``.eglk-harness/suite.json`` for fragment routing and boundary checks."""
     paths.harness_root(workdir).mkdir(parents=True, exist_ok=True)
-    frags = list(fragments or _DEFAULT_FRAGMENTS.get(suite, ()))
     doc: dict[str, Any] = {
         "suite": suite,
         "task_id": task_id,
-        "fragments": frags,
+        "fragments": [str(x) for x in (fragments or ())],
         "boundary": [str(x) for x in (boundary or [])],
     }
     if extra:
@@ -64,16 +56,3 @@ def boundary_lines(workdir: Path) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(x) for x in raw if str(x).strip()]
-
-
-def wa_hard_boundary(task_id: str) -> list[str]:
-    """Mechanical delivery contract for WebArena Hard live runs."""
-    base = f"agent_runs/{task_id}"
-    return [
-        f"MUST_EXIST: {base}/agent_response.json (official WebArena answer JSON)",
-        f"MUST_EXIST: {base}/network.har (real HAR from wa_finalize_session)",
-        f"FORBIDDEN_PATH_PREFIX: agent_runs/root.",
-        f"FORBIDDEN_PATH_PREFIX: agent_runs/wa-{task_id}-root",
-        "USE_MCP: wa-browser (wa_start_session → navigate → wa_write_agent_response → wa_finalize_session)",
-        "FORBIDDEN: text placeholder HAR or agent_response.json outside agent_runs/<task_id>/",
-    ]

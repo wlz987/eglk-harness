@@ -27,7 +27,7 @@ do not write the main ring or invent Gate scores.
 - Tie challenges to **leaf acceptance lines**, not generic style opinions.
 
 ## Hard rules
-- Never put eval Oracle results, WA/Weave/TB scores, or admit judgments into challenges.
+- Never put eval Oracle results, external suite scores, or admit judgments into challenges.
 - Do not write Evidence (Checker owns Evidence schema).
 - Do not mutate workdir. Observation / read-only probes only.
 

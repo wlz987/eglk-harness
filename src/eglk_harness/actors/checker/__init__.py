@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -9,11 +11,22 @@ from eba import Worker
 
 from eglk_harness.domain.adapters.base import AgentAdapter, EpisodeRequest
 from eglk_harness.domain.adapters.mock import MockAdapter
-from eglk_harness.domain.runtime.format_repair import run_with_format_repair
 from eglk_harness.domain.kernel.leaf_contract import LeafContract, contract_from_dict
-from eglk_harness.domain.runtime.models import resolve_model
+from eglk_harness.domain.kernel.schema_validate import coerce_document
 from eglk_harness.domain.memory.skills import render_prompt
+from eglk_harness.domain.runtime.contract_align import (
+    align_evidence_to_contract,
+    render_contract_binding_block,
+)
+from eglk_harness.domain.runtime.evidence_guard import normalize_evidence
+from eglk_harness.domain.runtime.format_repair import run_with_format_repair
+from eglk_harness.domain.runtime.mechanical_evidence import (
+    checker_mechanical_enabled,
+    synthesize_mechanical_evidence,
+)
+from eglk_harness.domain.runtime.models import resolve_model
 from eglk_harness.protocol import messages, payload, topics
+
 
 def _leaf_from_args(
     args: Mapping[str, Any],
@@ -42,6 +55,13 @@ def _leaf_from_args(
         tick=tick,
     )
 
+
+def _checker_tools_off_preferred() -> bool:
+    """Default: Checker audits disk without MCP (cost); override with EGLK_CHECKER_TOOLS=1."""
+    raw = os.environ.get("EGLK_CHECKER_TOOLS", "0").strip().lower()
+    return raw not in {"1", "true", "yes", "on"}
+
+
 class CheckerActor(Worker):
     pattern = f"{topics.ROLE_CHECKER_RUN}.*"
     result_prefix = topics.ROLE_CHECKER_RESULT
@@ -65,6 +85,58 @@ class CheckerActor(Worker):
         self.tools_allowed = tools_allowed
         self.mcp_config = mcp_config
         self.add_dirs = tuple(add_dirs or ())
+
+    def _finalize_evidence(
+        self,
+        evidence: dict[str, Any],
+        *,
+        claim: Mapping[str, Any],
+        written: list[str],
+        mutations: list[str],
+        workdir: Path,
+        boundary: list[str],
+        contract_ref: str,
+        obligation_refs: list[str],
+        world_revision: int | None,
+        tick: int,
+        subgoal_id: str,
+        tokens: int = 0,
+        cost_usd: float = 0.0,
+        format_repair_tokens: int = 0,
+        format_repair_cost_usd: float = 0.0,
+    ) -> dict[str, Any]:
+        evidence = normalize_evidence(
+            evidence,
+            written=written,
+            mutations=mutations,
+            workdir=workdir,
+            boundary=boundary,
+        )
+        evidence = coerce_document("evidence", evidence)
+        evidence = align_evidence_to_contract(
+            evidence,
+            contract_ref=contract_ref,
+            obligation_refs=obligation_refs,
+            world_revision=world_revision,
+        )
+        evidence["tick"] = tick
+        evidence["subgoal_id"] = subgoal_id
+        maker_sid = str(claim.get("maker_session_id") or "")
+        csid = str(evidence.get("checker_session_id") or "").strip()
+        if not csid or csid == "unknown" or csid == maker_sid:
+            evidence["checker_session_id"] = f"checker-{uuid.uuid4().hex[:12]}"
+        if contract_ref and not evidence.get("contract_ref"):
+            evidence["contract_ref"] = contract_ref
+        return messages.ok_value(
+            evidence=evidence,
+            tokens=int(tokens or 0),
+            cost_usd=float(cost_usd or 0.0),
+            format_repair_tokens=int(format_repair_tokens or 0),
+            format_repair_cost_usd=float(format_repair_cost_usd or 0.0),
+            checker_mechanical=bool(
+                evidence.get("note") == "mechanical_evidence_from_boundary"
+            ),
+        )
 
     async def work(self, envelope_payload: Any) -> Any:
         args = payload.get_args(envelope_payload if isinstance(envelope_payload, dict) else {})
@@ -92,8 +164,6 @@ class CheckerActor(Worker):
             if str(x).strip()
         ]
         world_revision = args.get("world_revision")
-        from eglk_harness.domain.runtime.contract_align import render_contract_binding_block
-
         binding_block = render_contract_binding_block(
             contract_ref,
             obligation_refs,
@@ -101,6 +171,45 @@ class CheckerActor(Worker):
         )
         if binding_block:
             leaf_block = f"{leaf_block}\n\n{binding_block}"
+
+        wr = int(world_revision) if world_revision is not None else None
+        use_tools = bool(self.tools_allowed) and not _checker_tools_off_preferred()
+        boundary = list(leaf.boundary or [])
+        mutations = list(args.get("mutations") or [])
+
+        force_llm = os.environ.get("EGLK_CHECKER_FORCE_LLM", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+        if checker_mechanical_enabled() and not force_llm:
+            mech = synthesize_mechanical_evidence(
+                workdir=workdir,
+                claim=claim,
+                contract_ref=contract_ref,
+                obligation_refs=obligation_refs,
+                boundary=boundary,
+                world_revision=wr,
+                tick=tick,
+                written=written,
+            )
+            if mech is not None:
+                return self._finalize_evidence(
+                    mech,
+                    claim=claim,
+                    written=written,
+                    mutations=mutations,
+                    workdir=workdir,
+                    boundary=boundary,
+                    contract_ref=contract_ref,
+                    obligation_refs=obligation_refs,
+                    world_revision=wr,
+                    tick=tick,
+                    subgoal_id=subgoal_id,
+                )
+
         observe_note = ""
         obs = args.get("observation")
         if isinstance(obs, dict) and obs.get("world_revision") is not None:
@@ -121,9 +230,9 @@ class CheckerActor(Worker):
             role="checker",
             prompt=prompt,
             workdir=workdir,
-            tools_allowed=self.tools_allowed,
-            mcp_config=self.mcp_config if self.tools_allowed else None,
-            add_dirs=self.add_dirs if self.tools_allowed else (),
+            tools_allowed=use_tools,
+            mcp_config=self.mcp_config if use_tools else None,
+            add_dirs=self.add_dirs if use_tools else (),
             expect="evidence",
             model=resolve_model("checker"),
             timeout_s=float(args.get("timeout_s") or 600.0),
@@ -135,7 +244,7 @@ class CheckerActor(Worker):
                 "done_criteria": criteria,
                 "obligation_refs": obligation_refs or None,
                 "contract_ref": contract_ref or None,
-                "world_revision": int(world_revision) if world_revision is not None else None,
+                "world_revision": wr,
             },
             tee_path=str(tee_path) if tee_path else None,
         )
@@ -144,42 +253,47 @@ class CheckerActor(Worker):
             request,
             leaf_block=f"{leaf_block}\n\n{extra}",
         )
-        if not result.ok or not isinstance(result.parsed, dict):
-            messages.work_error(result.error or "checker_episode_failed")
-        from eglk_harness.domain.runtime.evidence_guard import normalize_evidence
+        if result.ok and isinstance(result.parsed, dict):
+            return self._finalize_evidence(
+                dict(result.parsed),
+                claim=claim,
+                written=written,
+                mutations=mutations,
+                workdir=workdir,
+                boundary=boundary,
+                contract_ref=contract_ref,
+                obligation_refs=obligation_refs,
+                world_revision=wr,
+                tick=tick,
+                subgoal_id=subgoal_id,
+                tokens=int(result.tokens or 0),
+                cost_usd=float(result.cost_usd or 0.0),
+                format_repair_tokens=int(result.format_repair_tokens or 0),
+                format_repair_cost_usd=float(result.format_repair_cost_usd or 0.0),
+            )
 
-        evidence = normalize_evidence(
-            dict(result.parsed),
-            written=written,
-            mutations=list(args.get("mutations") or []),
+        mech = synthesize_mechanical_evidence(
             workdir=workdir,
-            boundary=leaf.boundary,
-        )
-        from eglk_harness.domain.kernel.schema_validate import coerce_document
-        from eglk_harness.domain.runtime.contract_align import align_evidence_to_contract
-
-        evidence = coerce_document("evidence", evidence)
-        wr = int(world_revision) if world_revision is not None else None
-        evidence = align_evidence_to_contract(
-            evidence,
+            claim=claim,
             contract_ref=contract_ref,
             obligation_refs=obligation_refs,
+            boundary=boundary,
             world_revision=wr,
+            tick=tick,
+            written=written,
         )
-        evidence["tick"] = tick
-        evidence["subgoal_id"] = subgoal_id
-        import uuid
-
-        maker_sid = str(claim.get("maker_session_id") or "")
-        csid = str(evidence.get("checker_session_id") or "").strip()
-        if not csid or csid == "unknown" or csid == maker_sid:
-            evidence["checker_session_id"] = f"checker-{uuid.uuid4().hex[:12]}"
-        if contract_ref and not evidence.get("contract_ref"):
-            evidence["contract_ref"] = contract_ref
-        return messages.ok_value(
-            evidence=evidence,
-            tokens=int(result.tokens or 0),
-            cost_usd=float(result.cost_usd or 0.0),
-            format_repair_tokens=int(result.format_repair_tokens or 0),
-            format_repair_cost_usd=float(result.format_repair_cost_usd or 0.0),
-        )
+        if mech is not None:
+            return self._finalize_evidence(
+                mech,
+                claim=claim,
+                written=written,
+                mutations=mutations,
+                workdir=workdir,
+                boundary=boundary,
+                contract_ref=contract_ref,
+                obligation_refs=obligation_refs,
+                world_revision=wr,
+                tick=tick,
+                subgoal_id=subgoal_id,
+            )
+        messages.work_error(result.error or "checker_episode_failed")

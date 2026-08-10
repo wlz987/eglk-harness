@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import time
 import uuid
+import fcntl
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,7 +51,6 @@ _EVENT_TYPES = frozenset(
         "RunFaulted",
         "RunRecoveryStarted",
         "RunRecoveryCompleted",
-        "CommandRejected",
     }
 )
 
@@ -189,34 +189,65 @@ class EventStore:
         )
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(type)")
 
-    def acquire_lease(self, *, holder: str, ttl_s: float = 120.0) -> None:
-        """Acquire exclusive write lease (pid/holder + ttl)."""
-        now = time.time()
-        if self.lease_path.is_file():
+    def acquire_lease(self, *, holder: str, ttl_s: float | None = None) -> None:
+        """Acquire exclusive write lease (flock for metadata + TTL).
+
+        Default TTL aligns with live tick wall (``EGLK_LEASE_TTL`` or 900s) so a
+        long Maker/Checker episode cannot be stolen by a second process after 120s.
+        Call ``renew_lease`` from long ticks if needed; always ``release_lease`` on exit.
+        """
+        if ttl_s is None:
             try:
-                data = json.loads(self.lease_path.read_text(encoding="utf-8"))
-                exp = float(data.get("expires_at", 0))
-                if exp > now and str(data.get("holder")) != holder:
-                    raise WriteLeaseError(f"lease held by {data.get('holder')}")
-            except (json.JSONDecodeError, OSError, TypeError, ValueError):
-                pass
-        payload = {
-            "holder": holder,
-            "acquired_at": now,
-            "expires_at": now + ttl_s,
-            "pid": holder,
-        }
-        self.lease_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                ttl_s = float(__import__("os").environ.get("EGLK_LEASE_TTL", "900") or 900)
+            except (TypeError, ValueError):
+                ttl_s = 900.0
+            ttl_s = max(60.0, float(ttl_s))
+        now = time.time()
+        self.lease_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.lease_path, "a+", encoding="utf-8") as fd:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            fd.seek(0)
+            raw = fd.read()
+            if raw.strip():
+                try:
+                    data = json.loads(raw)
+                    exp = float(data.get("expires_at", 0))
+                    if exp > now and str(data.get("holder")) != holder:
+                        raise WriteLeaseError(f"lease held by {data.get('holder')}")
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+            payload = {
+                "holder": holder,
+                "acquired_at": now,
+                "expires_at": now + float(ttl_s),
+                "pid": holder,
+            }
+            fd.seek(0)
+            fd.truncate()
+            fd.write(json.dumps(payload) + "\n")
+            fd.flush()
+            fcntl.flock(fd, fcntl.LOCK_UN)
+
+    def renew_lease(self, *, holder: str, ttl_s: float | None = None) -> None:
+        """Extend TTL for the current holder (same flock protocol as acquire)."""
+        self.acquire_lease(holder=holder, ttl_s=ttl_s)
 
     def release_lease(self, *, holder: str) -> None:
         if not self.lease_path.is_file():
             return
-        try:
-            data = json.loads(self.lease_path.read_text(encoding="utf-8"))
-            if str(data.get("holder")) != holder:
+        with open(self.lease_path, "a+", encoding="utf-8") as fd:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                data = json.loads(fd.read() or "{}")
+                if str(data.get("holder")) != holder:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                    return
+            except (json.JSONDecodeError, OSError):
+                fcntl.flock(fd, fcntl.LOCK_UN)
                 return
-        except (json.JSONDecodeError, OSError):
-            return
+            fd.seek(0)
+            fd.truncate()
+            fcntl.flock(fd, fcntl.LOCK_UN)
         self.lease_path.unlink(missing_ok=True)
 
     def tail(self) -> EventEnvelope | None:

@@ -89,8 +89,10 @@ def _merge_verdicts(primary: Mapping[str, Any], secondary: Mapping[str, Any]) ->
                 seen.add(key)
             atts.append(dict(att))
     status = str(a.get("status") or b.get("status") or "unsatisfied")
-    if status != "satisfied" and str(b.get("status") or "") == "satisfied":
-        status = "satisfied"
+    if status != "satisfied":
+        status = "unsatisfied"
+    elif str(b.get("status") or "") != "satisfied":
+        status = "unsatisfied"
     gaps = [str(g) for g in _as_list(a.get("gaps")) if str(g).strip()]
     for g in _as_list(b.get("gaps")):
         gs = str(g)

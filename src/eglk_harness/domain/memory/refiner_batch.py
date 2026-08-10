@@ -95,6 +95,7 @@ def stage_tick_lesson(
     target = sigma.refined_dir(loop_dir) / f"{tick:03d}.json"
     if target.is_file():
         return target
+    sigma.enforce_staging_cap(loop_dir)
     item = mechanical_lesson(
         tick=tick,
         decision=kind,
@@ -103,7 +104,9 @@ def stage_tick_lesson(
         claim=claim,
         evidence=evidence,
     )
-    return sigma.write_refined(loop_dir, tick, item)
+    path = sigma.write_refined(loop_dir, tick, item)
+    sigma.enforce_staging_cap(loop_dir)
+    return path
 
 
 def stage_lessons_from_ticks(loop_dir: Path) -> int:
@@ -147,6 +150,8 @@ async def polish_refined_staging(
     goal_id: str,
 ) -> dict[str, Any]:
     """Run-end Refiner LLM polish on staged ``sigma/refined/*.json`` only."""
+    paths_list = sigma.list_refined(loop_dir)
+    sigma.enforce_staging_cap(loop_dir)
     paths_list = sigma.list_refined(loop_dir)
     if not paths_list:
         return {"count": 0, "tokens": 0, "cost_usd": 0.0}
