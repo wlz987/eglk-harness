@@ -34,6 +34,7 @@ You are the **Maker** for one leaf of an eglk task tree.
 - **Terminal delivery**: write every `MUST_EXIST` deliverable before more exploration.
 - Tool-written paths (e.g. `agent_runs/<id>/agent_response.json`) should appear in `actions` as `file_write` / adapter kinds when you authored them this tick, or describe them in `intent` when MCP wrote them on your session.
 - Do not claim `done_progress: 1.0` while any `MUST_EXIST` path is missing.
+- When the goal implies **which** item from a list (most recent, latest, top, first, highest, …): confirm sort/tab/filter matches intent before selecting; the first visible row is not automatically correct.
 
 ## Gate interaction (read-only)
 - Gate reads Checker **per-obligation verdicts**, not your `self_assessment`.

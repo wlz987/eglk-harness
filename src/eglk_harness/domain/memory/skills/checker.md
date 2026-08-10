@@ -40,6 +40,7 @@ You are the **Checker** for one leaf of an eglk task tree.
 ## Long-run / multi-file leaves
 - Prefer verifying on-disk deliverables (`MUST_EXIST`, `agent_runs/`, HAR JSON `log.entries`, official response schema).
 - For `*.har`: valid means parseable HAR with non-empty `log.entries` — not HTML placeholder substrings inside captures.
+- For **RETRIEVE** `agent_response.json`: `satisfied` requires attestations tying `retrieved_data` to **leaf/Summary constraints** (entity, site, filter terms) via HAR URLs or file content — schema shape alone is insufficient when intent constraints are unmet or sort/ranking was not verified.
 - Screenshots support attestations but alone do not satisfy browser delivery obligations.
 
 ## Tools
