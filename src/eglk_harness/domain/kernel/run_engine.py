@@ -20,6 +20,7 @@ from eglk_harness.domain.kernel.projections import (
     effective_cognitive_tokens_max,
     effective_repairs_max,
 )
+from eglk_harness.domain.kernel.goal_parse import INTENT_CRITERIA_FALLBACK, intent_criteria
 from eglk_harness.domain.kernel.obligation_compile import compile_root_obligations
 from eglk_harness.domain.kernel.covers import covers_closure_complete
 from eglk_harness.domain.kernel.scheduler import (
@@ -45,8 +46,10 @@ def compile_goal_spec(
 ) -> dict[str, Any]:
     """Mechanical GoalSpec frame — coarse root obligations (conservative verification_type)."""
     criteria = list(done_criteria or [])
+    if not criteria and goal_text.strip():
+        criteria = intent_criteria(goal_text)
     if not criteria:
-        criteria = ["Satisfy the goal intent with inspectable artifacts"]
+        criteria = [INTENT_CRITERIA_FALLBACK]
     obligations = compile_root_obligations(criteria, requirement_id="req-1", id_prefix="ob")
     spec = {
         "schema": P.GOAL_SPEC_SCHEMA,

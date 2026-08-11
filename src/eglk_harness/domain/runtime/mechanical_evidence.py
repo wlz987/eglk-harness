@@ -10,10 +10,50 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from eglk_harness.domain.kernel import projections as P
+from eglk_harness.domain.kernel.obligation_compile import VERIFICATION_TYPES
 from eglk_harness.domain.runtime.boundary_verify import (
     parse_boundary_rules,
     verify_boundary,
 )
+
+_INTENT_MECH_GAP = (
+    "mechanical_checker: intent obligation requires independent LLM/scout attestation"
+)
+
+
+def _verification_type_map(
+    obligation_refs: Sequence[str],
+    obligation_verification_types: Mapping[str, str] | None,
+) -> dict[str, str]:
+    """When ``obligation_verification_types`` is omitted, preserve legacy boundary-only mechanical checks."""
+    out: dict[str, str] = {}
+    if obligation_verification_types is None:
+        for oid in obligation_refs:
+            oid_s = str(oid).strip()
+            if oid_s:
+                out[oid_s] = "file_exists"
+        return out
+    raw = obligation_verification_types
+    for oid in obligation_refs:
+        oid_s = str(oid).strip()
+        if not oid_s:
+            continue
+        vt = str(raw.get(oid_s) or "custom_attestation")
+        out[oid_s] = vt if vt in VERIFICATION_TYPES else "custom_attestation"
+    return out
+
+
+def has_intent_obligations(
+    obligation_refs: Sequence[str],
+    obligation_verification_types: Mapping[str, str] | None = None,
+) -> bool:
+    """True when any bound obligation requires custom_attestation (intent-level)."""
+    if obligation_verification_types is None:
+        return False
+    type_map = _verification_type_map(obligation_refs, obligation_verification_types)
+    if not type_map:
+        return False
+    return any(vt == "custom_attestation" for vt in type_map.values())
 
 
 def checker_mechanical_enabled() -> bool:
@@ -107,6 +147,7 @@ def synthesize_mechanical_evidence(
     world_revision: int | None,
     tick: int,
     written: Sequence[str] | None = None,
+    obligation_verification_types: Mapping[str, str] | None = None,
 ) -> dict[str, Any] | None:
     """Build Evidence from MUST_EXIST / FORBIDDEN only — never reads eval scores.
 
@@ -114,6 +155,7 @@ def synthesize_mechanical_evidence(
     """
     workdir = Path(workdir).resolve()
     refs = [str(x).strip() for x in obligation_refs if str(x).strip()]
+    type_map = _verification_type_map(refs, obligation_verification_types)
     rules = parse_boundary_rules(boundary)
     if not refs and not rules.must_exist and not rules.forbidden_prefixes:
         return None
@@ -169,6 +211,18 @@ def synthesize_mechanical_evidence(
 
     verdicts: list[dict[str, Any]] = []
     for oid in refs:
+        vt = type_map.get(oid, "custom_attestation")
+        if vt == "custom_attestation":
+            verdicts.append(
+                {
+                    "obligation_id": oid,
+                    "status": "unsatisfied",
+                    "attestations": [],
+                    "gaps": [_INTENT_MECH_GAP],
+                    "defect_suspected": False,
+                }
+            )
+            continue
         satisfied = boundary_ok and atts and not gaps
         if satisfied and file_writes and not content_bound:
             satisfied = False
@@ -189,6 +243,7 @@ def synthesize_mechanical_evidence(
         )
 
     additional = [g for g in gaps if g.startswith("boundary:")]
+
     return {
         "schema": P.EVIDENCE_BUNDLE_SCHEMA,
         "evidence_id": f"eb-mech-{tick:03d}-{uuid.uuid4().hex[:8]}",

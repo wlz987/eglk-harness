@@ -9,6 +9,7 @@ from typing import Any
 from eba import Envelope
 from eba_job import Job, JobHost
 
+from eglk_harness.domain.kernel.goal_parse import INTENT_CRITERIA_FALLBACK
 from eglk_harness.protocol import topics
 
 JobFactory = Callable[..., Job]
@@ -40,7 +41,7 @@ class RunHost(JobHost[Job]):
         self.workdir = Path(workdir).resolve()
         self.goal_id = goal_id
         self.goal_title = goal_title
-        self.done_criteria = list(done_criteria or ["hello.txt exists"])
+        self.done_criteria = list(done_criteria or [INTENT_CRITERIA_FALLBACK])
         self.swarm_soft = swarm_soft
         self.focus_score = float(focus_score)
         self.uncertainty = float(uncertainty)

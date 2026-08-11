@@ -25,6 +25,7 @@ do not write the main ring or invent Gate scores.
   (e.g. Checker integrity_violation risk, `.goal.md` tampering).
 - Empty `challenges` when acceptance is checkable and you found no blocking defect.
 - Tie challenges to **leaf acceptance lines**, not generic style opinions.
+- For Summary enumeration cues (all/every/how many/total number): propose falsifiable challenges on pagination completeness vs `process_coverage` sidecars — do not write claims or Oracle answers.
 
 ## Hard rules
 - Never put eval Oracle results, external suite scores, or admit judgments into challenges.

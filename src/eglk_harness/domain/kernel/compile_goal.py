@@ -9,6 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eglk_harness.domain.kernel.goal_parse import (
+    INTENT_CRITERIA_FALLBACK,
+    intent_criteria,
+    loose_bullets,
+    section_bullets,
+    title_from_goal as _title_from_goal_parse,
+)
+
 GOAL_FORMAT_NAME = ".goal_format.md"
 
 @dataclass
@@ -25,55 +33,21 @@ def resolve_compile_mode(cli: str | None = None, *, env: dict[str, str] | None =
     return raw
 
 def _first_heading(goal_text: str) -> str:
-    for line in goal_text.splitlines():
-        s = line.strip()
-        if s.startswith("#"):
-            return s.lstrip("#").strip() or "Goal"
-    return "Goal"
+    return _title_from_goal_parse(goal_text)
 
 def _section_bullets(goal_text: str, *headers: str) -> list[str]:
-    want = {h.lower() for h in headers}
-    lines = goal_text.splitlines()
-    out: list[str] = []
-    capture = False
-    for line in lines:
-        h = re.match(r"^#{1,3}\s+(.+)$", line.strip())
-        if h:
-            capture = h.group(1).strip().lower() in want
-            continue
-        if not capture:
-            continue
-        m = re.match(r"^\s*(?:[-*]|\d+[.)])\s+(.+)$", line)
-        if m:
-            out.append(m.group(1).strip())
-    return out
+    return section_bullets(goal_text, *headers)
 
 def _loose_bullets(goal_text: str) -> list[str]:
-    return [
-        m.group(1).strip()
-        for line in goal_text.splitlines()
-        if (m := re.match(r"^\s*(?:[-*]|\d+[.)])\s+(.+)$", line))
-    ]
+    return loose_bullets(goal_text)
 
 def format_goal_frame(goal_text: str) -> str:
     """Build a structured abstract frame from human ``.goal.md`` (no LLM)."""
     title = _first_heading(goal_text)
-    criteria = _section_bullets(
-        goal_text,
-        "acceptance",
-        "done",
-        "done criteria",
-        "success criteria",
-        "checklist",
-        "验收",
-        "完成条件",
-    )
+    criteria = intent_criteria(goal_text)
     constraints = _section_bullets(
         goal_text, "constraints", "constraint", "边界", "约束", "rules", "non-goals", "non goals"
     )
-    if not criteria:
-        loose = _loose_bullets(goal_text)
-        criteria = loose[:8] if loose else [f"Satisfy the intent of: {title}"]
     if not constraints:
         constraints = [
             "Preserve `.goal.md` and `.eglk-harness/`.",
@@ -108,7 +82,7 @@ def frame_from_compile_json(doc: dict[str, Any], *, source_excerpt: str = "") ->
     acceptance = doc.get("acceptance") or []
     constraints = doc.get("constraints") or []
     if not isinstance(acceptance, list) or not acceptance:
-        acceptance = [f"Satisfy the intent of: {title}"]
+        acceptance = [INTENT_CRITERIA_FALLBACK]
     if not isinstance(constraints, list) or not constraints:
         constraints = ["Preserve `.goal.md` and `.eglk-harness/`."]
     notes = str(doc.get("notes") or "")

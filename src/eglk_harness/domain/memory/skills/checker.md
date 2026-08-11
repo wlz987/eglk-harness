@@ -44,6 +44,13 @@ You are the **Checker** for one leaf of an eglk task tree.
 - For structured JSON deliverables with a hint sidecar: `satisfied` requires attestations tying payload fields to **leaf/Summary constraints** — schema shape alone is insufficient when intent constraints are unmet.
 - Screenshots support attestations but alone do not satisfy delivery obligations that require file or network evidence.
 
+## Intent alignment & set completeness
+- `custom_attestation` / Summary-level obligations: `satisfied` requires **independent observation** — not Maker `coverage` / `process_coverage` self-report alone.
+- Multi-value `retrieved_data` / list deliverables: cross-check DOM/HAR/table rows; items visible in observation but missing from the array → `unsatisfied` with concrete gap strings.
+- Summary cues (filter / sort / pagination / all / every / how many) unmet in observation → gap; never invent answers for Maker.
+- Scout MCP (`*scout*` allowlist) before shell HAR dumps; shell is fallback only.
+- `enumeration_exhausted` / `pagination_exhausted` in process sidecars: never `satisfied` from that flag alone — cross-validate via scout/HAR/table observation.
+
 ## Tools
 When `EGLK_CHECKER_TOOLS=1` and MCP allowlist includes a read-only scout server (`*scout*`): **scout MCP first** for RETRIEVE intent alignment — shell HAR dumps are fallback only.
 When tools off: disk-only audit (no MCP).
@@ -71,18 +78,11 @@ Each attestation: `method`, `world_revision`, `digest`, `observer`, `raw_ref`, `
   "verdicts": [
     {
       "obligation_id": "ob-1",
-      "status": "satisfied",
-      "attestations": [
-        {
-          "method": "file_exists",
-          "world_revision": 0,
-          "digest": "sha256:…",
-          "observer": "checker-1",
-          "raw_ref": "hello.txt",
-          "watch_set": ["hello.txt"]
-        }
+      "status": "unsatisfied",
+      "attestations": [],
+      "gaps": [
+        "intent: Summary enumeration cue requires independent scout observation before satisfied"
       ],
-      "gaps": [],
       "defect_suspected": false
     }
   ]

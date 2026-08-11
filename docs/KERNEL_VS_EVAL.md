@@ -1,6 +1,6 @@
 # Kernel vs eval · 控制核与评测边界
 
-`eglk-harness` 是 **通用控制核**（Gate · 四相位 · WorldRef · Σ）。  
+`eglk-harness` 是 **通用控制核**（Gate · 事件驱动 tick · WorldRef · Σ）。  
 **任何 benchmark / 套件特化** 应通过 **外部 eval 树** 注入，不写进内核 skills / Gate 逻辑。
 
 ## 内核（`domain/kernel` · `actors/` · `memory/skills/`）
@@ -9,7 +9,8 @@
 |------|----------|
 | Gate | Claim + Evidence + quota + repair_counts |
 | Boundary | `MUST_EXIST` / `FORBIDDEN_*` / `USE_MCP:` ← **`.goal.md` + leaf_contract** |
-| Packaged skills | `maker.md` / `checker.md` … — **无套件工具名** |
+| Packaged skills | `maker.md` / `checker.md` … — **无套件工具名**；普适 `intent_constraints` fragment 自动注入 |
+| Intent compile | `intent_criteria()` 从 `.goal.md` Summary/Acceptance — **禁**无依据 `hello.txt` 默认 |
 | WorldRef restore | `EGLK_RESTORE_PRESERVE_DIRS` + `MUST_EXIST` 首段 + 通用默认目录 |
 
 内核 **不读** Oracle / 离线 scorer / external judge。  
@@ -65,5 +66,6 @@ CLI / `eval_runner` 通过 `suite_ops` 分发；榜名逻辑只留在 `experimen
 3. Gate 读分数 → `evidence_guard` 剥离禁止键。
 4. boundary 失败 → `boundary_unmet` 先于 `perception_gap`。
 5. Checker 边界失败 → `apply_boundary_to_evidence` 写入 `additional_gaps`（`boundary:` 前缀）并下调 verdict；normalize 不覆盖。
+6. eval overlay 重复 harness NL 纪律（枚举/qualifier 表）→ 上收 `memory/skills/fragments/intent_constraints.md`；eval 只留 MCP/站点。
 
 设计 SSOT：`design/` · 阈值默认：`domain/kernel/projections.py`。

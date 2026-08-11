@@ -115,6 +115,8 @@ def render_prompt(
     skill_body = _render_skill_body(doc, disclosure, format_repair)
     overlay = load_role_overlay(role, workdir)
     fragment_ids = list(_fragment_ids_for_workdir(workdir))
+    if role in ("maker", "checker") and "intent_constraints" not in fragment_ids:
+        fragment_ids.append("intent_constraints")
     if role == "checker" and "checker-scout-audit" not in fragment_ids:
         from eglk_harness.domain.adapters.tool_policy import resolve_role_tool_profile
 

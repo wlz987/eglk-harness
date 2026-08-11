@@ -8,6 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from eglk_harness.domain.runtime.process_coverage import (
+    is_process_coverage_path,
+    normalize_process_coverage,
+    validate_process_coverage,
+)
+
 
 @dataclass
 class BoundaryRules:
@@ -281,6 +287,19 @@ def verify_boundary(workdir: Path, boundary: Sequence[str]) -> list[str]:
             if note:
                 msg += f" ({note})"
             violations.append(msg)
+            continue
+        if is_process_coverage_path(rel):
+            try:
+                raw_cov = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeError):
+                violations.append(f"boundary: {rel} invalid JSON for process_coverage")
+                continue
+            if not isinstance(raw_cov, dict):
+                violations.append(f"boundary: {rel} must be JSON object")
+                continue
+            cov = normalize_process_coverage(raw_cov)
+            for cov_v in validate_process_coverage(cov):
+                violations.append(f"boundary: {cov_v}")
 
     for hit in _forbidden_hits(workdir, rules.forbidden_prefixes):
         violations.append(f"boundary: {hit}")

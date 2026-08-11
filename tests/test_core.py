@@ -437,6 +437,7 @@ class TestObligationCompile(unittest.TestCase):
 
         self.assertEqual(choose_root_verification_type("Get the total number of reviews"), "custom_attestation")
         self.assertEqual(choose_root_verification_type("MUST_EXIST out/report.json"), "file_exists")
+        self.assertEqual(choose_root_verification_type("hello.txt exists"), "custom_attestation")
         obs = compile_root_obligations(["Satisfy intent", "Leave inspectable artifacts"])
         self.assertTrue(all(o["origin"] == "root" for o in obs))
         self.assertTrue(all(o["verification_type"] == "custom_attestation" for o in obs))

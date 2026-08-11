@@ -52,6 +52,8 @@ Mechanical Claim when MUST_EXIST is met (`EGLK_MAKER_MECHANICAL_FIRST` default o
 - Tool-written paths should appear in `actions` as `file_write` / adapter kinds when you authored them this tick, or describe them in `intent` when MCP wrote them on your session.
 - Do not claim `done_progress: 1.0` while any `MUST_EXIST` path is missing.
 - When the goal implies **which** item from a list (most recent, latest, top, first, highest, …): confirm sort/tab/filter matches intent before selecting; the first visible row is not automatically correct.
+- For enumeration/list Summary goals: **second independent scan** before writing array/`retrieved_data` fields (advisory; Checker still owns satisfied).
+- `process_coverage.json` / `coverage_note.json` are process self-reports — not exhaustive proof; Checker cross-validates.
 
 ## Gate interaction (read-only)
 - Gate reads Checker **per-obligation verdicts**, not your `self_assessment`.

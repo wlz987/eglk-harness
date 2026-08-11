@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eglk.process_coverage",
+  "title": "eglk.process_coverage",
+  "description": "Maker self-report of observation process (pagination/enumeration scope). Not proof of correctness; Checker must cross-validate via independent observation. Never Gate Oracle input.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "pages_scanned": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of distinct pages/views scanned in the observation process."
+    },
+    "enumeration_exhausted": {
+      "type": "boolean",
+      "description": "Maker asserts no further enumeration surface remains (pagination/API/scroll)."
+    },
+    "pagination_exhausted": {
+      "type": "boolean",
+      "description": "Legacy alias for enumeration_exhausted (eval adapters may write both)."
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional URL or path anchors for Checker re-observation."
+    },
+    "note": {
+      "type": "string",
+      "description": "Free-text process narrative; not authoritative for Gate without Checker attestation."
+    }
+  },
+  "anyOf": [
+    { "required": ["enumeration_exhausted"] },
+    { "required": ["pagination_exhausted"] }
+  ]
+}

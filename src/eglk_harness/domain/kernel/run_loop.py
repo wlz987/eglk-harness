@@ -16,6 +16,7 @@ from eglk_harness.domain.memory import skill_lib
 from eglk_harness.domain.kernel import worldref
 from eglk_harness.domain.kernel.leaf_contract import assemble_leaf_contract
 from eglk_harness.domain.kernel.compile_goal import load_goal_constraints, load_goal_excerpts
+from eglk_harness.domain.kernel.goal_parse import INTENT_CRITERIA_FALLBACK
 from eglk_harness.domain.kernel.projections import effective_cognitive_tokens_max, effective_repairs_max
 from eglk_harness.domain.kernel.repair_counts import repair_counts_from_decisions
 from eglk_harness.domain.kernel.event_runtime import RunEventContext
@@ -85,7 +86,7 @@ class TickRunLoop:
         self.goal_id = goal_id
         self.tick = int(tick)
         self.goal_title = goal_title
-        self.done_criteria = list(done_criteria or ["hello.txt exists"])
+        self.done_criteria = list(done_criteria or [INTENT_CRITERIA_FALLBACK])
         self.swarm_soft = swarm_soft
         self.focus_score = float(focus_score)
         self.uncertainty = float(uncertainty)
@@ -655,7 +656,11 @@ class TickRunLoop:
                         "done_criteria": list(cur.done_criteria) if cur else list(self.done_criteria),
                         "leaf_contract": self.leaf_contract,
                         "obligation_refs": list(active_contract.get("obligation_refs") or []),
+                        "obligation_verification_types": dict(
+                            active_contract.get("obligation_verification_types") or {}
+                        ),
                         "contract_ref": str(active_contract.get("contract_id") or ""),
+                        "world_revision": active_contract.get("world_revision_base"),
                         "workdir": str(self.workdir),
                         "timeout_s": self.checker_timeout_s or 600.0,
                         "tee_path": str(

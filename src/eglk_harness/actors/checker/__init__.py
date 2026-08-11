@@ -22,6 +22,7 @@ from eglk_harness.domain.runtime.evidence_guard import normalize_evidence
 from eglk_harness.domain.runtime.format_repair import run_with_format_repair
 from eglk_harness.domain.runtime.mechanical_evidence import (
     checker_mechanical_enabled,
+    has_intent_obligations,
     synthesize_mechanical_evidence,
 )
 from eglk_harness.domain.runtime.models import resolve_model
@@ -164,6 +165,14 @@ class CheckerActor(Worker):
             )
             if str(x).strip()
         ]
+        raw_vt = args.get("obligation_verification_types")
+        obligation_verification_types: dict[str, str] | None = None
+        if "obligation_verification_types" in args:
+            obligation_verification_types = {}
+            if isinstance(raw_vt, Mapping):
+                for k, v in raw_vt.items():
+                    if str(k).strip():
+                        obligation_verification_types[str(k)] = str(v)
         world_revision = args.get("world_revision")
         binding_block = render_contract_binding_block(
             contract_ref,
@@ -185,7 +194,11 @@ class CheckerActor(Worker):
             "on",
         }
 
-        if checker_mechanical_enabled() and not force_llm:
+        intent_obligations = has_intent_obligations(
+            obligation_refs, obligation_verification_types
+        )
+
+        if checker_mechanical_enabled() and not force_llm and not intent_obligations:
             mech = synthesize_mechanical_evidence(
                 workdir=workdir,
                 claim=claim,
@@ -195,6 +208,7 @@ class CheckerActor(Worker):
                 world_revision=wr,
                 tick=tick,
                 written=written,
+                obligation_verification_types=obligation_verification_types,
             )
             if mech is not None:
                 return self._finalize_evidence(
@@ -282,6 +296,7 @@ class CheckerActor(Worker):
             world_revision=wr,
             tick=tick,
             written=written,
+            obligation_verification_types=obligation_verification_types,
         )
         if mech is not None:
             return self._finalize_evidence(

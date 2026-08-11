@@ -30,8 +30,9 @@ from eglk_harness.domain.kernel.run_engine import RunEngine
 from eglk_harness.domain.kernel.run_loop import _recoverable_worker_error
 from eglk_harness.domain.adapters import create_adapter
 from eglk_harness.domain.adapters.mcp import assert_tools_for_role, resolve_add_dirs, resolve_mcp_config
+from eglk_harness.domain.adapters.tool_policy import resolve_role_tool_profile
 from eglk_harness.domain.kernel.compile_goal import compile_goal
-from eglk_harness.domain.kernel.goal_parse import done_criteria, goal_id, read_goal_text, title_from_goal
+from eglk_harness.domain.kernel.goal_parse import intent_criteria, goal_id, read_goal_text, title_from_goal
 from eglk_harness.domain.kernel.loop_store import read_json
 from eglk_harness.domain.product.manifest import build_manifest, new_run_id, write_manifest
 from eglk_harness.domain.runtime.models import resolve_model
@@ -134,13 +135,12 @@ def _assemble_actors(
     text = read_goal_text(workdir, request.goal)
     gid = goal_id(text)
     title = title_from_goal(text)
-    criteria = done_criteria(text)
+    criteria = intent_criteria(text)
 
     mcp_path = resolve_mcp_config(request.mcp_config, agent=request.agent)
     add_dirs = resolve_add_dirs(request.mcp_add_dirs)
 
-    # All session roles may hold tools by default; profiles/allowlists tighten.
-    for role in (
+    session_roles = (
         "maker",
         "checker",
         "governor",
@@ -149,8 +149,10 @@ def _assemble_actors(
         "pruner",
         "refiner",
         "compile",
-    ):
-        assert_tools_for_role(role, tools_allowed=True)
+    )
+    role_profiles = {r: resolve_role_tool_profile(r) for r in session_roles}
+    for role in session_roles:
+        assert_tools_for_role(role, tools_allowed=role_profiles[role].tools_allowed)
 
     adapter = create_adapter(
         request.agent,
@@ -164,16 +166,27 @@ def _assemble_actors(
     def _inbox() -> Inbox:
         return Inbox(32)
 
+    maker_profile = role_profiles["maker"]
+    checker_profile = role_profiles["checker"]
     tool_kw = dict(
         adapter=adapter,
         workdir=workdir,
-        tools_allowed=True,
-        mcp_config=mcp_path,
-        add_dirs=add_dirs,
+        tools_allowed=maker_profile.tools_allowed,
+        mcp_config=mcp_path if maker_profile.tools_allowed else None,
+        add_dirs=add_dirs if maker_profile.tools_allowed else (),
     )
     actors: list[Any] = [
         MakerActor(actor_id=ActorId(keys.MAKER), bus=bus, inbox=_inbox(), **tool_kw),
-        CheckerActor(actor_id=ActorId(keys.CHECKER), bus=bus, inbox=_inbox(), **tool_kw),
+        CheckerActor(
+            actor_id=ActorId(keys.CHECKER),
+            bus=bus,
+            inbox=_inbox(),
+            adapter=adapter,
+            workdir=workdir,
+            tools_allowed=checker_profile.tools_allowed,
+            mcp_config=mcp_path if checker_profile.tools_allowed else None,
+            add_dirs=add_dirs if checker_profile.tools_allowed else (),
+        ),
         GovernorActor(
             actor_id=ActorId(keys.GOVERNOR),
             bus=bus,

@@ -6,7 +6,7 @@ See design/kernel/semantic_core.md §2.4.
 from __future__ import annotations
 
 import re
-from typing import Any, Sequence
+from eglk_harness.domain.kernel.goal_parse import INTENT_CRITERIA_FALLBACK
 
 VERIFICATION_TYPES = frozenset(
     {
@@ -20,9 +20,13 @@ VERIFICATION_TYPES = frozenset(
 )
 
 _EXPLICIT_EXISTS = re.compile(
-    r"\b(MUST_EXIST|file\s+exists|exists\s+at|path\s+exists)\b|"
-    r"(?:^|[\s`])(/[\w./\-]+\.\w{1,8}|[\w./\-]+\.\w{1,8}|[\w\-]+/[\w./\-]+)(?:$|[\s`])",
+    r"\bMUST_EXIST\b|"
+    r"(?:must|should)\s+(?:exist|be\s+present)\b|"
+    r"(?:file|path)\s+[`'\"]?[\w./\-]+\.(?:txt|json|har|md|yaml|yml)[`'\"]?\s+(?:must|shall)\s+exist",
     re.IGNORECASE,
+)
+_EXPLICIT_PATH = re.compile(
+    r"(?:^|[\s`\"'])(/[\w./\-]+\.\w{1,8}|[\w\-]+/[\w./\-]+\.\w{1,8}|[\w./\-]+\.\w{1,8})(?:$|[\s`\"'])",
 )
 
 
@@ -34,12 +38,12 @@ def choose_root_verification_type(statement: str) -> str:
     s = (statement or "").strip()
     if not s:
         return "custom_attestation"
-    # Explicit delivery path language only
-    if re.search(r"\bMUST_EXIST\b", s) or re.search(
-        r"(?:must|should)\s+(?:exist|be\s+present)\b", s, re.IGNORECASE
-    ):
+    if re.search(r"\bMUST_EXIST\b", s, re.IGNORECASE):
         return "file_exists"
-    if "exist" in s.lower() and _EXPLICIT_EXISTS.search(s):
+    if re.search(r"(?:must|should)\s+(?:exist|be\s+present)\b", s, re.IGNORECASE):
+        if _EXPLICIT_PATH.search(s):
+            return "file_exists"
+    if _EXPLICIT_EXISTS.search(s) and _EXPLICIT_PATH.search(s):
         return "file_exists"
     return "custom_attestation"
 
@@ -54,7 +58,7 @@ def compile_root_obligations(
     out: list[dict[str, Any]] = []
     items = [str(c).strip() for c in criteria if str(c).strip()]
     if not items:
-        items = ["Satisfy the goal intent with inspectable artifacts"]
+        items = [INTENT_CRITERIA_FALLBACK]
     for i, statement in enumerate(items, start=1):
         out.append(
             {
