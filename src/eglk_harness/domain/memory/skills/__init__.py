@@ -115,6 +115,13 @@ def render_prompt(
     skill_body = _render_skill_body(doc, disclosure, format_repair)
     overlay = load_role_overlay(role, workdir)
     fragment_ids = list(_fragment_ids_for_workdir(workdir))
+    if role == "checker" and "checker-scout-audit" not in fragment_ids:
+        from eglk_harness.domain.adapters.tool_policy import resolve_role_tool_profile
+
+        profile = resolve_role_tool_profile("checker")
+        allow = profile.mcp_server_allowlist
+        if profile.tools_allowed and allow and any("scout" in s.lower() for s in allow):
+            fragment_ids.append("checker-scout-audit")
     if role in ("maker", "checker"):
         from eglk_harness.domain.plugins.computer_use import computer_use_enabled
 
@@ -128,6 +135,12 @@ def render_prompt(
         parts.extend(["", "[SKILL_OVERLAY]", "", overlay.strip()])
     if fragments.strip():
         parts.extend(["", fragments.strip()])
+    if role == "checker":
+        from eglk_harness.domain.runtime.oracle_guard import format_oracle_guard_block
+
+        oracle_block = format_oracle_guard_block()
+        if oracle_block:
+            parts.extend(["", oracle_block])
     block = leaf_block.strip()
     if block:
         parts.extend(["", block])

@@ -45,8 +45,9 @@ You are the **Checker** for one leaf of an eglk task tree.
 - Screenshots support attestations but alone do not satisfy delivery obligations that require file or network evidence.
 
 ## Tools
-Default: **disk-only** audit (no MCP). Set `EGLK_CHECKER_TOOLS=1` only when read-only observation tools are required.
-Prefer verifying on-disk deliverables; do not re-crawl the browser session.
+When `EGLK_CHECKER_TOOLS=1` and MCP allowlist includes a read-only scout server (`*scout*`): **scout MCP first** for RETRIEVE intent alignment — shell HAR dumps are fallback only.
+When tools off: disk-only audit (no MCP).
+Prefer verifying on-disk deliverables; ground `custom_attestation` via scout observation when Summary constraints need live DOM.
 `gaps` must be **strings**; `world_revision` must be **integers**.
 
 ## Output schema (EvidenceBundle)

@@ -193,7 +193,33 @@ class TestCapability(unittest.TestCase):
         )
         self.assertTrue(ok.allowed)
 
-class TestSchemas(unittest.TestCase):
+    def test_maker_mcp_invoke_generic(self) -> None:
+        broker = CapabilityBroker(default_local_fs_manifest())
+        for resource in ("mcp:wa-browser/session", "mcp:custom/foo"):
+            d = broker.authorize(
+                role="maker",
+                resource=resource,
+                operation="mcp_invoke",
+                side_effect_class="reversible",
+            )
+            self.assertTrue(d.allowed, f"{resource}: {d.reason}")
+
+    def test_checker_mcp_read_only(self) -> None:
+        broker = CapabilityBroker(default_local_fs_manifest())
+        ok = broker.authorize(
+            role="checker",
+            resource="mcp:wa-scout/snapshot",
+            operation="mcp_invoke",
+            side_effect_class="read_only",
+        )
+        self.assertTrue(ok.allowed, ok.reason)
+        denied = broker.authorize(
+            role="checker",
+            resource="mcp:wa-scout/write",
+            operation="mcp_invoke",
+            side_effect_class="reversible",
+        )
+        self.assertFalse(denied.allowed)
     def test_action_claim_and_evidence_roundtrip(self) -> None:
         claim = coerce_document(
             "action_claim",
@@ -330,6 +356,7 @@ class TestAttestationFloor(unittest.TestCase):
 
         self.assertFalse(method_allowed_for_verification_type("api_state", "file_exists"))
         self.assertTrue(method_allowed_for_verification_type("file_exists", "file_exists"))
+        self.assertTrue(method_allowed_for_verification_type("file_content_match", "file_exists"))
         self.assertTrue(method_allowed_for_verification_type("custom_attestation", "file_exists"))
 
     def test_gate_rejects_revision_mismatch(self) -> None:

@@ -17,8 +17,10 @@ if str(MCP_DIR) not in sys.path:
     sys.path.insert(0, str(MCP_DIR))
 
 from wa_browser_common import (  # noqa: E402
+    credentials_for_site,
     extract_links,
     merge_observed_nav_payload,
+    pack_site_key_from_arg,
     site_env_map_from_config,
 )
 
@@ -45,6 +47,38 @@ class WaBrowserCommonTests(unittest.TestCase):
         m = site_env_map_from_config(cfg)
         self.assertEqual(m.get("shopping_admin"), "__SHOPPING_ADMIN__")
         self.assertEqual(m.get("gitlab"), "__GITLAB__")
+
+    def test_pack_site_key_from_env_key(self) -> None:
+        cfg = {
+            "environments": {
+                "__SHOPPING_ADMIN__": {
+                    "urls": ["http://127.0.0.1:7780/admin"],
+                    "credentials": {"username": "admin", "password": "admin1234"},
+                }
+            }
+        }
+        self.assertEqual(pack_site_key_from_arg("shopping_admin", cfg), "shopping_admin")
+        self.assertEqual(pack_site_key_from_arg("__SHOPPING_ADMIN__", cfg), "shopping_admin")
+        self.assertIsNone(pack_site_key_from_arg("__UNKNOWN__", cfg))
+
+    def test_credentials_for_site_accepts_pack_and_env_key(self) -> None:
+        cfg = {
+            "environments": {
+                "__SHOPPING_ADMIN__": {
+                    "urls": ["http://127.0.0.1:7780/admin"],
+                    "credentials": {"username": "admin", "password": "admin1234"},
+                }
+            }
+        }
+        by_pack = credentials_for_site("shopping_admin", cfg)
+        by_env = credentials_for_site("__SHOPPING_ADMIN__", cfg)
+        self.assertIsNotNone(by_pack)
+        self.assertIsNotNone(by_env)
+        assert by_pack is not None and by_env is not None
+        self.assertEqual(by_pack["site_key"], "shopping_admin")
+        self.assertEqual(by_env["site_key"], "shopping_admin")
+        self.assertEqual(by_pack["env_key"], "__SHOPPING_ADMIN__")
+        self.assertEqual(by_pack["username"], "admin")
 
     def test_merge_observed_nav_no_oracle_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

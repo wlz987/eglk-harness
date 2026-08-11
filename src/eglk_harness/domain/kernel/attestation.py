@@ -21,8 +21,9 @@ ATTESTATION_METHODS = frozenset(
 )
 
 # Hard verification_type → allowed attestation methods (custom always allowed as fallback).
+# Stronger methods may satisfy weaker obligation types (e.g. file_content_match ⊃ file_exists).
 _TYPE_ALLOWED: dict[str, frozenset[str]] = {
-    "file_exists": frozenset({"file_exists", "custom_attestation"}),
+    "file_exists": frozenset({"file_exists", "file_content_match", "custom_attestation"}),
     "file_content_match": frozenset({"file_content_match", "file_exists", "custom_attestation"}),
     "command_exit": frozenset({"command_exit", "custom_attestation"}),
     "api_state": frozenset({"api_state", "custom_attestation"}),

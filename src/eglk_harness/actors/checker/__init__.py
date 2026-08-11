@@ -56,10 +56,11 @@ def _leaf_from_args(
     )
 
 
-def _checker_tools_off_preferred() -> bool:
-    """Default: Checker audits disk without MCP (cost); override with EGLK_CHECKER_TOOLS=1."""
-    raw = os.environ.get("EGLK_CHECKER_TOOLS", "0").strip().lower()
-    return raw not in {"1", "true", "yes", "on"}
+def _checker_use_tools() -> bool:
+    """Checker MCP follows tool_policy + EGLK_CHECKER_TOOLS (single control surface)."""
+    from eglk_harness.domain.adapters.tool_policy import resolve_role_tool_profile
+
+    return resolve_role_tool_profile("checker").tools_allowed
 
 
 class CheckerActor(Worker):
@@ -173,7 +174,7 @@ class CheckerActor(Worker):
             leaf_block = f"{leaf_block}\n\n{binding_block}"
 
         wr = int(world_revision) if world_revision is not None else None
-        use_tools = bool(self.tools_allowed) and not _checker_tools_off_preferred()
+        use_tools = bool(self.tools_allowed) and _checker_use_tools()
         boundary = list(leaf.boundary or [])
         mutations = list(args.get("mutations") or [])
 

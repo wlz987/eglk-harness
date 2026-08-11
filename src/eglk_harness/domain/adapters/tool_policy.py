@@ -79,6 +79,16 @@ def resolve_role_tool_profile(
         return RoleToolProfile(tools_allowed=False, mcp_server_allowlist=frozenset())
 
     env = _env_map(env)
+    if r == "checker":
+        tools_on = (env.get("EGLK_CHECKER_TOOLS") or "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not tools_on:
+            return RoleToolProfile(tools_allowed=False, mcp_server_allowlist=frozenset())
+
     key = f"EGLK_MCP_ALLOW_{r.upper()}"
     if key in env and str(env.get(key, "")).strip() != "":
         allow = _parse_allowlist(str(env.get(key) or ""))
