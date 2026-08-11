@@ -324,67 +324,35 @@ class RunEventContext:
         return True
 
     def run_closure_gate(self) -> CommandResult:
+        from eglk_harness.domain.kernel.closure_evidence import build_closure_verdict
+
         proj = self.handler.projection()
         root = proj.root_id or "root"
         contract = self.assemble_contract_for_node(root)
         self.contract_assembled(contract)
+        events = self.store.read_all()
         verdicts = []
         for oid in contract["obligation_refs"]:
-            ob = proj.obligations.get(oid)
-            if ob and ob.status == "satisfied":
-                attestations: list[dict[str, Any]] = []
-                for watch in ob.watch_set or []:
-                    rel = str(watch).strip().lstrip("/").replace("\\", "/")
-                    if rel.startswith("workdir/"):
-                        rel = rel[len("workdir/") :]
-                    if not rel:
-                        continue
-                    path = self.workdir / rel
-                    if path.is_file():
-                        import hashlib as _hashlib
-
-                        digest = "sha256:" + _hashlib.sha256(path.read_bytes()).hexdigest()
-                        attestations.append(
-                            {
-                                "method": ob.verification_type,
-                                "world_revision": proj.world_revision,
-                                "digest": digest,
-                                "observer": "root-closure-checker",
-                                "raw_ref": rel,
-                                "watch_set": list(ob.watch_set),
-                            }
-                        )
-                if not attestations:
-                    # Do not synthesize fake digests — missing watch files keep obligation open.
-                    verdicts.append(
-                        {
-                            "obligation_id": oid,
-                            "status": "unsatisfied",
-                            "attestations": [],
-                            "gaps": ["closure:missing_watch_files"],
-                            "defect_suspected": False,
-                        }
-                    )
-                    continue
+            ob = proj.obligations.get(str(oid))
+            if ob is None:
                 verdicts.append(
                     {
-                        "obligation_id": oid,
-                        "status": "satisfied",
-                        "attestations": attestations,
-                        "gaps": [],
-                        "defect_suspected": False,
-                    }
-                )
-            else:
-                verdicts.append(
-                    {
-                        "obligation_id": oid,
+                        "obligation_id": str(oid),
                         "status": "unsatisfied",
                         "attestations": [],
                         "gaps": ["closure_incomplete"],
                         "defect_suspected": False,
                     }
                 )
+                continue
+            verdicts.append(
+                build_closure_verdict(
+                    self.workdir,
+                    ob,
+                    world_revision=int(proj.world_revision),
+                    events=events,
+                )
+            )
         evidence = {
             "schema": "eglk.evidence_bundle",
             "evidence_id": f"eb-closure",
